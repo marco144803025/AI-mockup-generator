@@ -29,6 +29,14 @@ function MainPage() {
 function ChatPage() {
   const [messages, setMessages] = React.useState([]);
   const [inputText, setInputText] = React.useState("");
+  const chatContainerRef = React.useRef(null);
+
+  // Auto-scroll to bottom when messages change
+  React.useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const handleSendMessage = () => {
     if (inputText.trim() !== "") {
@@ -52,7 +60,10 @@ function ChatPage() {
   return (
     <div className="flex flex-col h-full p-8">
       <h1 className="text-2xl font-bold mb-4">Chat</h1>
-      <div className="flex-1 bg-gray-100 rounded-lg p-4 mb-4 overflow-y-auto">
+      <div 
+        ref={chatContainerRef}
+        className="flex-1 bg-gray-100 rounded-lg p-4 mb-4 overflow-y-auto"
+      >
         {messages.length === 0 ? (
           <div className="text-gray-500 text-center mt-8">No messages yet. Start a conversation!</div>
         ) : (
