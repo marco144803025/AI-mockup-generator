@@ -1,5 +1,6 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import UIRecommendationPage from "./UIRecommendationPage";
 
 function Sidebar() {
   return (
@@ -27,19 +28,34 @@ function MainPage() {
 }
 
 function ChatPage() {
-  const [messages, setMessages] = React.useState([]);
+  const [messages, setMessages] = React.useState(() => {
+    // Load messages from localStorage if available
+    const cached = localStorage.getItem("chatMessages");
+    return cached ? JSON.parse(cached) : [];
+  });
   const [inputText, setInputText] = React.useState("");
+  const [showImagePrompt, setShowImagePrompt] = React.useState(false);
   const chatContainerRef = React.useRef(null);
 
-  // Auto-scroll to bottom when messages change
   React.useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
+  // Cache messages to localStorage whenever they change
+  React.useEffect(() => {
+    localStorage.setItem("chatMessages", JSON.stringify(messages));
+  }, [messages]);
+
   const handleSendMessage = () => {
     if (inputText.trim() !== "") {
+      //this is a placeholder for the image upload button, will be replaced with the actual button once AI agent is implemented
+      if (inputText.trim().toLowerCase() === "upload image") {
+        setShowImagePrompt(true);
+        setInputText("");
+        return;
+      }
       const newMessage = {
         id: Date.now(),
         text: inputText,
@@ -48,12 +64,40 @@ function ChatPage() {
       };
       setMessages([...messages, newMessage]);
       setInputText("");
+      //placeholder for ai response
+      setTimeout(() => {
+        const aiMessage = {
+          id: Date.now() + 0.5,
+          text: "This is a placeholder AI response.",
+          sender: "ai",
+          timestamp: new Date().toLocaleTimeString()
+        };
+        setMessages(prevMessages => [...prevMessages, aiMessage]);
+      }, 1000);
     }
   };
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter") {
       handleSendMessage();
+    }
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const newMessage = {
+          id: Date.now(),
+          image: event.target.result,
+          sender: "user",
+          timestamp: new Date().toLocaleTimeString()
+        };
+        setMessages([...messages, newMessage]);
+        setShowImagePrompt(false);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -80,13 +124,31 @@ function ChatPage() {
                       : "bg-white text-gray-800 rounded-bl-none border"
                   }`}
                 >
-                  <div className="text-sm">{message.text}</div>
+                  {message.image ? (
+                    <img src={message.image} alt="uploaded" className="max-w-full max-h-48 rounded mb-2" />
+                  ) : (
+                    <div className="text-sm">{message.text}</div>
+                  )}
                   <div className={`text-xs mt-1 ${message.sender === "user" ? "text-blue-100" : "text-gray-500"}`}>
                     {message.timestamp}
                   </div>
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {showImagePrompt && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg flex flex-col items-center">
+              <h2 className="text-lg font-semibold mb-4">Upload an Image</h2>
+              <input type="file" accept="image/*" onChange={handleImageUpload} className="mb-4" />
+              <button
+                onClick={() => setShowImagePrompt(false)}
+                className="text-red-500 hover:underline"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -104,29 +166,6 @@ function ChatPage() {
         >
           Send
         </button>
-      </div>
-    </div>
-  );
-}
-
-function UIRecommendationPage() {
-  // Placeholder images, replace with real UI recommendations later
-  const images = [
-    "https://via.placeholder.com/300x180?text=UI+1",
-    "https://via.placeholder.com/300x180?text=UI+2",
-    "https://via.placeholder.com/300x180?text=UI+3",
-    "https://via.placeholder.com/300x180?text=UI+4",
-  ];
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">UI Recommendations</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {images.map((src, idx) => (
-          <div key={idx} className="bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer">
-            <img src={src} alt={`UI ${idx + 1}`} className="rounded-t-lg w-full h-40 object-cover" />
-            <div className="p-4 text-center">UI Template {idx + 1}</div>
-          </div>
-        ))}
       </div>
     </div>
   );
