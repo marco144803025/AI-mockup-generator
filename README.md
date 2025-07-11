@@ -1,11 +1,11 @@
 # AI Mockup Backend
 
-A Python backend for AI agent prototyping and prompt engineering using Claude's API and Model Context Protocol (MCP).
+A Python backend for AI agent prototyping and prompt engineering using Claude's API.
 
 ## Features
 
 - **FastAPI Server**: RESTful API for Claude integration
-- **MCP Server**: Model Context Protocol server for AI agent tools
+- **MCP Server**: Model Context Protocol server for AI agent tools (will be implemented in the future)
 - **Prompt Engineering**: Tools for testing and iterating on prompts
 - **Claude API Integration**: Direct access to Claude models
 
@@ -20,10 +20,6 @@ python -m venv venv
 # Activate on Windows
 venv\Scripts\activate
 
-# Activate on macOS/Linux
-source venv/bin/activate
-```
-
 ### 2. Install Dependencies
 
 ```bash
@@ -32,24 +28,9 @@ pip install -r requirements.txt
 
 ### 3. Configure Environment Variables
 
-1. Copy `env_template.txt` to `.env`:
-```bash
-cp env_template.txt .env
+1. Create a .env key to include your claude api key
+
 ```
-
-2. Edit `.env` and add your Claude API key:
-```
-CLAUDE_API_KEY=your_actual_api_key_here
-```
-
-### 4. Get Claude API Key
-
-1. Go to [Anthropic Console](https://console.anthropic.com/)
-2. Create an account or sign in
-3. Navigate to API Keys section
-4. Create a new API key
-5. Copy the key to your `.env` file
-
 ## Usage
 
 ### Start the FastAPI Server
