@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from typing import Optional, Dict, Any
 import json
+import anthropic
 
 load_dotenv()
 
@@ -56,50 +57,45 @@ async def health_check():
 @app.post("/api/claude", response_model=ClaudeResponse)
 async def call_claude(request: ClaudeRequest):
     """
-    Send a prompt to Claude API and return the response
+    Send a prompt to Claude API and return the response using the official SDK
     """
+    print(f"Received request: {request.json()}")
     try:
-        headers = {
-            "Content-Type": "application/json",
-            "x-api-key": CLAUDE_API_KEY,
-            "anthropic-version": "2023-06-01"
-        }
-        
-        payload = {
-            "model": request.model,
-            "max_tokens": request.max_tokens,
-            "temperature": request.temperature,
-            "messages": []
-        }
-        
-        # Add system prompt if provided
+        # Use the API key from the environment variable (ANTHROPIC_API_KEY)
+        client = anthropic.Anthropic(
+            api_key=CLAUDE_API_KEY
+        )
+        print(f"Using Claude model: {request.model}")
+        # Prepare the messages list as required by the SDK
         if request.system_prompt:
-            payload["messages"].append({
-                "role": "user",
-                "content": f"[System: {request.system_prompt}]\n\n{request.prompt}"
-            })
+            print(f"Using system prompt: {request.system_prompt}")
+            user_content = f"[System: {request.system_prompt}]\n\n{request.prompt}"
         else:
-            payload["messages"].append({
-                "role": "user",
-                "content": request.prompt
-            })
-        
-        # Make the API call
-        response = requests.post(CLAUDE_API_URL, headers=headers, json=payload)
-        response.raise_for_status()
-        
-        data = response.json()
-        
+            print("No system prompt provided, using user prompt only.")
+            user_content = request.prompt
+        # Call the Claude API using the SDK
+        print(f"Calling Claude API with prompt: {user_content}")
+        message = client.messages.create(
+            model=request.model,
+            max_tokens=request.max_tokens,
+            temperature=request.temperature,
+            messages=[{"role": "user", "content": user_content}]
+        )
+        # message.content is a list of content blocks; join them if needed
+        if isinstance(message.content, list):
+            response_text = " ".join([block.text for block in message.content if hasattr(block, 'text')])
+        else:
+            response_text = str(message.content)
+        usage = getattr(message, 'usage', {})
+        if not isinstance(usage, dict):
+            usage = dict(usage)
         return ClaudeResponse(
-            response=data["content"][0]["text"],
-            usage=data.get("usage", {}),
+            response=response_text,
+            usage=usage,
             model=request.model
         )
-        
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Claude API error: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Claude SDK error: {str(e)}")
 
 @app.post("/api/prompt-test")
 async def test_prompt(request: PromptTestRequest):
