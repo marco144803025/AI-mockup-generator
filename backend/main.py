@@ -23,8 +23,9 @@ app.add_middleware(
 
 # testing models for Claude API request/response, will change in the future
 class ClaudeRequest(BaseModel):
-    prompt: str
-    model: str = "claude-3-sonnet-20240229"
+    prompt: Optional[str] = None
+    image: Optional[str] = None  # Allow image uploads
+    model: str = "claude-3-5-haiku-20241022"
     max_tokens: int = 1000
     temperature: float = 0.7
     system_prompt: Optional[str] = None
@@ -66,6 +67,53 @@ async def call_claude(request: ClaudeRequest):
             api_key=CLAUDE_API_KEY
         )
         print(f"Using Claude model: {request.model}")
+        # Vision support: handle image input
+        if request.image:
+            # Detect image type (default to png if not provided)
+            media_type = "image/png"
+            base64_data = request.image
+            if request.image.startswith("data:image/"):
+                # e.g. data:image/jpeg;base64,...
+                media_type = request.image.split(";")[0].split(":")[1]
+                base64_data = request.image.split(",")[1]
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": base64_data
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "text": request.prompt or "Describe this image."
+                        }
+                    ]
+                }
+            ]
+            message = client.messages.create(
+                model=request.model,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                messages=messages
+            )
+            response_text = (
+                " ".join([block.text for block in message.content if hasattr(block, 'text')])
+                if isinstance(message.content, list)
+                else str(message.content)
+            )
+            usage = getattr(message, 'usage', {})
+            if not isinstance(usage, dict):
+                usage = dict(usage)
+            return ClaudeResponse(
+                response=response_text,
+                usage=usage,
+                model=request.model
+            )
         # Prepare the messages list as required by the SDK
         if request.system_prompt:
             print(f"Using system prompt: {request.system_prompt}")
