@@ -1,12 +1,16 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import requests
 import os
 from dotenv import load_dotenv
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import json
 import anthropic
+from sqlmodel import select
+from .models import Template
+from .db import get_db
+from .schemas import TemplateCreate, TemplateRead
 
 load_dotenv()
 
@@ -45,6 +49,11 @@ CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 if not CLAUDE_API_KEY:
     raise ValueError("CLAUDE_API_KEY not found")
 
+@app.on_event("startup")
+def on_startup():
+    # init_db() # Removed as per edit hint
+    pass
+
 @app.get("/")
 async def root():
     return {"message": "Model Server is running!"}
@@ -52,6 +61,23 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "claude_api_configured": bool(CLAUDE_API_KEY)}
+
+@app.get("/api/templates", response_model=List[TemplateRead])
+def list_templates():
+    db = get_db()
+    templates = list(db.templates.find())
+    return [TemplateRead(**t, id=str(t["_id"])) for t in templates]
+
+@app.post("/api/templates", response_model=TemplateRead)
+def create_template(template: TemplateCreate):
+    db = get_db()
+    from datetime import datetime
+    data = template.dict()
+    data["created_at"] = datetime.utcnow()
+    data["updated_at"] = datetime.utcnow()
+    result = db.templates.insert_one(data)
+    data["_id"] = result.inserted_id
+    return TemplateRead(**data, id=str(result.inserted_id))
 
 
 # Main claude API calling function

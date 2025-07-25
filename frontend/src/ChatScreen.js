@@ -42,7 +42,7 @@ function ChatScreen() {
         const response = await fetch("http://localhost:8000/api/claude", {
           method: "POST",
           headers: {"Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: inputText, model: "claude-3-5-haiku-20241022" })
+          body: JSON.stringify({prompt: inputText, model: "claude-3-5-haiku-20241022"})
         });
         if (response.ok) {
           const data = await response.json();
