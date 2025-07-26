@@ -12,7 +12,8 @@ client = MongoClient(MONGODB_URI)
 db = client[MONGO_DB_NAME]
 
 # --- Read files for the first template ---
-template_dir = os.path.join("..", "UIpages", "landing_UI_template_2")
+# change the path to your template directory
+template_dir = os.path.join("..", "UIpages", "signup_UI_template_2")
 with open(os.path.join(template_dir, "index.html"), encoding="utf-8") as f:
     html_export = f.read()
 with open(os.path.join(template_dir, "globals.css"), encoding="utf-8") as f:
@@ -27,19 +28,19 @@ with open(os.path.join(template_dir, "style.css"), encoding="utf-8") as f:
 # UX: user-friendly, engaging, informative, conversion-based
 #industry: business/corporate, technology/saas, creative/agency, Education,Healthcare etc
 templates = [
-        {
-        "name": "About Me UI Template 1",
-        "html_export": html_export,
-        "globals_css": globals_css,
-        "style_css": style_css,
-        "thumbnail_url": None,  # Add if available
-        "metadata": {"category": "About me",
-        "figma_url":"https://www.figma.com/design/EOSjmqgxyiGGQ13O4ER167/10-Framer-websites-%E2%80%94-Landing-Page-UI-%E2%80%94-Web-to-Figma--Community-?node-id=2-9955&t=jjTc9OP86s629vVy-0",
-        "description": "A vibrant and structured personal portfolio page designed for creative professionals, showcasing capabilities, work history, contact information, and a photo gallery within distinct, colorful content blocks.",},
-        "tags": ["portfolio", "about me", "personal", "creative", "designer", "modern", "playful", "colorful", "asymmetrical", "card-based", "image-heavy", "work history", "skills showcase", "gallery", "half-width", "engaging", "unique layout", "illustration-heavy"],
-        "created_at": datetime.now(),
-        "updated_at": datetime.now(),
+     {
+    "name": "Sign-up UI Template 2",
+    "html_export": html_export,
+    "globals_css": globals_css,
+    "style_css": style_css,
+    "thumbnail_url": None,  # Add if available
+    "metadata": {
+        "category": "sign-up",
+        "figma_url": "https://www.figma.com/design/GNPI5u6NpR4UXlBas7o7Iy/Login-pages-v1----Carey--Community-?node-id=0-1&p=f&t=QlLYGB52k0uNcdWq-0", # Placeholder, replace with actual Figma URL
+        "description": "A sleek, dark-themed user registration page, offering detailed signup fields and social authentication options, designed to complement a modern web application's aesthetic. Same design with sign_UI_template_2",
     },
+    "tags": ["sign-up form", "dark theme", "user registration", "futuristic aesthetic", "abstract gradients", "purple accents", "social signup", "account creation", "minimalist form", "onboarding flow", "sleek design", "web application signup", "expressive headline"]
+}
     # Add more templates as needed
 ]
 
