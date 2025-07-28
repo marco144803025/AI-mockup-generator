@@ -8,7 +8,7 @@ function Sidebar() {
     <div className="h-screen w-55 bg-white text-black flex flex-col p-4 space-y-4">
       <h2 className="text-2xl font-bold mb-8">Launchpad AI</h2>
       <Link to="/" className="hover:bg-purple-200 rounded px-3 py-2">Main Page</Link>
-      <Link to="/chat" className="hover:bg-purple-200 rounded px-3 py-2">Chat</Link>
+      <Link to="/chat" className="hover:bg-purple-200 rounded px-3 py-2">AI UI Workflow</Link>
       <Link to="/ui-recommendation" className="hover:bg-purple-200 rounded px-3 py-2">UI Recommendation</Link>
       <Link to="/created" className="hover:bg-purple-200 rounded px-3 py-2">Created</Link>
     </div>
@@ -20,9 +20,9 @@ function MainPage() {
     <div className="flex flex-col items-center justify-center h-full p-8">
       <h1 className="text-3xl font-bold mb-6">Welcome to Launchpad AI</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-xl">
-        <Link to="/chat" className="bg-blue-500 text-white rounded-lg p-6 text-center shadow hover:bg-blue-600 transition">Go to Chat</Link>
-        <Link to="/ui-recommendation" className="bg-green-500 text-white rounded-lg p-6 text-center shadow hover:bg-green-600 transition">UI Recommendations</Link>
-        <Link to="/created" className="bg-purple-500 text-white rounded-lg p-6 text-center shadow hover:bg-purple-600 transition">View Created Pages</Link>
+        <Link to="/chat" className="bg-blue-500 text-white rounded-lg p-6 text-center shadow hover:bg-blue-600 transition">AI UI Workflow</Link>
+        <Link to="/ui-recommendation" className="bg-purple-500 text-white rounded-lg p-6 text-center shadow hover:bg-purple-600 transition">UI Recommendations</Link>
+        <Link to="/created" className="bg-orange-500 text-white rounded-lg p-6 text-center shadow hover:bg-orange-600 transition">View Created Pages</Link>
       </div>
     </div>
   );
