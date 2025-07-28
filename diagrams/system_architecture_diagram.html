@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Level System Architecture - AutoGen UI Mockup Generation System</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        .description {
+            background: #f8f9fa;
+            padding: 25px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .description h2 {
+            color: #2c3e50;
+            margin: 0 0 15px 0;
+            font-size: 1.5em;
+        }
+        .description p {
+            margin: 0;
+            line-height: 1.6;
+            color: #495057;
+        }
+        .diagram-container {
+            padding: 40px;
+            background: white;
+        }
+        .mermaid {
+            text-align: center;
+        }
+        .legend {
+            background: #f8f9fa;
+            padding: 20px;
+            border-top: 1px solid #e9ecef;
+        }
+        .legend h3 {
+            color: #2c3e50;
+            margin: 0 0 15px 0;
+        }
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 2px solid #333;
+        }
+        .legend-text {
+            font-size: 0.9em;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>High-Level System Architecture</h1>
+            <p>AutoGen UI Mockup Generation System</p>
+        </div>
+        
+        <div class="description">
+            <h2>System Overview</h2>
+            <p>
+                This diagram illustrates the complete system architecture of the AutoGen-powered UI mockup generation platform, 
+                showing the interaction between frontend, backend services, AI agents, and external systems. The architecture 
+                follows a layered design pattern with clear separation of concerns, enabling scalable and maintainable development.
+            </p>
+        </div>
+        
+        <div class="diagram-container">
+            <div class="mermaid">
+                graph TB
+                    %% User Interface Layer
+                    subgraph "User Interface Layer"
+                        UI[Frontend React Application<br/>http://localhost:3000]
+                        UI_API[API Integration Layer<br/>REST/WebSocket]
+                    end
+                    
+                    %% Backend Services Layer
+                    subgraph "Backend Services Layer"
+                        MAIN_API[Main Backend API<br/>FastAPI - Port 8000<br/>Claude Integration]
+                        AUTOGEN_API[AutoGen Multi-Agent API<br/>FastAPI - Port 8001<br/>Agent Orchestration]
+                    end
+                    
+                    %% AI Agent Layer
+                    subgraph "AI Agent Layer"
+                        UP[User Proxy Agent<br/>Conversational Interface<br/>Workflow Coordination]
+                        RU[Requirement Understanding Agent<br/>Natural Language Processing<br/>Specification Extraction]
+                        UR[UI Recommender Agent<br/>Template Matching<br/>Scoring Algorithm]
+                        UM[UI Modification Agent<br/>Change Analysis<br/>Implementation Planning]
+                        UE[UI Editing Agent<br/>Code Generation<br/>Validation]
+                        RG[Report Generation Agent<br/>Documentation<br/>PDF Creation]
+                    end
+                    
+                    %% Data Layer
+                    subgraph "Data Layer"
+                        MONGODB[(MongoDB Database<br/>Template Storage<br/>Project Metadata)]
+                        TEMPLATES[Template Repository<br/>HTML/CSS Templates<br/>Metadata & Tags]
+                    end
+                    
+                    %% External Services Layer
+                    subgraph "External Services Layer"
+                        CLAUDE[Claude AI API<br/>Anthropic<br/>Natural Language Processing]
+                        FILE_SYS[File System<br/>Generated Reports<br/>Project Assets]
+                    end
+                    
+                    %% Network Layer
+                    subgraph "Network Layer"
+                        CORS[CORS Middleware<br/>Cross-Origin Resource Sharing]
+                        AUTH[Authentication Layer<br/>API Key Management]
+                    end
+                    
+                    %% Connections - User Interface to Backend
+                    UI --> UI_API
+                    UI_API --> CORS
+                    CORS --> MAIN_API
+                    CORS --> AUTOGEN_API
+                    
+                    %% Backend to AI Agents
+                    AUTOGEN_API --> UP
+                    AUTOGEN_API --> RU
+                    AUTOGEN_API --> UR
+                    AUTOGEN_API --> UM
+                    AUTOGEN_API --> UE
+                    AUTOGEN_API --> RG
+                    
+                    %% Main API to External Services
+                    MAIN_API --> AUTH
+                    AUTH --> CLAUDE
+                    
+                    %% AI Agents to Data Layer
+                    UP --> MONGODB
+                    RU --> MONGODB
+                    UR --> TEMPLATES
+                    UR --> MONGODB
+                    UM --> MONGODB
+                    UE --> MONGODB
+                    RG --> FILE_SYS
+                    
+                    %% Agent to Agent Communication
+                    UP -.-> RU
+                    RU -.-> UR
+                    UR -.-> UM
+                    UM -.-> UE
+                    UE -.-> RG
+                    
+                    %% Styling
+                    classDef userLayer fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+                    classDef backendLayer fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+                    classDef agentLayer fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+                    classDef dataLayer fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+                    classDef externalLayer fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+                    classDef networkLayer fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+                    
+                    class UI,UI_API userLayer
+                    class MAIN_API,AUTOGEN_API backendLayer
+                    class UP,RU,UR,UM,UE,RG agentLayer
+                    class MONGODB,TEMPLATES dataLayer
+                    class CLAUDE,FILE_SYS externalLayer
+                    class CORS,AUTH networkLayer
+            </div>
+        </div>
+        
+        <div class="legend">
+            <h3>Architecture Layer Legend</h3>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #e3f2fd; border-color: #1976d2;"></div>
+                    <div class="legend-text">User Interface Layer</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #f3e5f5; border-color: #7b1fa2;"></div>
+                    <div class="legend-text">Backend Services Layer</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #e8f5e8; border-color: #388e3c;"></div>
+                    <div class="legend-text">AI Agent Layer</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #fff3e0; border-color: #f57c00;"></div>
+                    <div class="legend-text">Data Layer</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #fce4ec; border-color: #c2185b;"></div>
+                    <div class="legend-text">External Services Layer</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #f1f8e9; border-color: #689f38;"></div>
+                    <div class="legend-text">Network Layer</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis',
+                nodeSpacing: 50,
+                rankSpacing: 50
+            },
+            securityLevel: 'loose'
+        });
+    </script>
+</body>
+</html> 

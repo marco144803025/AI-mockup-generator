@@ -40,7 +40,7 @@ class AutoGenOrchestrator:
         self.manager = autogen.GroupChatManager(
             groupchat=self.groupchat,
             llm_config={
-                "config_list": [{"model": "claude-3-5-sonnet-20241022", "api_key": os.getenv("CLAUDE_API_KEY")}],
+                "config_list": [{"model": "claude-3-5-sonnet-20241022", "api_key": os.getenv("ANTHROPIC_API_KEY")}],
                 "temperature": 0.7
             }
         )

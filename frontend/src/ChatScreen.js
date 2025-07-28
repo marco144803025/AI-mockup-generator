@@ -1,92 +1,118 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from 'react';
+import './ChatScreen.css';
+import DebugPanel from './DebugPanel';
 
 function ChatScreen() {
-  const [messages, setMessages] = React.useState(() => {
-    const cached = localStorage.getItem("chatMessages");
-    return cached ? JSON.parse(cached) : [];
-  });
-  const [inputText, setInputText] = React.useState("");
-  const [uploading, setUploading] = React.useState(false);
-  const [categories, setCategories] = React.useState([]);
-  const [showCategorySelection, setShowCategorySelection] = React.useState(false);
-  const [selectedCategory, setSelectedCategory] = React.useState(null);
-  const [projectState, setProjectState] = React.useState(null);
-  const [loading, setLoading] = React.useState(false);
-  const [aiAskedForCategory, setAiAskedForCategory] = React.useState(false);
-  const chatContainerRef = React.useRef(null);
-  const fileInputRef = React.useRef(null);
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [showCategorySelection, setShowCategorySelection] = useState(true);
+  const [aiAskedForCategory, setAiAskedForCategory] = useState(true);
+  const [sessionId, setSessionId] = useState(null);
+  const [useMultiAgent, setUseMultiAgent] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const messagesEndRef = useRef(null);
 
-  React.useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
   }, [messages]);
 
-  React.useEffect(() => {
-    localStorage.setItem("chatMessages", JSON.stringify(messages));
-  }, [messages]);
-
-  // Fetch categories on component mount and show initial AI message
-  React.useEffect(() => {
+  useEffect(() => {
     fetchCategories();
-    // Show initial AI message asking for category
+    // Initialize with AI greeting asking for category
     const initialMessage = {
       id: Date.now(),
-      text: "Hello! I'm here to help you build UI mockups. What type of UI mockup would you like to create?",
+      text: "Hello! I'm here to help you build UI mockups using our advanced multi-agent system. Please select a category below to get started with your UI mockup creation.",
       sender: "ai",
       timestamp: new Date().toLocaleTimeString()
     };
     setMessages([initialMessage]);
     setAiAskedForCategory(true);
+    setShowCategorySelection(true);
   }, []);
 
   const fetchCategories = async () => {
     try {
-      setLoading(true);
-      const response = await fetch("http://localhost:8000/api/templates/categories");
+      setCategoriesLoading(true);
+      console.log("Fetching categories from backend...");
+      const response = await fetch("http://localhost:8000/api/templates/categories", {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(5000) // 5 second timeout
+      });
+      console.log("Response status:", response.status);
+      
       if (response.ok) {
         const data = await response.json();
-        setCategories(data.categories || []);
+        console.log("Categories data:", data);
+        setCategories(data.categories);
+        console.log("Categories set:", data.categories);
       } else {
-        console.error("Failed to fetch categories");
+        console.error("Failed to fetch categories:", response.status, response.statusText);
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        
+        // Fallback to default categories if API fails
+        console.log("Using fallback categories...");
+        setCategories(['landing', 'login', 'signup', 'profile']);
       }
     } catch (error) {
       console.error("Error fetching categories:", error);
+      
+      // Fallback to default categories if network error
+      console.log("Using fallback categories due to network error...");
+      setCategories(['landing', 'login', 'signup', 'profile']);
     } finally {
-      setLoading(false);
+      setCategoriesLoading(false);
     }
   };
 
-  const handleCategorySelect = (category) => {
+  const handleCategorySelect = async (category) => {
     setSelectedCategory(category);
     setShowCategorySelection(false);
     setAiAskedForCategory(false);
-    
-    // Add user message showing category selection
+    setUseMultiAgent(true);
+    setLoading(true);
+
+    // Add user message
     const userMessage = {
       id: Date.now(),
       text: `I want to build a ${category} UI mockup.`,
       sender: "user",
       timestamp: new Date().toLocaleTimeString()
     };
-    
     setMessages(prevMessages => [...prevMessages, userMessage]);
+
+    // Multi-agent system is activated silently
+
+    // Create predefined prompt for the orchestrator
+    const predefinedPrompt = `I want to create a ${category} UI mockup. Please help me design and build this interface.`;
     
-    // Let the AI agent take over with the category information
-    sendToClaude(`The user wants to build a ${category} UI mockup. Please help them with their requirements.`);
+    // Send to multi-agent system with the predefined prompt
+    await sendToMultiAgent(predefinedPrompt);
   };
 
-
-
   const resetToCategorySelection = () => {
-    setShowCategorySelection(false);
+    setMessages([]);
     setSelectedCategory(null);
-    setProjectState(null);
+    setShowCategorySelection(true);
     setAiAskedForCategory(true);
-    // Reset to initial AI message
+    setSessionId(null);
+    setUseMultiAgent(false);
+    
+    // Initialize with AI greeting
     const initialMessage = {
       id: Date.now(),
-      text: "Hello! I'm here to help you build UI mockups. What type of UI mockup would you like to create?",
+      text: "Hello! I'm here to help you build UI mockups using our advanced multi-agent system. Please select a category below to get started with your UI mockup creation.",
       sender: "ai",
       timestamp: new Date().toLocaleTimeString()
     };
@@ -94,44 +120,41 @@ function ChatScreen() {
   };
 
   const handleSendMessage = async () => {
-    console.log("handleSendMessage called. inputText:", inputText);
-    // Prevent sending if AI hasn't asked for category yet or if category selection is shown
-    if (aiAskedForCategory || showCategorySelection) {
-      return;
-    }
-    
-    if (inputText.trim() !== "") {
-      if (inputText.trim().toLowerCase() === "upload image") {
-        console.log("Triggering image upload pop-up");
-        setInputText("");
-        return;
-      }
+    if (!inputMessage.trim() || loading) return;
 
-      const newMessage = {
-        id: Date.now(),
-        text: inputText,
-        sender: "user",
-        timestamp: new Date().toLocaleTimeString()
-      };
-      setMessages([...messages, newMessage]);
-      setInputText("");
+    const userMessage = {
+      id: Date.now(),
+      text: inputMessage,
+      sender: "user",
+      timestamp: new Date().toLocaleTimeString()
+    };
 
-      // Regular chat with Claude
-      await sendToClaude(inputText);
+    setMessages(prevMessages => [...prevMessages, userMessage]);
+    setInputMessage('');
+    setLoading(true);
+
+    if (useMultiAgent) {
+      await sendToMultiAgent(inputMessage);
+    } else {
+      await sendToClaude(inputMessage);
     }
   };
 
-  const startMultiAgentProject = async (userPrompt) => {
+  const sendToMultiAgent = async (message) => {
     try {
-      setLoading(true);
-      
       const requestData = {
-        project_name: `Project_${Date.now()}`,
-        user_prompt: userPrompt,
-        logo_image: null // TODO: Add logo upload support
+        message: message,
+        session_id: sessionId,
+        context: {
+          selected_category: selectedCategory,
+          current_phase: selectedCategory ? "requirements_gathering" : "initial",
+          user_intent: "create_ui_mockup",
+          category_type: selectedCategory,
+          project_type: "ui_mockup_generation"
+        }
       };
 
-      const response = await fetch("http://localhost:8001/project/start", {
+      const response = await fetch("http://localhost:8000/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -141,24 +164,51 @@ function ChatScreen() {
 
       if (response.ok) {
         const data = await response.json();
-        setProjectState(data);
         
+        // Update session ID if provided
+        if (data.session_id) {
+          console.log('ChatScreen: Setting sessionId to:', data.session_id);
+          setSessionId(data.session_id);
+        }
+
         const aiMessage = {
           id: Date.now() + 0.5,
-          text: `🎯 Project started! Our AI agents are analyzing your requirements for a ${selectedCategory} website.\n\n${data.message || 'Processing your request...'}`,
+          text: data.response,
           sender: "ai",
           timestamp: new Date().toLocaleTimeString()
         };
         setMessages(prevMessages => [...prevMessages, aiMessage]);
+
+        // Handle any actions from the orchestrator
+        if (data.actions) {
+          for (const action of data.actions) {
+            if (action.action === "set_category" && action.success) {
+              setSelectedCategory(action.data.category);
+            }
+            // Log other actions for debugging
+            if (action.action !== "set_category") {
+              console.log("Orchestrator action:", action);
+            }
+          }
+        }
+
+        // Log session state for debugging
+        if (data.session_state) {
+          console.log("Session state:", data.session_state);
+        }
+
+        // Validation results are handled internally by the system
+        // No need to display them to the user
+
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to start project");
+        throw new Error(errorData.detail || "Failed to get response");
       }
     } catch (error) {
-      console.error("Error starting project:", error);
+      console.error("Error sending message:", error);
       const aiMessage = {
         id: Date.now() + 0.5,
-        text: `❌ Error: ${error.message}. Falling back to regular chat.`,
+        text: `Error: ${error.message}. Please try again.`,
         sender: "ai",
         timestamp: new Date().toLocaleTimeString()
       };
@@ -254,243 +304,177 @@ Please respond as a helpful UI design assistant, asking questions within these d
         timestamp: new Date().toLocaleTimeString()
       };
       setMessages(prevMessages => [...prevMessages, aiMessage]);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === "Enter" && !aiAskedForCategory && !showCategorySelection) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       handleSendMessage();
     }
   };
 
   const handleImageButtonClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.value = null; // reset file input
-      fileInputRef.current.click();
-    }
+    document.getElementById('imageInput').click();
   };
 
   const handleImageUpload = async (e) => {
-    // Prevent image upload if AI hasn't asked for category yet or if category selection is shown
-    if (aiAskedForCategory || showCategorySelection) {
-      return;
-    }
-    
     const file = e.target.files[0];
-    if (file && file.type.startsWith("image/")) {
-      setUploading(true);
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64Image = event.target.result;
-        const newMessage = {
-          id: Date.now(),
-          image: base64Image,
-          sender: "user",
-          timestamp: new Date().toLocaleTimeString()
-        };
-        setMessages((prev) => [...prev, newMessage]);
-        // setShowImagePrompt(false); // Removed
-        // Send image to backend
-        try {
-          const response = await fetch("http://localhost:8000/api/claude", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: base64Image, model: "claude-3-5-haiku-20241022" })
-          });
-          if (response.ok) {
-            const data = await response.json();
-            const aiMessage = {
-              id: Date.now() + 0.5,
-              text: data.response,
-              sender: "ai",
-              timestamp: new Date().toLocaleTimeString()
-            };
-            setMessages((prev) => [...prev, aiMessage]);
-          } else {
-            const data = await response.json();
-            const aiMessage = {
-              id: Date.now() + 0.5,
-              text: data.detail ? `Error: ${data.detail}` : "Error: Failed to get response from AI.",
-              sender: "ai",
-              timestamp: new Date().toLocaleTimeString()
-            };
-            setMessages((prev) => [...prev, aiMessage]);
-          }
-        } catch (error) {
-          const aiMessage = {
-            id: Date.now() + 0.5,
-            text: "Error: Unable to connect to backend.",
-            sender: "ai",
-            timestamp: new Date().toLocaleTimeString()
-          };
-          setMessages((prev) => [...prev, aiMessage]);
-        } finally {
-          setUploading(false);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+
+    // Handle image upload logic here
+    console.log("Image uploaded:", file.name);
   };
 
-  // Category Selection UI
-  if (showCategorySelection) {
-    return (
-      <div className="flex flex-col h-full p-8 bg-gradient-to-br from-blue-50 to-purple-100 min-h-screen">
-        <h1 className="text-3xl font-extrabold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-500 drop-shadow-lg tracking-tight">AI UI Workflow</h1>
-        
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Choose Your Website Category</h2>
-          <p className="text-lg text-gray-600">Select the type of website you want to create</p>
+  return (
+    <div className="chat-screen">
+      <div className="chat-header">
+        <h1>AI UI Mockup Generator</h1>
+        <div className="header-buttons">
+          <button
+            onClick={() => setShowDebugPanel(!showDebugPanel)}
+            className="debug-button"
+            title="Toggle Debug Panel"
+          >
+            🐛 Debug
+          </button>
+          <button
+            onClick={resetToCategorySelection}
+            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+          >
+            Restart
+          </button>
         </div>
+      </div>
 
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="chat-messages">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`message ${
+              message.sender === "user" 
+                ? "user-message" 
+                : message.sender === "system" 
+                  ? "system-message" 
+                  : "ai-message"
+            }`}
+          >
+            <div className="message-content">
+              {message.text}
+            </div>
+            <div className="message-timestamp">{message.timestamp}</div>
           </div>
-        ) : (
-          <div className="max-w-md mx-auto">
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-              {categories.map((category, index) => (
-                <div key={category}>
-                  <button
-                    onClick={() => handleCategorySelect(category)}
-                    className="w-full px-6 py-4 text-left hover:bg-gray-50 transition-colors duration-200 focus:outline-none focus:bg-blue-50"
-                  >
-                    <span className="text-lg font-medium text-gray-800 capitalize">
-                      {category}
-                    </span>
-                  </button>
-                  {index < categories.length - 1 && (
-                    <div className="border-b border-gray-200"></div>
-                  )}
-                </div>
-              ))}
+        ))}
+        {loading && (
+          <div className="message ai-message">
+            <div className="message-content">
+              <div className="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div className="text-sm text-gray-500 mt-2">
+                {useMultiAgent ? "Multi-agent system is processing..." : "AI is thinking..."}
+              </div>
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
-    );
-  }
 
-  // Regular Chat UI
-  return (
-    <div className="flex flex-col h-full p-8 bg-gradient-to-br from-blue-50 to-purple-100 min-h-screen">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-500 drop-shadow-lg tracking-tight">
-          AI UI Workflow - {selectedCategory}
-        </h1>
-        <button
-          onClick={resetToCategorySelection}
-          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-        >
-          Restart
-        </button>
-      </div>
-      
-      <div 
-        ref={chatContainerRef}
-        className="flex-1 bg-white/80 rounded-2xl p-6 mb-6 overflow-y-auto shadow-xl border border-blue-100 backdrop-blur-lg"
-        style={{ minHeight: 400 }}
-      >
-        {messages.length === 0 ? (
-          <div className="text-gray-400 text-center mt-16 text-lg font-medium animate-fade-in">No messages yet. Start a conversation!</div>
-        ) : (
-          <div className="space-y-6">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-xs lg:max-w-md px-5 py-3 rounded-2xl shadow-md transition-all duration-300 ${
-                    message.sender === "user"
-                      ? "bg-gradient-to-r from-blue-400 to-blue-600 text-white rounded-br-none"
-                      : "bg-white text-gray-800 rounded-bl-none border border-blue-100"
-                  }`}
-                >
-                  {message.image ? (
-                    <img src={message.image} alt="uploaded" className="max-w-full max-h-60 rounded-xl mb-2 border-2 border-blue-200 shadow-lg" />
-                  ) : (
-                    <div className="text-base leading-relaxed whitespace-pre-line">{message.text}</div>
-                  )}
-                  <div className={`text-xs mt-2 ${message.sender === "user" ? "text-blue-100" : "text-gray-400"}`}>
-                    {message.timestamp}
+      {aiAskedForCategory && showCategorySelection && (
+        <div className="category-selection">
+          <div className="max-w-2xl mx-auto p-6">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4 text-center">
+              Select Your UI Mockup Category
+            </h3>
+            <p className="text-gray-600 mb-6 text-center">
+              Choose a category to start building your UI mockup with our multi-agent system
+            </p>
+            <div className="text-center mb-4">
+              <p className="text-sm text-gray-500">
+                Available categories: {categories.length > 0 ? categories.join(', ') : 'Loading...'}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {categories.length > 0 ? (
+                categories.map((category, index) => (
+                  <div key={category} className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 hover:shadow-xl transition-shadow duration-300">
+                    <button
+                      onClick={() => handleCategorySelect(category)}
+                      className="w-full px-6 py-6 text-left hover:bg-blue-50 transition-colors duration-200 focus:outline-none focus:bg-blue-50 focus:ring-2 focus:ring-blue-500"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-lg font-medium text-gray-800 capitalize">
+                          {category}
+                        </span>
+                        <span className="text-blue-500 text-2xl">→</span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-2">
+                        Create a {category} interface mockup
+                      </p>
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-2 text-center py-8">
+                  <div className="text-gray-500">
+                    <p>Loading categories...</p>
+                    <p className="text-sm mt-2">If this persists, please check the backend connection.</p>
                   </div>
                 </div>
-              </div>
-            ))}
-            {uploading && (
-              <div className="flex justify-center mt-4">
-                <div className="flex items-center gap-2 bg-blue-100 px-4 py-2 rounded-xl shadow animate-pulse">
-                  <svg className="w-5 h-5 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
-                  <span className="font-medium text-blue-700">Uploading image...</span>
-                </div>
-              </div>
-            )}
-            
-            {/* Show category selection button when AI asks for category */}
-            {aiAskedForCategory && !showCategorySelection && (
-              <div className="flex justify-center mt-4">
-                <button
-                  onClick={() => setShowCategorySelection(true)}
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:from-blue-600 hover:to-purple-600 transition-all duration-200"
-                >
-                  Choose Category
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        )}
+        </div>
+      )}
+
+      <div className="chat-input">
+        <div className="input-container">
+          <textarea
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Type your message..."
+            disabled={aiAskedForCategory || showCategorySelection}
+            className="message-input"
+          />
+          <div className="input-buttons">
+            <button
+              onClick={handleImageButtonClick}
+              disabled={aiAskedForCategory || showCategorySelection}
+              className="image-button"
+              title="Upload Image"
+            >
+              Image
+            </button>
+            <input
+              id="imageInput"
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              style={{ display: 'none' }}
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={!inputMessage.trim() || loading || aiAskedForCategory || showCategorySelection}
+              className="send-button"
+            >
+              Send
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="flex gap-3 mt-2 items-center">
-        <input
-          className={`flex-1 border-2 rounded-xl p-4 focus:outline-none focus:ring-2 text-lg shadow transition-all duration-200 ${
-            aiAskedForCategory || showCategorySelection
-              ? 'border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed' 
-              : 'border-blue-200 focus:ring-blue-400 bg-white/90'
-          }`}
-          placeholder={aiAskedForCategory || showCategorySelection ? "Please select a category first..." : "Type your message..."}
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyPress={handleKeyPress}
-          disabled={aiAskedForCategory || showCategorySelection}
-        />
-        <button
-          onClick={handleSendMessage}
-          disabled={aiAskedForCategory || showCategorySelection}
-          className={`px-8 py-4 rounded-xl font-bold text-lg shadow-lg transition-all duration-200 ${
-            aiAskedForCategory || showCategorySelection
-              ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-              : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600'
-          }`}
-        >
-          Send
-        </button>
-        <button
-          onClick={handleImageButtonClick}
-          disabled={aiAskedForCategory || showCategorySelection}
-          className={`flex items-center gap-2 border-2 px-5 py-4 rounded-xl font-bold text-lg shadow transition-all duration-200 ${
-            aiAskedForCategory || showCategorySelection
-              ? 'bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed'
-              : 'bg-white border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400'
-          }`}
-          title="Upload Image"
-        >
-          <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" /></svg>
-          Upload Image
-        </button>
-        <input
-          type="file"
-          accept="image/*"
-          ref={fileInputRef}
-          style={{ display: "none" }}
-          onChange={handleImageUpload}
-        />
-      </div>
+      
+      <DebugPanel 
+        sessionId={sessionId}
+        isVisible={showDebugPanel}
+        onClose={() => setShowDebugPanel(false)}
+      />
     </div>
   );
 }
-
-
 
 export default ChatScreen; 

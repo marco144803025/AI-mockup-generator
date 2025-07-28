@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2024-12-01T00:00:00.000Z" agent="5.0" etag="xxx" version="22.1.16" type="device">
+  <diagram name="Multi-Agent Workflow" id="multi-agent-workflow">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="Multi-Agent Collaboration Workflow" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="10" width="400" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- Phase 1: Project Initialization -->
+        <mxCell id="phase1-container" value="Phase 1: Project Initialization &amp; Requirements Analysis" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#e8f5e8;strokeColor=#388e3c;fontColor=#388e3c;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="300" height="320" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="start" value="User Initiates Project" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=#fbc02d;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase1-container">
+          <mxGeometry y="30" width="300" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="up-init" value="User Proxy Agent&#xa;Project Initialization" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e8;strokeColor=#388e3c;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase1-container">
+          <mxGeometry y="110" width="300" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ru-analyze" value="Requirement Understanding Agent&#xa;Requirements Analysis" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e8;strokeColor=#388e3c;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase1-container">
+          <mxGeometry y="190" width="300" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ur-search" value="UI Recommender Agent&#xa;Template Search &amp; Scoring" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e8;strokeColor=#388e3c;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase1-container">
+          <mxGeometry y="270" width="300" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Phase 2: Template Customization -->
+        <mxCell id="phase2-container" value="Phase 2: Template Customization &amp; Modification" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#fff3e0;strokeColor=#f57c00;fontColor=#f57c00;" vertex="1" parent="1">
+          <mxGeometry x="400" y="60" width="300" height="320" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="up-master" value="User Proxy Agent&#xa;Master Style Confirmation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#f57c00;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase2-container">
+          <mxGeometry y="30" width="300" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="um-analyze" value="UI Modification Agent&#xa;Modification Request Analysis" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#f57c00;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase2-container">
+          <mxGeometry y="110" width="300" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ue-apply" value="UI Editing Agent&#xa;Apply Modifications" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#f57c00;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase2-container">
+          <mxGeometry y="190" width="300" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="up-review" value="User Proxy Agent&#xa;Review &amp; Feedback Collection" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#f57c00;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase2-container">
+          <mxGeometry y="270" width="300" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Phase 3: Finalization -->
+        <mxCell id="phase3-container" value="Phase 3: Finalization &amp; Documentation" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f3e5f5;strokeColor=#7b1fa2;fontColor=#7b1fa2;" vertex="1" parent="1">
+          <mxGeometry x="760" y="60" width="300" height="320" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="rg-collect" value="Report Generation Agent&#xa;Data Collection" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase3-container">
+          <mxGeometry y="30" width="300" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="rg-analyze" value="Process Analysis&#xa;Decision Documentation&#xa;Modification History" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase3-container">
+          <mxGeometry y="110" width="300" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="rg-generate" value="Generate Comprehensive Report&#xa;PDF Creation&#xa;Technical Documentation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase3-container">
+          <mxGeometry y="190" width="300" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="complete" value="Project Complete" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=#fbc02d;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="phase3-container">
+          <mxGeometry y="270" width="300" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Decision Points -->
+        <mxCell id="user-decision" value="User Decision" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=#fbc02d;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="1">
+          <mxGeometry x="200" y="320" width="120" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="user-satisfied" value="User Satisfied?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=#fbc02d;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="1">
+          <mxGeometry x="560" y="320" width="120" height="80" as="geometry" />
+        </mxCell>
+        
+        <!-- Agent Communication Patterns -->
+        <mxCell id="comm-container" value="Agent Communication Patterns" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#e3f2fd;strokeColor=#1976d2;fontColor=#1976d2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="420" width="300" height="150" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="up-comm" value="User Proxy Agent&#xa;Central Coordinator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1976d2;" vertex="1" parent="comm-container">
+          <mxGeometry y="30" width="300" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ru-comm" value="Requirement Understanding Agent&#xa;Specialist" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1976d2;" vertex="1" parent="comm-container">
+          <mxGeometry y="70" width="300" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ur-comm" value="UI Recommender Agent&#xa;Specialist" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1976d2;" vertex="1" parent="comm-container">
+          <mxGeometry y="110" width="300" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- Data Flow -->
+        <mxCell id="data-container" value="Data Flow &amp; State Management" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#fce4ec;strokeColor=#c2185b;fontColor=#c2185b;" vertex="1" parent="1">
+          <mxGeometry x="400" y="420" width="300" height="150" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="project-state" value="Project State Management&#xa;Conversation History&#xa;Modification Tracking" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;" vertex="1" parent="data-container">
+          <mxGeometry y="30" width="300" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="template-data" value="Template Database&#xa;Metadata &amp; Tags&#xa;Scoring Criteria" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;" vertex="1" parent="data-container">
+          <mxGeometry y="70" width="300" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="validation-data" value="Validation Results&#xa;Error Logs&#xa;Performance Metrics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;" vertex="1" parent="data-container">
+          <mxGeometry y="110" width="300" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- Connections -->
+        <mxCell id="flow1" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ur-search" target="user-decision">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="190" y="300" as="sourcePoint" />
+            <mxPoint x="260" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="flow2" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="user-decision" target="up-master">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="260" y="400" as="sourcePoint" />
+            <mxPoint x="550" y="90" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="flow3" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="up-review" target="user-satisfied">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="550" y="300" as="sourcePoint" />
+            <mxPoint x="620" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="flow4" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="user-satisfied" target="rg-collect">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="620" y="400" as="sourcePoint" />
+            <mxPoint x="910" y="90" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Feedback loops -->
+        <mxCell id="feedback1" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="user-satisfied" target="um-analyze">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="560" y="340" as="sourcePoint" />
+            <mxPoint x="700" y="100" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Agent communication (dotted lines) -->
+        <mxCell id="agent-comm1" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="up-comm" target="ru-comm">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="40" y="495" as="sourcePoint" />
+            <mxPoint x="340" y="495" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="agent-comm2" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ru-comm" target="ur-comm">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="40" y="535" as="sourcePoint" />
+            <mxPoint x="340" y="535" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Decision labels -->
+        <mxCell id="reject-label" value="Reject" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="180" y="320" width="40" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="accept-label" value="Accept" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="260" y="320" width="40" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="no-label" value="No" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="540" y="320" width="20" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="yes-label" value="Yes" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="620" y="320" width="20" height="20" as="geometry" />
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile> 

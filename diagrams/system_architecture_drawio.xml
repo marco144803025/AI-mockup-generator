@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2024-12-01T00:00:00.000Z" agent="5.0" etag="xxx" version="22.1.16" type="device">
+  <diagram name="System Architecture" id="system-architecture">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- User Interface Layer -->
+        <mxCell id="ui-layer" value="User Interface Layer" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#e3f2fd;strokeColor=#1976d2;fontColor=#1976d2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="200" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="ui-frontend" value="Frontend React Application&#xa;http://localhost:3000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1976d2;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="ui-layer">
+          <mxGeometry y="30" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="ui-api" value="API Integration Layer&#xa;REST/WebSocket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1976d2;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="ui-layer">
+          <mxGeometry y="110" width="200" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- Backend Services Layer -->
+        <mxCell id="backend-layer" value="Backend Services Layer" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f3e5f5;strokeColor=#7b1fa2;fontColor=#7b1fa2;" vertex="1" parent="1">
+          <mxGeometry x="320" y="40" width="200" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="main-api" value="Main Backend API&#xa;FastAPI - Port 8000&#xa;Claude Integration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="backend-layer">
+          <mxGeometry y="30" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="autogen-api" value="AutoGen Multi-Agent API&#xa;FastAPI - Port 8001&#xa;Agent Orchestration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="backend-layer">
+          <mxGeometry y="110" width="200" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- AI Agent Layer -->
+        <mxCell id="agent-layer" value="AI Agent Layer" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#e8f5e8;strokeColor=#388e3c;fontColor=#388e3c;" vertex="1" parent="1">
+          <mxGeometry x="600" y="40" width="200" height="320" as="geometry" />
+        </mxCell>
+        <mxCell id="user-proxy" value="User Proxy Agent&#xa;Conversational Interface&#xa;Workflow Coordination" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e8;strokeColor=#388e3c;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="agent-layer">
+          <mxGeometry y="30" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="requirement-agent" value="Requirement Understanding Agent&#xa;Natural Language Processing&#xa;Specification Extraction" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e8;strokeColor=#388e3c;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="agent-layer">
+          <mxGeometry y="110" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="recommender-agent" value="UI Recommender Agent&#xa;Template Matching&#xa;Scoring Algorithm" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e8;strokeColor=#388e3c;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="agent-layer">
+          <mxGeometry y="190" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="modification-agent" value="UI Modification Agent&#xa;Change Analysis&#xa;Implementation Planning" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e8;strokeColor=#388e3c;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="agent-layer">
+          <mxGeometry y="270" width="200" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Data Layer -->
+        <mxCell id="data-layer" value="Data Layer" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#fff3e0;strokeColor=#f57c00;fontColor=#f57c00;" vertex="1" parent="1">
+          <mxGeometry x="40" y="220" width="200" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="mongodb" value="MongoDB Database&#xa;Template Storage&#xa;Project Metadata" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#fff3e0;strokeColor=#f57c00;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="data-layer">
+          <mxGeometry y="30" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="templates" value="Template Repository&#xa;HTML/CSS Templates&#xa;Metadata &amp; Tags" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#f57c00;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="data-layer">
+          <mxGeometry y="110" width="200" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- External Services Layer -->
+        <mxCell id="external-layer" value="External Services Layer" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#fce4ec;strokeColor=#c2185b;fontColor=#c2185b;" vertex="1" parent="1">
+          <mxGeometry x="320" y="220" width="200" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="claude-api" value="Claude AI API&#xa;Anthropic&#xa;Natural Language Processing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="external-layer">
+          <mxGeometry y="30" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="file-system" value="File System&#xa;Generated Reports&#xa;Project Assets" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="external-layer">
+          <mxGeometry y="110" width="200" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- Network Layer -->
+        <mxCell id="network-layer" value="Network Layer" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f1f8e9;strokeColor=#689f38;fontColor=#689f38;" vertex="1" parent="1">
+          <mxGeometry x="600" y="320" width="200" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="cors" value="CORS Middleware&#xa;Cross-Origin Resource Sharing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f8e9;strokeColor=#689f38;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="network-layer">
+          <mxGeometry y="30" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="auth" value="Authentication Layer&#xa;API Key Management" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f8e9;strokeColor=#689f38;spacing=10;spacingTop=10;spacingBottom=10;" vertex="1" parent="network-layer">
+          <mxGeometry y="110" width="200" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- Connections -->
+        <mxCell id="ui-to-backend" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ui-api" target="main-api">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="140" y="180" as="sourcePoint" />
+            <mxPoint x="420" y="70" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="backend-to-agents" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="autogen-api" target="user-proxy">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="420" y="180" as="sourcePoint" />
+            <mxPoint x="700" y="70" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="agents-to-data" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="user-proxy" target="mongodb">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="700" y="290" as="sourcePoint" />
+            <mxPoint x="140" y="270" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="backend-to-external" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="main-api" target="claude-api">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="420" y="180" as="sourcePoint" />
+            <mxPoint x="420" y="270" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Agent Communication (dotted lines) -->
+        <mxCell id="agent-comm-1" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="user-proxy" target="requirement-agent">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="600" y="90" as="sourcePoint" />
+            <mxPoint x="600" y="90" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="agent-comm-2" value="" style="endArrow=classic;html=1;rounded=0;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="requirement-agent" target="recommender-agent">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="600" y="130" as="sourcePoint" />
+            <mxPoint x="600" y="130" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Title -->
+        <mxCell id="title" value="AutoGen UI Mockup Generation System - High-Level Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="10" width="400" height="30" as="geometry" />
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile> 

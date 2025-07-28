@@ -1,34 +1,56 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import requests
+from typing import List, Optional, Dict, Any
 import os
-from dotenv import load_dotenv
-from typing import Optional, Dict, Any, List
+import logging
 import json
 import anthropic
-from sqlmodel import select
-from .models import Template
-from .db import get_db
-from .schemas import TemplateCreate, TemplateRead
+from db import get_db
+from datetime import datetime
 
-load_dotenv()
+# Import the new layered orchestrator
+from layered_orchestrator import LayeredOrchestrator
 
-app = FastAPI(title="AI Mockup Backend", description="Backend for AI agent and prompt engineering")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# add new frontend URLs to allow CORS in the future
+app = FastAPI()
+
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# testing models for Claude API request/response, will change in the future
+# Initialize the layered orchestrator
+orchestrator = LayeredOrchestrator()
+
+# Claude API configuration
+CLAUDE_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+if not CLAUDE_API_KEY:
+    print("Warning: ANTHROPIC_API_KEY not found. LLM features will be limited.")
+    CLAUDE_API_KEY = "placeholder_key"
+
+class ChatMessage(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    session_id: str
+    success: bool
+    metadata: Optional[Dict[str, Any]] = None
+    validation_results: Optional[List[Dict[str, Any]]] = None
+
 class ClaudeRequest(BaseModel):
     prompt: Optional[str] = None
-    image: Optional[str] = None  # Allow image uploads
+    image: Optional[str] = None
     model: str = "claude-3-5-haiku-20241022"
     max_tokens: int = 1000
     temperature: float = 0.7
@@ -39,69 +61,49 @@ class ClaudeResponse(BaseModel):
     usage: Dict[str, Any]
     model: str
 
-class PromptTestRequest(BaseModel):
-    prompt: str
-    test_cases: list[str] = []
-
-
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
-CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
-if not CLAUDE_API_KEY:
-    raise ValueError("CLAUDE_API_KEY not found")
-
-@app.on_event("startup")
-def on_startup():
-    # init_db() # Removed as per edit hint
-    pass
-
 @app.get("/")
-async def root():
-    return {"message": "Model Server is running!"}
+def read_root():
+    return {"message": "Layered AI UI Workflow API"}
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "claude_api_configured": bool(CLAUDE_API_KEY)}
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_with_ai(chat_message: ChatMessage):
+    """Main chat endpoint using the layered orchestrator"""
+    try:
+        # Process the message through the layered orchestrator
+        result = await orchestrator.process_user_message(
+            chat_message.message, 
+            chat_message.context
+        )
+        
+        if result["success"]:
+            return ChatResponse(
+                response=result["response"],
+                session_id=result["session_id"],
+                success=True,
+                metadata=result.get("metadata"),
+                validation_results=result.get("validation_results")
+            )
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
+            
+    except Exception as e:
+        logger.error(f"Error in chat endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/templates", response_model=List[TemplateRead])
-def list_templates():
-    db = get_db()
-    templates = list(db.templates.find())
-    return [TemplateRead(**t, id=str(t["_id"])) for t in templates]
-
-@app.post("/api/templates", response_model=TemplateRead)
-def create_template(template: TemplateCreate):
-    db = get_db()
-    from datetime import datetime
-    data = template.dict()
-    data["created_at"] = datetime.utcnow()
-    data["updated_at"] = datetime.utcnow()
-    result = db.templates.insert_one(data)
-    data["_id"] = result.inserted_id
-    return TemplateRead(**data, id=str(result.inserted_id))
-
-
-# Main claude API calling function
 @app.post("/api/claude", response_model=ClaudeResponse)
 async def call_claude(request: ClaudeRequest):
-    """
-    Send a prompt to Claude API and return the response using the official SDK
-    """
-    print(f"Received request: {request.json()}")
+    """Legacy Claude API endpoint for direct LLM calls"""
     try:
-        # Use the API key from the environment variable (ANTHROPIC_API_KEY)
-        client = anthropic.Anthropic(
-            api_key=CLAUDE_API_KEY
-        )
-        print(f"Using Claude model: {request.model}")
-        # Vision support: handle image input
+        client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+        
+        # Handle image input
         if request.image:
-            # Detect image type (default to png if not provided)
             media_type = "image/png"
             base64_data = request.image
             if request.image.startswith("data:image/"):
-                # e.g. data:image/jpeg;base64,...
                 media_type = request.image.split(";")[0].split(":")[1]
                 base64_data = request.image.split(",")[1]
+            
             messages = [
                 {
                     "role": "user",
@@ -121,124 +123,390 @@ async def call_claude(request: ClaudeRequest):
                     ]
                 }
             ]
-            message = client.messages.create(
-                model=request.model,
-                max_tokens=request.max_tokens,
-                temperature=request.temperature,
-                messages=messages
-            )
-            response_text = (
-                " ".join([block.text for block in message.content if hasattr(block, 'text')])
-                if isinstance(message.content, list)
-                else str(message.content)
-            )
-            usage = getattr(message, 'usage', {})
-            if not isinstance(usage, dict):
-                usage = dict(usage)
-            return ClaudeResponse(
-                response=response_text,
-                usage=usage,
-                model=request.model
-            )
-        # Prepare the messages list as required by the SDK
-        if request.system_prompt:
-            print(f"Using system prompt: {request.system_prompt}")
-            user_content = f"[System: {request.system_prompt}]\n\n{request.prompt}"
         else:
-            print("No system prompt provided, using user prompt only.")
-            user_content = request.prompt
-        # Call the Claude API using the SDK
-        print(f"Calling Claude API with prompt: {user_content}")
+            # Prepare text messages
+            if request.system_prompt:
+                user_content = f"[System: {request.system_prompt}]\n\n{request.prompt}"
+            else:
+                user_content = request.prompt
+            
+            messages = [{"role": "user", "content": user_content}]
+        
+        # Call Claude API
         message = client.messages.create(
             model=request.model,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
-            messages=[{"role": "user", "content": user_content}]
+            messages=messages
         )
-        # message.content is a list of content blocks; join them if needed
+        
+        # Extract response content
         if isinstance(message.content, list):
             response_text = " ".join([block.text for block in message.content if hasattr(block, 'text')])
         else:
             response_text = str(message.content)
+        
+        # Extract usage information
         usage = getattr(message, 'usage', {})
         if not isinstance(usage, dict):
             usage = dict(usage)
+        
         return ClaudeResponse(
             response=response_text,
             usage=usage,
             model=request.model
         )
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Claude SDK error: {str(e)}")
+        logger.error(f"Claude API error: {e}")
+        raise HTTPException(status_code=500, detail=f"Claude API error: {str(e)}")
 
-@app.post("/api/prompt-test")
-async def test_prompt(request: PromptTestRequest):
-    """
-    Test a prompt with multiple test cases for prompt engineering
-    """
-    results = []
-    
-    for i, test_case in enumerate(request.test_cases):
-        try:
-            #test request
-            test_request = ClaudeRequest(
-                prompt=f"{request.prompt}\n\nTest case {i+1}: {test_case}",
-                max_tokens=500,
-                temperature=0.3
-            )
-            
-            # Call Claude API
-            response = await call_claude(test_request)
-            
-            results.append({
-                "test_case": test_case,
-                "response": response.response,
-                "usage": response.usage,
-                "success": True
-            })
-            
-        except Exception as e:
-            results.append({
-                "test_case": test_case,
-                "error": str(e),
-                "success": False
-            })
-    
-    return {
-        "prompt": request.prompt,
-        "test_results": results,
-        "total_tests": len(request.test_cases),
-        "successful_tests": len([r for r in results if r["success"]])
-    }
+@app.get("/api/session/status")
+def get_session_status():
+    """Get current session status"""
+    try:
+        return orchestrator.get_session_status()
+    except Exception as e:
+        logger.error(f"Error getting session status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-# List of available models
-@app.get("/api/models")
-async def get_available_models():
-    """
-    Get list of available Claude models
-    """
-    return {
-        "models": [
-            {
-                "id": "claude-3-opus-20240229",
-                "name": "Claude 3 Opus",
-                "description": "Most powerful model for complex tasks"
-            },
-            {
-                "id": "claude-3-sonnet-20240229", 
-                "name": "Claude 3 Sonnet",
-                "description": "Balanced model for most tasks"
-            },
-            {
-                "id": "claude-3-haiku-20240307",
-                "name": "Claude 3 Haiku", 
-                "description": "Fastest model for simple tasks"
+@app.post("/api/session/reset")
+def reset_session():
+    """Reset the current session"""
+    try:
+        result = orchestrator.reset_session()
+        return result
+    except Exception as e:
+        logger.error(f"Error resetting session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/templates/categories")
+def get_template_categories():
+    """Get available template categories"""
+    try:
+        db = get_db()
+        # Get categories from direct category field
+        direct_categories = db.templates.distinct("category")
+        
+        # Get categories from metadata.category field
+        metadata_categories = db.templates.distinct("metadata.category")
+        
+        # Combine and deduplicate categories
+        all_categories = list(set(direct_categories + metadata_categories))
+        
+        # Remove None/empty values
+        all_categories = [cat for cat in all_categories if cat]
+        
+        # Normalize categories to lowercase for consistency
+        normalized_categories = []
+        category_mapping = {
+            'About': 'about',
+            'sign-up': 'signup',
+            'Sign-up': 'signup',
+            'Signup': 'signup',
+            'Login': 'login',
+            'Profile': 'profile',
+            'Landing': 'landing',
+            'Portfolio': 'portfolio'
+        }
+        
+        for category in all_categories:
+            normalized = category_mapping.get(category, category.lower())
+            if normalized not in normalized_categories:
+                normalized_categories.append(normalized)
+        
+        # If no categories found in database, provide default categories
+        if not normalized_categories:
+            logger.info("No categories found in database, providing defaults")
+            normalized_categories = ['landing', 'login', 'signup', 'profile', 'about', 'portfolio']
+        
+        return {
+            "categories": normalized_categories,
+            "count": len(normalized_categories)
+        }
+    except Exception as e:
+        logger.error(f"Error fetching categories: {e}")
+        # Return default categories on error
+        return {
+            "categories": ['landing', 'login', 'signup', 'profile', 'about', 'portfolio'],
+            "count": 6
+        }
+
+@app.get("/api/templates/category-constraints/{category}")
+def get_category_constraints(category: str):
+    """Get category-specific constraints for prompt engineering"""
+    try:
+        db = get_db()
+        
+        # Normalize the input category
+        category_mapping = {
+            'About': 'about',
+            'sign-up': 'signup',
+            'Sign-up': 'signup',
+            'Signup': 'signup',
+            'Login': 'login',
+            'Profile': 'profile',
+            'Landing': 'landing',
+            'Portfolio': 'portfolio'
+        }
+        
+        # Find templates in this category (check both direct and metadata fields)
+        # Also check for variations of the category name
+        possible_categories = [category]
+        for original, normalized in category_mapping.items():
+            if normalized == category:
+                possible_categories.append(original)
+            elif original == category:
+                possible_categories.append(normalized)
+        
+        category_templates = list(db.templates.find({
+            "$or": [
+                {"category": {"$in": possible_categories}},
+                {"metadata.category": {"$in": possible_categories}}
+            ]
+        }))
+        
+        if not category_templates:
+            raise HTTPException(status_code=404, detail=f"No templates found for category: {category}")
+        
+        # Extract unique tags from all templates in this category
+        all_tags = []
+        for template in category_templates:
+            tags = template.get('tags', [])
+            if isinstance(tags, list):
+                all_tags.extend(tags)
+        
+        unique_tags = list(set(all_tags))
+        
+        # Categorize tags
+        styles = []
+        themes = []
+        features = []
+        layouts = []
+        
+        for tag in unique_tags:
+            tag_lower = tag.lower()
+            if any(style in tag_lower for style in ['modern', 'minimal', 'clean', 'professional', 'colorful']):
+                styles.append(tag)
+            elif any(theme in tag_lower for theme in ['dark', 'light', 'theme']):
+                themes.append(tag)
+            elif any(feature in tag_lower for feature in ['responsive', 'interactive', 'user-friendly', 'form', 'gallery']):
+                features.append(tag)
+            elif any(layout in tag_lower for layout in ['card', 'grid', 'flexbox', 'hero']):
+                layouts.append(tag)
+            else:
+                # Default to features if not categorized
+                features.append(tag)
+        
+        return {
+            "category": category,
+            "templates_count": len(category_templates),
+            "category_tags": unique_tags,
+            "styles": styles,
+            "themes": themes,
+            "features": features,
+            "layouts": layouts,
+            "templates": [
+                {
+                    "name": template.get('name', 'Unknown'),
+                    "tags": template.get('tags', [])
+                } for template in category_templates
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching category constraints: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching category constraints: {str(e)}")
+
+@app.get("/api/templates")
+def get_templates(category: Optional[str] = None, limit: int = 10):
+    """Get templates with optional category filter"""
+    try:
+        db = get_db()
+        
+        # Build query
+        query = {}
+        if category:
+            # Normalize the input category and check for variations
+            category_mapping = {
+                'About': 'about',
+                'sign-up': 'signup',
+                'Sign-up': 'signup',
+                'Signup': 'signup',
+                'Login': 'login',
+                'Profile': 'profile',
+                'Landing': 'landing',
+                'Portfolio': 'portfolio'
             }
-        ]
+            
+            possible_categories = [category]
+            for original, normalized in category_mapping.items():
+                if normalized == category:
+                    possible_categories.append(original)
+                elif original == category:
+                    possible_categories.append(normalized)
+            
+            query["$or"] = [
+                {"category": {"$in": possible_categories}},
+                {"metadata.category": {"$in": possible_categories}}
+            ]
+        
+        # Execute query
+        templates = list(db.templates.find(query).limit(limit))
+        
+        # Convert ObjectId to string for JSON serialization
+        for template in templates:
+            if '_id' in template:
+                template['_id'] = str(template['_id'])
+        
+        return {
+            "templates": templates,
+            "count": len(templates),
+            "category": category
+        }
+    except Exception as e:
+        logger.error(f"Error fetching templates: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching templates: {str(e)}")
+
+@app.get("/api/debug/session/{session_id}")
+def get_session_debug_info(session_id: str):
+    """Get detailed debug information for a session"""
+    try:
+        logger.info(f"Debug endpoint called for session: {session_id}")
+        
+        # Get session state from memory
+        session_state = orchestrator.memory.retrieve_project_state(session_id)
+        logger.info(f"Retrieved session state: {session_state is not None}")
+        
+        conversation_context = orchestrator.memory.retrieve_conversation_context(session_id)
+        logger.info(f"Retrieved conversation context: {conversation_context is not None}")
+        
+        # Get conversation history from control layer
+        conversation_history = orchestrator.control.conversation_history
+        logger.info(f"Conversation history length: {len(conversation_history)}")
+        
+        # Get validation summary
+        validation_summary = orchestrator.validation.get_validation_summary()
+        logger.info(f"Validation summary retrieved")
+        
+        # Get tool statistics
+        tool_stats = orchestrator.tools.get_tool_statistics()
+        logger.info(f"Tool statistics retrieved")
+        
+        # Convert datetime objects to strings for JSON serialization
+        def convert_datetime(obj):
+            if hasattr(obj, 'isoformat'):  # datetime objects
+                return obj.isoformat()
+            elif isinstance(obj, dict):
+                return {k: convert_datetime(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_datetime(item) for item in obj]
+            return obj
+        
+        response_data = {
+            "session_id": session_id,
+            "session_state": convert_datetime(session_state),
+            "conversation_context": convert_datetime(conversation_context),
+            "conversation_history": convert_datetime(conversation_history),
+            "validation_summary": convert_datetime(validation_summary),
+            "tool_statistics": convert_datetime(tool_stats),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        logger.info(f"Debug response prepared successfully")
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"Error getting debug info: {e}")
+        return {
+            "error": str(e),
+            "session_id": session_id,
+            "message": "Failed to retrieve debug information"
+        }
+
+@app.get("/api/debug/test")
+def test_debug_endpoint():
+    """Simple test endpoint to check if debug endpoints are working"""
+    return {
+        "status": "debug_endpoints_working",
+        "message": "Debug endpoints are accessible",
+        "timestamp": datetime.now().isoformat(),
+        "orchestrator_session_id": orchestrator.session_id
     }
+
+@app.get("/api/debug/logs")
+def get_recent_logs(limit: int = 50):
+    """Get recent application logs"""
+    try:
+        # This would require setting up a log handler that stores logs in memory
+        # For now, return a message about where to find logs
+        return {
+            "message": "Logs are written to console and agent_debug.log file",
+            "log_file": "agent_debug.log",
+            "console_logging": "Enabled with DEBUG level",
+            "note": "Run the backend with --log-level debug for more detailed logs"
+        }
+    except Exception as e:
+        logger.error(f"Error getting logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/debug/test-agent")
+async def test_agent_pipeline(request: ChatMessage):
+    """Test the agent pipeline with detailed output"""
+    try:
+        # Process the message and capture detailed information
+        result = await orchestrator.process_user_message(request.message, request.context)
+        
+        # Get additional debug information
+        session_state = orchestrator.memory.retrieve_project_state(result["session_id"])
+        conversation_history = orchestrator.control.conversation_history[-5:]  # Last 5 entries
+        
+        return {
+            "success": True,
+            "result": result,
+            "debug_info": {
+                "session_state": session_state,
+                "recent_conversation_history": conversation_history,
+                "validation_summary": orchestrator.validation.get_validation_summary(),
+                "tool_statistics": orchestrator.tools.get_tool_statistics()
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error in test agent pipeline: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "debug_info": {
+                "error_traceback": str(e)
+            }
+        }
+
+@app.get("/api/health")
+def health_check():
+    """Health check endpoint"""
+    try:
+        # Test database connection
+        db = get_db()
+        db.command("ping")
+        
+        # Test orchestrator
+        status = orchestrator.get_session_status()
+        
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "orchestrator": "ready",
+            "session_id": status.get("session_id"),
+            "timestamp": status.get("session_state", {}).get("created_at")
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        }
 
 if __name__ == "__main__":
     import uvicorn
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host=host, port=port, reload=True) 
+    uvicorn.run(app, host="0.0.0.0", port=8000) 

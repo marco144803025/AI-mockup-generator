@@ -14,7 +14,7 @@ class BaseAgent:
     def __init__(self, name: str, system_message: str, model: str = "claude-3-5-sonnet-20241022"):
         self.name = name
         self.model = model
-        self.claude_client = Anthropic(api_key=os.getenv("CLAUDE_API_KEY"))
+        self.claude_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.db = get_db()
         
         # Create AutoGen agent

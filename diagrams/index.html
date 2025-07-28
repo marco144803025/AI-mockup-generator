@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Architecture Diagrams - AutoGen UI Mockup Generation System</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 50px;
+        }
+        .header h1 {
+            font-size: 3em;
+            font-weight: 300;
+            margin: 0 0 10px 0;
+            letter-spacing: 2px;
+        }
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin: 0;
+        }
+        .diagrams-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        .diagram-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .diagram-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+        .diagram-image {
+            height: 200px;
+            background: linear-gradient(45deg, #f0f0f0, #e0e0e0);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .diagram-image::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.3) 50%, transparent 70%);
+            animation: shimmer 2s infinite;
+        }
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .diagram-icon {
+            font-size: 4em;
+            color: #667eea;
+            z-index: 1;
+        }
+        .diagram-content {
+            padding: 25px;
+        }
+        .diagram-title {
+            font-size: 1.4em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0 0 15px 0;
+        }
+        .diagram-description {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        .diagram-features {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }
+        .diagram-features li {
+            padding: 5px 0;
+            color: #555;
+            font-size: 0.9em;
+        }
+        .diagram-features li::before {
+            content: '✓';
+            color: #27ae60;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .view-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 25px;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .view-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 50px;
+            padding: 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+        }
+        .footer h3 {
+            margin: 0 0 15px 0;
+            font-weight: 300;
+        }
+        .footer p {
+            margin: 0;
+            opacity: 0.8;
+            line-height: 1.6;
+        }
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: 2px solid white;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        .back-link:hover {
+            background: white;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>System Architecture Diagrams</h1>
+            <p>AutoGen UI Mockup Generation System</p>
+        </div>
+        
+        <div class="diagrams-grid">
+            <!-- System Architecture Diagram -->
+            <div class="diagram-card">
+                <div class="diagram-image">
+                    <div class="diagram-icon">🏗️</div>
+                </div>
+                <div class="diagram-content">
+                    <h3 class="diagram-title">System Architecture</h3>
+                    <p class="diagram-description">
+                        High-level system architecture showing all components and their interactions across the entire platform.
+                    </p>
+                    <ul class="diagram-features">
+                        <li>User Interface Layer (React Frontend)</li>
+                        <li>Backend Services Layer (FastAPI APIs)</li>
+                        <li>AI Agent Layer (6 specialized agents)</li>
+                        <li>Data Layer (MongoDB, Template Repository)</li>
+                        <li>External Services Layer (Claude AI, File System)</li>
+                        <li>Network Layer (CORS, Authentication)</li>
+                    </ul>
+                    <a href="system_architecture_diagram.html" class="view-button">View Architecture Diagram</a>
+                </div>
+            </div>
+            
+            <!-- Multi-Agent Workflow Diagram -->
+            <div class="diagram-card">
+                <div class="diagram-image">
+                    <div class="diagram-icon">🤖</div>
+                </div>
+                <div class="diagram-content">
+                    <h3 class="diagram-title">Multi-Agent Workflow</h3>
+                    <p class="diagram-description">
+                        Detailed workflow showing how the 6 AI agents collaborate throughout the UI mockup generation process.
+                    </p>
+                    <ul class="diagram-features">
+                        <li>Phase 1: Project Initialization & Requirements</li>
+                        <li>Phase 2: Template Customization & Modification</li>
+                        <li>Phase 3: Finalization & Documentation</li>
+                        <li>Agent Communication Patterns</li>
+                        <li>Data Flow & State Management</li>
+                        <li>Decision Points & Feedback Loops</li>
+                    </ul>
+                    <a href="multi_agent_workflow_diagram.html" class="view-button">View Workflow Diagram</a>
+                </div>
+            </div>
+            
+            <!-- Data Flow Diagram -->
+            <div class="diagram-card">
+                <div class="diagram-image">
+                    <div class="diagram-icon">🔄</div>
+                </div>
+                <div class="diagram-content">
+                    <h3 class="diagram-title">Data Flow</h3>
+                    <p class="diagram-description">
+                        Comprehensive data transformation and flow throughout the system, from input to final output.
+                    </p>
+                    <ul class="diagram-features">
+                        <li>Input Data Sources & Processing</li>
+                        <li>4-Phase Processing Pipeline</li>
+                        <li>Data Storage & State Management</li>
+                        <li>Output Data Generation</li>
+                        <li>Data Quality & Validation</li>
+                        <li>Performance Optimization</li>
+                    </ul>
+                    <a href="data_flow_diagram.html" class="view-button">View Data Flow Diagram</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <h3>Professional Documentation</h3>
+            <p>
+                These diagrams are designed for academic and professional use, suitable for research papers, 
+                technical documentation, and stakeholder presentations. Each diagram is self-contained and 
+                can be opened directly in any web browser.
+            </p>
+            <a href="../README.md" class="back-link">← Back to Project Documentation</a>
+        </div>
+    </div>
+</body>
+</html> 
