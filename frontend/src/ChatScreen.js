@@ -95,7 +95,7 @@ function ChatScreen() {
     // Multi-agent system is activated silently
 
     // Create predefined prompt for the orchestrator
-    const predefinedPrompt = `I want to create a ${category} UI mockup. Please help me design and build this interface.`;
+    const predefinedPrompt = `I want to create a ${category} UI mockup. Fetch the templates from the database from mongoDB, then use the currently available template that suits the user's request the most then further modify it as user requests.`;
     
     // Send to multi-agent system with the predefined prompt
     await sendToMultiAgent(predefinedPrompt);
@@ -112,7 +112,7 @@ function ChatScreen() {
     // Initialize with AI greeting
     const initialMessage = {
       id: Date.now(),
-      text: "Hello! I'm here to help you build UI mockups using our advanced multi-agent system. Please select a category below to get started with your UI mockup creation.",
+      text: "Hello! I'm here to help you build UI mockups. Please select a category below to get started with your UI mockup creation.",
       sender: "ai",
       timestamp: new Date().toLocaleTimeString()
     };
