@@ -47,7 +47,7 @@ function ChatScreen() {
         headers: {
           'Content-Type': 'application/json',
         },
-        signal: AbortSignal.timeout(5000) // 5 second timeout
+        signal: AbortSignal.timeout(10000) // 10 second timeout
       });
       console.log("Response status:", response.status);
       
@@ -63,14 +63,14 @@ function ChatScreen() {
         
         // Fallback to default categories if API fails
         console.log("Using fallback categories...");
-        setCategories(['landing', 'login', 'signup', 'profile']);
+        setCategories(['landing', 'login', 'signup', 'profile', 'about', 'portfolio']);
       }
     } catch (error) {
       console.error("Error fetching categories:", error);
       
       // Fallback to default categories if network error
       console.log("Using fallback categories due to network error...");
-      setCategories(['landing', 'login', 'signup', 'profile']);
+      setCategories(['landing', 'login', 'signup', 'profile', 'about', 'portfolio']);
     } finally {
       setCategoriesLoading(false);
     }
@@ -95,13 +95,32 @@ function ChatScreen() {
     // Multi-agent system is activated silently
 
     // Create predefined prompt for the orchestrator
-    const predefinedPrompt = `I want to create a ${category} UI mockup. Fetch the templates from the database from mongoDB, then use the currently available template that suits the user's request the most then further modify it as user requests.`;
+    const predefinedPrompt = `I want to create a ${category} UI mockup.  Fetch the templates from the database from mongoDB, the . Use the currently available template that suits the user's request the most then further modify it as user requests.`;
     
     // Send to multi-agent system with the predefined prompt
     await sendToMultiAgent(predefinedPrompt);
   };
 
-  const resetToCategorySelection = () => {
+  const resetToCategorySelection = async () => {
+    // First, reset the backend session
+    try {
+      const response = await fetch("http://localhost:8000/api/session/reset", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      
+      if (response.ok) {
+        console.log("Backend session reset successful");
+      } else {
+        console.error("Failed to reset backend session:", response.status);
+      }
+    } catch (error) {
+      console.error("Error resetting backend session:", error);
+    }
+    
+    // Then reset frontend state
     setMessages([]);
     setSelectedCategory(null);
     setShowCategorySelection(true);
@@ -341,7 +360,7 @@ Please respond as a helpful UI design assistant, asking questions within these d
             🐛 Debug
           </button>
           <button
-            onClick={resetToCategorySelection}
+            onClick={() => resetToCategorySelection()}
             className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
           >
             Restart
