@@ -1150,3 +1150,322 @@ EXAMPLES:
             "message": "Session reset successfully",
             "session_id": self.session_id
         } 
+
+    def handle_editing_phase(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+        """Handle Phase 2: UI Editing - coordinate between UI Editing Agent and User Proxy Agent"""
+        try:
+            self.logger.info(f"Handling editing phase request for session {session_id}")
+            
+            # Step 1: Detect editing intent
+            intent = self._detect_editing_intent(user_message)
+            self.logger.info(f"Detected editing intent: {intent}")
+            
+            # Step 2: Route based on intent
+            if intent == "modification_request":
+                return self._handle_modification_request(user_message, current_ui_state, session_id)
+            elif intent == "clarification_request":
+                return self._handle_clarification_request(user_message, current_ui_state, session_id)
+            elif intent == "completion_request":
+                return self._handle_completion_request(user_message, current_ui_state, session_id)
+            else:
+                return self._handle_general_request(user_message, current_ui_state, session_id)
+                
+        except Exception as e:
+            self.logger.error(f"Error in editing phase: {e}")
+            return self._create_error_response(f"Error processing your request: {str(e)}")
+    
+    def _detect_editing_intent(self, user_message: str) -> str:
+        """Detect the intent of the user's editing request"""
+        try:
+            message_lower = user_message.lower()
+            
+            # Completion indicators
+            if any(phrase in message_lower for phrase in [
+                "i'm done", "that's perfect", "finished", "complete", "good enough",
+                "generate report", "show me the final", "create report"
+            ]):
+                return "completion_request"
+            
+            # Clarification indicators
+            if any(phrase in message_lower for phrase in [
+                "what can i change", "what options", "help", "what's possible",
+                "show me options", "what else", "suggestions"
+            ]):
+                return "clarification_request"
+            
+            # General conversation indicators (should be checked before modification)
+            if any(phrase in message_lower for phrase in [
+                "hello", "hi", "hey", "how are you", "thank", "thanks",
+                "how does this work", "what is this", "explain"
+            ]):
+                return "general_request"
+            
+            # Modification indicators (more specific)
+            if any(phrase in message_lower for phrase in [
+                "change", "modify", "update", "make", "set", "adjust", "edit",
+                "color", "size", "font", "background", "button", "text"
+            ]):
+                return "modification_request"
+            
+            # Default to general request for unclear messages
+            return "general_request"
+            
+        except Exception as e:
+            self.logger.error(f"Error detecting editing intent: {e}")
+            return "general_request"  # Safe default
+    
+    def _handle_modification_request(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+        """Handle UI modification requests"""
+        try:
+            self.logger.info("Processing modification request")
+            
+            # Step 3: UI Editing Agent performs the modification
+            ui_editing_result = self._process_ui_modification(user_message, current_ui_state)
+            
+            if not ui_editing_result["success"]:
+                return self._create_error_response(ui_editing_result["error"])
+            
+            # Step 4: Orchestrator instructs User Proxy
+            user_proxy_instruction = {
+                "type": "modification_success",
+                "modification_result": ui_editing_result,
+                "user_message": user_message,
+                "context": {
+                    "session_id": session_id,
+                    "previous_changes": self._get_previous_changes(session_id)
+                }
+            }
+            
+            # Step 5: User Proxy Agent responds to user
+            user_response = self._generate_user_response(user_proxy_instruction)
+            
+            # Extract modifications for the response
+            modifications = ui_editing_result.get("modifications")
+            
+            return {
+                "success": True,
+                "response": user_response,
+                "modifications": modifications,  # Ensure modifications are included
+                "metadata": {
+                    "session_id": session_id,
+                    "intent": "modification_request",
+                    "change_summary": ui_editing_result.get("change_summary", "Changes analyzed successfully")
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error handling modification request: {e}")
+            return self._create_error_response(f"Error processing modification: {str(e)}")
+    
+    def _process_ui_modification(self, user_message: str, current_ui_state: Dict[str, Any]) -> Dict[str, Any]:
+        """Process UI modification using UI Editing Agent"""
+        try:
+            # Create UI Editing Agent instance
+            from agents.ui_editing_agent import UIEditingAgent
+            ui_agent = UIEditingAgent()
+            
+            # Create context for the agent
+            context = {
+                "current_ui_codes": current_ui_state,
+                "session_id": "editing_session",
+                "available_tools": ["css_change", "html_change", "js_change", "complete_change"]
+            }
+            
+            # Analyze the request
+            ui_response = ui_agent.analyze_ui_request(user_message, context)
+            
+            if not ui_response["success"]:
+                return {
+                    "success": False,
+                    "error": ui_response["data"].get("response", "Failed to analyze request")
+                }
+            
+            # Extract modifications
+            modifications = ui_response["data"].get("modifications")
+            
+            if modifications:
+                # For now, return the modifications without applying them
+                # The actual application will be handled by the frontend calling the modify endpoint
+                return {
+                    "success": True,
+                    "modifications": modifications,
+                    "change_summary": ui_response["data"].get("response", "Changes analyzed successfully")
+                }
+            else:
+                return {
+                    "success": True,
+                    "modifications": None,
+                    "change_summary": ui_response["data"].get("response", "No changes needed")
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Error processing UI modification: {e}")
+            return {
+                "success": False,
+                "error": f"Error processing modification: {str(e)}"
+            }
+    
+    def _handle_clarification_request(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+        """Handle clarification requests"""
+        try:
+            # Create User Proxy Agent instance
+            from agents.user_proxy_agent import UserProxyAgent
+            user_proxy = UserProxyAgent()
+            
+            # Generate helpful suggestions
+            suggestions = self._generate_editing_suggestions(current_ui_state)
+            
+            instruction = {
+                "type": "clarification_response",
+                "user_message": user_message,
+                "suggestions": suggestions,
+                "context": {"session_id": session_id}
+            }
+            
+            response = user_proxy.create_response_from_instructions(instruction)
+            
+            return {
+                "success": True,
+                "response": response,
+                "metadata": {
+                    "session_id": session_id,
+                    "intent": "clarification_request",
+                    "suggestions": suggestions
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error handling clarification request: {e}")
+            return self._create_error_response(f"Error providing suggestions: {str(e)}")
+    
+    def _handle_completion_request(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+        """Handle completion requests"""
+        try:
+            # Create User Proxy Agent instance
+            from agents.user_proxy_agent import UserProxyAgent
+            user_proxy = UserProxyAgent()
+            
+            instruction = {
+                "type": "completion_response",
+                "user_message": user_message,
+                "context": {
+                    "session_id": session_id,
+                    "final_ui_state": current_ui_state
+                }
+            }
+            
+            response = user_proxy.create_response_from_instructions(instruction)
+            
+            return {
+                "success": True,
+                "response": response,
+                "metadata": {
+                    "session_id": session_id,
+                    "intent": "completion_request",
+                    "final_ui_state": current_ui_state
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error handling completion request: {e}")
+            return self._create_error_response(f"Error processing completion: {str(e)}")
+    
+    def _handle_general_request(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+        """Handle general requests that don't fit other categories"""
+        try:
+            # Create User Proxy Agent instance
+            from agents.user_proxy_agent import UserProxyAgent
+            user_proxy = UserProxyAgent()
+            
+            instruction = {
+                "type": "general_response",
+                "user_message": user_message,
+                "context": {"session_id": session_id}
+            }
+            
+            response = user_proxy.create_response_from_instructions(instruction)
+            
+            return {
+                "success": True,
+                "response": response,
+                "metadata": {
+                    "session_id": session_id,
+                    "intent": "general_request"
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error handling general request: {e}")
+            return self._create_error_response(f"Error processing request: {str(e)}")
+    
+    def _generate_user_response(self, instruction: Dict[str, Any]) -> str:
+        """Generate user response using User Proxy Agent"""
+        try:
+            from agents.user_proxy_agent import UserProxyAgent
+            user_proxy = UserProxyAgent()
+            
+            return user_proxy.create_response_from_instructions(instruction)
+            
+        except Exception as e:
+            self.logger.error(f"Error generating user response: {e}")
+            return "I've processed your request. Check the preview to see the changes!"
+    
+    def _generate_editing_suggestions(self, current_ui_state: Dict[str, Any]) -> List[str]:
+        """Generate helpful editing suggestions based on current UI state"""
+        suggestions = []
+        
+        # Analyze current UI to provide contextual suggestions
+        html_content = current_ui_state.get("html_export", "")
+        css_content = current_ui_state.get("style_css", "") + current_ui_state.get("globals_css", "")
+        
+        # Check for common elements and suggest modifications
+        if "button" in html_content.lower():
+            suggestions.extend([
+                "Change button colors (e.g., 'make the button red')",
+                "Adjust button size (e.g., 'make the button bigger')",
+                "Modify button text (e.g., 'change button text to Submit')"
+            ])
+        
+        if "title" in html_content.lower() or "h1" in html_content.lower():
+            suggestions.extend([
+                "Change title text (e.g., 'change the title to Welcome')",
+                "Adjust title size (e.g., 'make the title bigger')",
+                "Modify title color (e.g., 'make the title blue')"
+            ])
+        
+        if "background" in css_content.lower():
+            suggestions.extend([
+                "Change background color (e.g., 'make background light blue')",
+                "Adjust background style (e.g., 'add a gradient background')"
+            ])
+        
+        # Add general suggestions
+        suggestions.extend([
+            "Change text colors (e.g., 'make text dark blue')",
+            "Adjust font sizes (e.g., 'make text bigger')",
+            "Modify spacing (e.g., 'add more space between elements')",
+            "Change layout (e.g., 'center the content')"
+        ])
+        
+        return suggestions[:8]  # Limit to 8 suggestions
+    
+    def _get_previous_changes(self, session_id: str) -> List[Dict[str, Any]]:
+        """Get previous changes for context"""
+        try:
+            # This would typically fetch from the session history
+            # For now, return empty list
+            return []
+        except Exception as e:
+            self.logger.error(f"Error getting previous changes: {e}")
+            return []
+    
+    def _create_error_response(self, error_message: str) -> Dict[str, Any]:
+        """Create standardized error response"""
+        return {
+            "success": False,
+            "response": f"I'm sorry, I encountered an error: {error_message}",
+            "metadata": {
+                "error": error_message,
+                "timestamp": datetime.now().isoformat()
+            }
+        } 

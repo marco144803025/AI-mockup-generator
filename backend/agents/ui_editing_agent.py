@@ -2,6 +2,7 @@ from .base_agent import BaseAgent
 from typing import Dict, Any, List, Optional
 import json
 import re
+import logging
 from tools.tool_utility import ToolUtility
 from config.keyword_config import KeywordManager
 
@@ -20,6 +21,7 @@ You focus on sophisticated UI modifications and improvements."""
         super().__init__("UIEditing", system_message)
         self.tool_utility = ToolUtility("ui_editing_agent")
         self.keyword_manager = KeywordManager()
+        self.logger = logging.getLogger(__name__)
     
     def process_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
         """Complete workflow: analyze request, plan modifications, and apply them using advanced prompt engineering"""
@@ -483,3 +485,274 @@ Remember: Focus on creating a robust, maintainable implementation that achieves 
     def validate_modifications(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> Dict[str, Any]:
         """Legacy method - redirects to advanced version"""
         return self.validate_modifications_advanced(original_template, modified_template) 
+
+    def analyze_ui_request(self, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze UI editing requests from chat and return modifications"""
+        try:
+            current_ui_codes = context.get("current_ui_codes", {})
+            
+            # Build a focused prompt for UI editing
+            prompt = self._build_ui_editing_prompt(message, current_ui_codes)
+            
+            # Call Claude with tools for UI modification
+            response = self.call_claude(prompt)
+            
+            # Parse the response to extract modifications
+            modifications = self._parse_ui_editing_response(response, message)
+            
+            # Debug logging
+            self.logger.info(f"AI Response: {response[:200]}...")
+            self.logger.info(f"Parsed modifications: {modifications}")
+            
+            # If no modifications were found, try fallback
+            if not modifications:
+                self.logger.info("No modifications found, trying fallback...")
+                modifications = self._create_fallback_modification(message)
+                self.logger.info(f"Fallback modifications: {modifications}")
+            
+            # Create a user-friendly response
+            user_response = self._generate_user_response(message, modifications)
+            
+            return self.create_standardized_response(
+                success=True,
+                data={
+                    "modifications": modifications,
+                    "response": user_response,
+                    "reasoning": "Successfully analyzed UI editing request"
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error analyzing UI request: {e}")
+            # Try fallback modification
+            try:
+                fallback_modifications = self._create_fallback_modification(message)
+                if fallback_modifications:
+                    user_response = self._generate_user_response(message, fallback_modifications)
+                    return self.create_standardized_response(
+                        success=True,
+                        data={
+                            "modifications": fallback_modifications,
+                            "response": user_response,
+                            "reasoning": f"Used fallback modification due to error: {str(e)}"
+                        }
+                    )
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback modification also failed: {fallback_error}")
+            
+            return self.create_standardized_response(
+                success=False,
+                data={
+                    "modifications": None,
+                    "response": f"I'm sorry, I couldn't process your request: {str(e)}",
+                    "reasoning": f"Error occurred: {str(e)}"
+                }
+            )
+    
+    def _build_ui_editing_prompt(self, message: str, current_ui_codes: Dict[str, Any]) -> str:
+        """Build prompt for UI editing analysis"""
+        
+        html_content = current_ui_codes.get("html_export", "")
+        css_content = current_ui_codes.get("style_css", "") + "\n" + current_ui_codes.get("globals_css", "")
+        
+        # Extract key elements from HTML for context
+        elements = self._extract_key_elements(html_content)
+        
+        prompt = f"""
+You are an expert UI editor. The user wants to make changes to their UI.
+
+## CURRENT UI STATE
+**HTML Elements Found**: {', '.join(elements) if elements else 'No specific elements found'}
+
+**Current CSS Classes**: {self._extract_css_classes(css_content)}
+
+## USER REQUEST
+"{message}"
+
+## YOUR TASK
+Analyze the user's request and determine what UI modifications are needed.
+
+## AVAILABLE MODIFICATION TYPES
+- `css_change`: Modify CSS properties for existing elements
+- `html_change`: Modify HTML content
+- `js_change`: Modify JavaScript code
+- `complete_change`: Complete replacement of code sections
+
+## OUTPUT FORMAT
+Return a JSON object with:
+```json
+{{
+    "type": "css_change|html_change|js_change|complete_change",
+    "changes": {{
+        // For css_change: {{"selector": {{"property": "value"}}}}
+        // For html_change: {{"html_export": "new_html_content"}}
+        // For js_change: {{"js": "new_js_content"}}
+        // For complete_change: {{"html_export": "...", "style_css": "...", "js": "..."}}
+    }},
+    "reasoning": "Explanation of what changes were made and why"
+}}
+```
+
+Focus on practical, implementable changes that match the user's intent.
+"""
+        return prompt
+    
+    def _extract_key_elements(self, html_content: str) -> List[str]:
+        """Extract key HTML elements for context"""
+        try:
+            # Simple regex to find common HTML elements
+            import re
+            elements = re.findall(r'<(?!\/)([a-zA-Z][a-zA-Z0-9]*)(?:\s|>)', html_content)
+            # Remove duplicates and common elements
+            unique_elements = list(set(elements))
+            # Filter out common structural elements
+            filtered_elements = [elem for elem in unique_elements if elem not in ['html', 'head', 'body', 'meta', 'title', 'style', 'script']]
+            return filtered_elements[:10]  # Limit to 10 elements
+        except Exception:
+            return []
+    
+    def _extract_css_classes(self, css_content: str) -> List[str]:
+        """Extract CSS classes for context"""
+        try:
+            import re
+            classes = re.findall(r'\.([a-zA-Z][a-zA-Z0-9_-]*)\s*{', css_content)
+            return list(set(classes))[:10]  # Limit to 10 classes
+        except Exception:
+            return []
+    
+    def _parse_ui_editing_response(self, response: str, original_message: str) -> Optional[Dict[str, Any]]:
+        """Parse the AI response to extract modifications"""
+        try:
+            # Try to extract JSON from the response
+            import re
+            json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # Try to find JSON without markdown
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0)
+                else:
+                    # Fallback: try to parse the entire response as JSON
+                    json_str = response
+            
+            modifications = json.loads(json_str)
+            
+            # Validate the modifications structure
+            if not isinstance(modifications, dict):
+                return None
+            
+            if "type" not in modifications or "changes" not in modifications:
+                return None
+            
+            return modifications
+            
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to parse UI editing response as JSON: {e}")
+            # Fallback: create a simple CSS modification based on common patterns
+            return self._create_fallback_modification(original_message)
+        except Exception as e:
+            self.logger.error(f"Error parsing UI editing response: {e}")
+            # Fallback: create a simple CSS modification based on common patterns
+            return self._create_fallback_modification(original_message)
+    
+    def _create_fallback_modification(self, message: str) -> Optional[Dict[str, Any]]:
+        """Create a fallback modification based on common patterns"""
+        message_lower = message.lower()
+        
+        # Common color change patterns
+        if any(color in message_lower for color in ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'black', 'white']):
+            color_map = {
+                'red': '#ff4444', 'blue': '#4444ff', 'green': '#44ff44',
+                'yellow': '#ffff44', 'purple': '#ff44ff', 'orange': '#ff8844',
+                'pink': '#ff88ff', 'black': '#000000', 'white': '#ffffff'
+            }
+            
+            for color_name, hex_code in color_map.items():
+                if color_name in message_lower:
+                    return {
+                        "type": "css_change",
+                        "changes": {
+                            ".button": {
+                                "background": hex_code,
+                                "color": "#ffffff" if color_name != 'white' else "#000000"
+                            }
+                        }
+                    }
+        
+        # Size change patterns
+        if any(size in message_lower for size in ['bigger', 'larger', 'smaller']):
+            size_change = "2em" if any(size in message_lower for size in ['bigger', 'larger']) else "0.8em"
+            return {
+                "type": "css_change",
+                "changes": {
+                    ".button": {
+                        "font-size": size_change
+                    }
+                }
+            }
+        
+        # Button-specific patterns
+        if "button" in message_lower:
+            if "red" in message_lower:
+                return {
+                    "type": "css_change",
+                    "changes": {
+                        ".button": {
+                            "background": "#ff4444",
+                            "color": "#ffffff"
+                        }
+                    }
+                }
+            elif "blue" in message_lower:
+                return {
+                    "type": "css_change",
+                    "changes": {
+                        ".button": {
+                            "background": "#4444ff",
+                            "color": "#ffffff"
+                        }
+                    }
+                }
+            elif "green" in message_lower:
+                return {
+                    "type": "css_change",
+                    "changes": {
+                        ".button": {
+                            "background": "#44ff44",
+                            "color": "#000000"
+                        }
+                    }
+                }
+        
+        return None
+    
+    def _generate_user_response(self, message: str, modifications: Optional[Dict[str, Any]]) -> str:
+        """Generate a user-friendly response about the modifications"""
+        if not modifications:
+            return "I understand your request, but I couldn't determine what specific changes to make. Could you please be more specific about what you'd like to modify?"
+        
+        mod_type = modifications.get("type", "")
+        changes = modifications.get("changes", {})
+        
+        if mod_type == "css_change":
+            selectors = list(changes.keys())
+            if len(selectors) == 1:
+                selector = selectors[0]
+                properties = list(changes[selector].keys())
+                return f"I've updated the {selector} styles to change {', '.join(properties)}."
+            else:
+                return f"I've updated the styles for {len(selectors)} elements."
+        
+        elif mod_type == "html_change":
+            return "I've updated the HTML content as requested."
+        
+        elif mod_type == "js_change":
+            return "I've updated the JavaScript functionality."
+        
+        elif mod_type == "complete_change":
+            return "I've made comprehensive changes to your UI."
+        
+        else:
+            return "I've made the requested changes to your UI." 

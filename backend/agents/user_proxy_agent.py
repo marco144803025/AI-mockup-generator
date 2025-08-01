@@ -307,8 +307,27 @@ IMPORTANT RULES:
         
         return questions[:5]  # Limit to 5 questions
     
-    def create_response_from_instructions(self, instructions: str, final_data: Dict[str, Any]) -> str:
-        """Create a natural language response from orchestrator instructions"""
+    def create_response_from_instructions(self, instructions, final_data=None):
+        """Create user-friendly responses based on instructions - backward compatible"""
+        try:
+            # Handle backward compatibility - old format had 3 arguments
+            if final_data is not None:
+                # Old format: create_response_from_instructions(instructions, final_data)
+                return self._create_legacy_response(instructions, final_data)
+            else:
+                # New format: create_response_from_instructions(instructions)
+                if isinstance(instructions, dict):
+                    return self._create_enhanced_response(instructions)
+                else:
+                    # Fallback for string instructions
+                    return self._create_legacy_response(instructions, {})
+                    
+        except Exception as e:
+            self.logger.error(f"Error creating response from instructions: {e}")
+            return "I understand your request. Let me process that for you."
+    
+    def _create_legacy_response(self, instructions: str, final_data: Dict[str, Any]) -> str:
+        """Create response using the old format for backward compatibility"""
         try:
             # Use the instructions to create a conversational response
             if "template recommendations" in instructions.lower():
@@ -562,4 +581,170 @@ This will help me find the perfect template for you!"""
             return response
             
         except Exception as e:
-            return f"I'm having trouble processing that right now. Could you please try again? (Error: {str(e)})" 
+            return f"I'm having trouble processing that right now. Could you please try again? (Error: {str(e)})"
+    
+    def _create_enhanced_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response using the new enhanced format for Phase 2 editing"""
+        try:
+            response_type = instructions.get("type", "general")
+            
+            if response_type == "modification_success":
+                return self._create_modification_success_response(instructions)
+            elif response_type == "clarification_response":
+                return self._create_clarification_response(instructions)
+            elif response_type == "completion_response":
+                return self._create_completion_response(instructions)
+            elif response_type == "general_response":
+                return self._create_general_response(instructions)
+            elif response_type == "error_response":
+                return self._create_error_response(instructions)
+            else:
+                return self._create_default_response(instructions)
+                
+        except Exception as e:
+            self.logger.error(f"Error creating enhanced response: {e}")
+            return "I understand your request. Let me process that for you."
+    
+    def _create_modification_success_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response for successful modifications"""
+        try:
+            modification_result = instructions.get("modification_result", {})
+            user_message = instructions.get("user_message", "")
+            context = instructions.get("context", {})
+            
+            # Get the change summary
+            change_summary = modification_result.get("change_summary", "Changes applied successfully")
+            
+            # Create a friendly response
+            response_parts = []
+            
+            # Acknowledge the change
+            if "button" in user_message.lower():
+                response_parts.append("✅ Button updated successfully!")
+            elif "color" in user_message.lower():
+                response_parts.append("🎨 Color changed as requested!")
+            elif "text" in user_message.lower():
+                response_parts.append("📝 Text updated!")
+            elif "size" in user_message.lower() or "bigger" in user_message.lower() or "smaller" in user_message.lower():
+                response_parts.append("📏 Size adjusted!")
+            else:
+                response_parts.append("✅ Changes applied successfully!")
+            
+            # Add the specific change summary
+            if change_summary and change_summary != "Changes applied successfully":
+                response_parts.append(f" {change_summary}")
+            
+            # Add next step suggestion
+            response_parts.append(" What would you like to change next?")
+            
+            return "".join(response_parts)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating modification success response: {e}")
+            return "✅ Changes applied successfully! What would you like to modify next?"
+    
+    def _create_clarification_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response for clarification requests"""
+        try:
+            suggestions = instructions.get("suggestions", [])
+            user_message = instructions.get("user_message", "")
+            
+            response_parts = []
+            
+            # Acknowledge the request for help
+            if "help" in user_message.lower():
+                response_parts.append("🤝 I'm here to help! Here are some things you can change:")
+            elif "what can" in user_message.lower():
+                response_parts.append("🎯 Here are some options for what you can modify:")
+            else:
+                response_parts.append("💡 Here are some suggestions for what you can change:")
+            
+            # Add suggestions
+            if suggestions:
+                response_parts.append("\n\n")
+                for i, suggestion in enumerate(suggestions[:6], 1):  # Limit to 6 suggestions
+                    response_parts.append(f"{i}. {suggestion}\n")
+                
+                response_parts.append("\nJust tell me what you'd like to change!")
+            else:
+                response_parts.append("\n\nYou can modify colors, sizes, text, layouts, and more. Just describe what you want to change!")
+            
+            return "".join(response_parts)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating clarification response: {e}")
+            return "💡 You can modify colors, sizes, text, layouts, and more. Just describe what you want to change!"
+    
+    def _create_completion_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response for completion requests"""
+        try:
+            user_message = instructions.get("user_message", "")
+            context = instructions.get("context", {})
+            
+            response_parts = []
+            
+            # Acknowledge completion
+            if "perfect" in user_message.lower():
+                response_parts.append("🎉 Perfect! Your UI is looking great!")
+            elif "done" in user_message.lower():
+                response_parts.append("✅ Great! You're all set with your UI design!")
+            else:
+                response_parts.append("🎯 Excellent! Your UI modifications are complete!")
+            
+            # Add next steps
+            response_parts.append("\n\n📋 I can generate a report of all your changes if you'd like. Just say 'generate report' or 'show me the final result'.")
+            
+            # Add option to continue editing
+            response_parts.append("\n\n💭 If you want to make more changes, just let me know!")
+            
+            return "".join(response_parts)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating completion response: {e}")
+            return "🎉 Perfect! Your UI is complete. Let me know if you want to make any more changes or generate a report!"
+    
+    def _create_general_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response for general requests"""
+        try:
+            user_message = instructions.get("user_message", "")
+            
+            # Analyze the message for intent
+            message_lower = user_message.lower()
+            
+            if "hello" in message_lower or "hi" in message_lower:
+                return "👋 Hello! I'm here to help you edit your UI. What would you like to change?"
+            elif "thank" in message_lower:
+                return "😊 You're welcome! I'm happy to help. What else would you like to modify?"
+            elif "how" in message_lower and "work" in message_lower:
+                return "🔧 I can help you modify your UI! Just tell me what you want to change - colors, sizes, text, layouts, etc. For example: 'make the button red' or 'change the title text'."
+            else:
+                return "I understand! I'm here to help you edit your UI. What would you like to change?"
+                
+        except Exception as e:
+            self.logger.error(f"Error creating general response: {e}")
+            return "I'm here to help you edit your UI. What would you like to change?"
+    
+    def _create_error_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response for errors"""
+        try:
+            error_message = instructions.get("error", "An error occurred")
+            
+            return f"❌ I encountered an issue: {error_message}\n\n💡 Try being more specific about what you want to change, or ask for help to see what options are available."
+            
+        except Exception as e:
+            self.logger.error(f"Error creating error response: {e}")
+            return "❌ I encountered an error. Please try again or ask for help to see what you can modify."
+    
+    def _create_default_response(self, instructions: Dict[str, Any]) -> str:
+        """Create default response when type is not recognized"""
+        try:
+            user_message = instructions.get("user_message", "")
+            
+            if user_message:
+                return f"I understand you want to '{user_message}'. Let me help you with that!"
+            else:
+                return "I'm here to help you edit your UI. What would you like to change?"
+                
+        except Exception as e:
+            self.logger.error(f"Error creating default response: {e}")
+            return "I'm here to help you edit your UI. What would you like to change?" 

@@ -61,6 +61,18 @@ class ClaudeResponse(BaseModel):
     usage: Dict[str, Any]
     model: str
 
+class UIEditorChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    current_ui_codes: Optional[Dict[str, Any]] = None
+
+class UIEditorChatResponse(BaseModel):
+    success: bool
+    response: str
+    ui_modifications: Optional[Dict[str, Any]] = None
+    session_id: str
+    metadata: Optional[Dict[str, Any]] = None
+
 @app.get("/")
 def read_root():
     return {"message": "Enhanced AI UI Workflow API"}
@@ -374,283 +386,424 @@ def get_templates(category: Optional[str] = None, limit: int = 10):
         logger.error(f"Error fetching templates: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching templates: {str(e)}")
 
-@app.get("/api/debug/session/{session_id}")
-def get_session_debug_info(session_id: str):
-    """Get detailed session debug information"""
-    try:
-        logger.info(f"Debug: Requesting session info for session_id: {session_id}")
-        logger.info(f"Debug: Current orchestrator session_id: {orchestrator.session_id}")
-        
-        # Check if this is the current session
-        if session_id == orchestrator.session_id:
-            session_status = orchestrator.get_session_status()
-            conversation_history = orchestrator.session_state.get("conversation_history", [])
-            current_plan = orchestrator.session_state.get("current_plan", [])
-            
-            debug_response = {
-                "session_id": session_id,
-                "session_status": session_status,
-                "session_state": orchestrator.session_state,
-                "conversation_history": conversation_history,
-                "current_plan": current_plan,
-                "debug_info": {
-                    "total_messages": len(conversation_history),
-                    "current_phase": orchestrator.session_state.get("current_phase", "unknown"),
-                    "plan_steps": len(current_plan),
-                    "current_plan_step": orchestrator.session_state.get("plan_step", 0),
-                    "project_state": orchestrator.session_state.get("project_state", {})
-                },
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            logger.info(f"Debug: Returning session info with {len(conversation_history)} messages and {len(current_plan)} plan steps")
-            return debug_response
-        else:
-            logger.warning(f"Debug: Session ID mismatch. Requested: {session_id}, Current: {orchestrator.session_id}")
-            return {
-                "session_id": session_id,
-                "error": "Session not found or not current session",
-                "current_session_id": orchestrator.session_id,
-                "timestamp": datetime.now().isoformat()
-            }
-            
-    except Exception as e:
-        logger.error(f"Error getting session debug info: {e}")
-        logger.error(f"Exception details: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return {
-            "session_id": session_id,
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
-
-@app.get("/api/debug/test")
-def test_debug_endpoint():
-    """Simple test endpoint to check if debug endpoints are working"""
-    logger.info("Debug: Test endpoint called")
-    return {
-        "status": "debug_endpoints_working",
-        "message": "Debug endpoints are accessible",
-        "timestamp": datetime.now().isoformat(),
-        "orchestrator_session_id": orchestrator.session_id,
-        "orchestrator_initialized": orchestrator is not None,
-        "session_state_keys": list(orchestrator.session_state.keys()) if orchestrator else []
-    }
-
-@app.get("/api/debug/logs")
-def get_recent_logs(limit: int = 50):
-    """Get recent application logs"""
-    try:
-        logger.info(f"Debug: Logs endpoint called with limit: {limit}")
-        return {
-            "message": "Logs are written to console and agent_debug.log file",
-            "log_file": "agent_debug.log",
-            "console_logging": "Enabled with DEBUG level",
-            "note": "Run the backend with --log-level debug for more detailed logs",
-            "current_log_level": "DEBUG",
-            "orchestrator_status": "Initialized" if orchestrator else "Not initialized"
-        }
-    except Exception as e:
-        logger.error(f"Error getting logs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/debug/test-agent")
-async def test_agent_pipeline(request: ChatMessage):
-    """Test the agent pipeline with detailed output"""
-    try:
-        logger.info(f"Debug: Testing agent pipeline with message: {request.message[:100]}...")
-        
-        # Test the orchestrator with a simple message
-        result = await orchestrator.process_user_message(
-            request.message, 
-            request.context
-        )
-        
-        logger.info(f"Debug: Agent pipeline test completed successfully")
-        
-        return {
-            "success": True,
-            "test_result": result,
-            "orchestrator_session_id": orchestrator.session_id,
-            "debug_info": {
-                "message_processed": request.message,
-                "session_state": orchestrator.session_state,
-                "conversation_history_length": len(orchestrator.session_state.get("conversation_history", [])),
-                "current_phase": orchestrator.session_state.get("current_phase", "unknown")
-            }
-        }
-    except Exception as e:
-        logger.error(f"Debug test failed: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return {
-            "success": False,
-            "error": str(e),
-            "debug_info": {
-                "error_traceback": str(e),
-                "orchestrator_session_id": orchestrator.session_id
-            }
-        }
-
-@app.get("/api/debug/reasoning/{session_id}")
-async def get_reasoning_chain(session_id: str):
-    """Get the complete reasoning chain for a session"""
-    try:
-        logger.info(f"Debug: Requesting reasoning chain for session_id: {session_id}")
-        
-        # Check if this is the current session
-        if session_id == orchestrator.session_id:
-            conversation_history = orchestrator.session_state.get("conversation_history", [])
-            current_plan = orchestrator.session_state.get("current_plan", [])
-            
-            logger.info(f"Debug: Returning reasoning chain with {len(conversation_history)} steps")
-            
-            return {
-                "session_id": session_id,
-                "reasoning_chain": conversation_history,
-                "agent_thinking": {
-                    "current_plan": current_plan,
-                    "plan_step": orchestrator.session_state.get("plan_step", 0),
-                    "total_plan_steps": len(current_plan)
-                },
-                "total_reasoning_steps": len(conversation_history),
-                "agents_involved": ["lean_flow_orchestrator", "requirements_analysis", "template_recommendation", "question_generation", "user_proxy"],
-                "current_phase": orchestrator.session_state.get("current_phase", "unknown"),
-                "timestamp": datetime.now().isoformat()
-            }
-        else:
-            logger.warning(f"Debug: Session ID mismatch for reasoning chain. Requested: {session_id}, Current: {orchestrator.session_id}")
-            return {
-                "session_id": session_id,
-                "error": "Session not found or not current session",
-                "current_session_id": orchestrator.session_id,
-                "timestamp": datetime.now().isoformat()
-            }
-    except Exception as e:
-        logger.error(f"Error getting reasoning chain: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return {
-            "session_id": session_id,
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
-
-@app.get("/api/debug/cot-summary/{session_id}")
-async def get_cot_summary(session_id: str):
-    """Get a summary of chain-of-thought reasoning for a session"""
-    try:
-        # Check if this is the current session
-        if session_id == orchestrator.session_id:
-            conversation_history = orchestrator.session_state.get("conversation_history", [])
-            current_plan = orchestrator.session_state.get("current_plan", [])
-            
-            # Analyze conversation history
-            user_messages = [msg for msg in conversation_history if msg.get("role") == "user"]
-            assistant_messages = [msg for msg in conversation_history if msg.get("role") == "assistant"]
-            
-            # Count step types
-            step_types = {}
-            for step in current_plan:
-                step_type = step.get("action", "unknown")
-                step_types[step_type] = step_types.get(step_type, 0) + 1
-            
-            return {
-                "session_id": session_id,
-                "summary": {
-                    "total_steps": len(conversation_history),
-                    "user_messages": len(user_messages),
-                    "assistant_messages": len(assistant_messages),
-                    "agents_used": ["lean_flow_orchestrator", "requirements_analysis", "template_recommendation", "question_generation", "user_proxy"],
-                    "layer_activity": {
-                        "conversation_history_length": len(conversation_history),
-                        "current_plan_length": len(current_plan),
-                        "current_phase": orchestrator.session_state.get("current_phase", "unknown")
-                    },
-                    "step_types": step_types,
-                    "first_step": conversation_history[0] if conversation_history else None,
-                    "last_step": conversation_history[-1] if conversation_history else None
-                },
-                "timestamp": datetime.now().isoformat()
-            }
-        else:
-            return {
-                "session_id": session_id,
-                "error": "Session not found or not current session",
-                "current_session_id": orchestrator.session_id,
-                "timestamp": datetime.now().isoformat()
-            }
-    except Exception as e:
-        logger.error(f"Error getting COT summary: {e}")
-        return {
-            "session_id": session_id,
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
-
-@app.post("/api/chat-with-cot")
-async def chat_with_cot(chat_message: ChatMessage):
-    """Enhanced chat endpoint that returns reasoning chain along with response"""
-    try:
-        # Process the message through the orchestrator
-        result = await orchestrator.process_user_message(
-            chat_message.message, 
-            chat_message.context
-        )
-        
-        # Get reasoning chain
-        conversation_history = orchestrator.session_state.get("conversation_history", [])
-        current_plan = orchestrator.session_state.get("current_plan", [])
-        
-        return {
-            "response": result.get("response", "No response generated"),
-            "session_id": result.get("session_id", orchestrator.session_id),
-            "success": result.get("success", False),
-            "metadata": result.get("metadata", {}),
-            "validation_results": result.get("validation_results", []),
-            "reasoning_chain": conversation_history,
-            "current_plan": current_plan,
-            "cot_enhanced": True,
-            "debug_info": {
-                "current_phase": orchestrator.session_state.get("current_phase", "unknown"),
-                "total_conversation_steps": len(conversation_history),
-                "plan_steps": len(current_plan)
-            }
-        }
-    except Exception as e:
-        logger.error(f"Error in chat-with-cot: {e}")
-        return {
-            "response": f"Error: {str(e)}",
-            "session_id": orchestrator.session_id,
-            "success": False,
-            "metadata": {"error": str(e)},
-            "validation_results": [],
-            "reasoning_chain": [],
-            "cot_enhanced": False
-        }
+# Remove debug endpoints - not needed for production
+# @app.get("/api/debug/test")
+# @app.get("/api/debug/logs") 
+# @app.post("/api/debug/test-agent")
+# @app.get("/api/debug/reasoning/{session_id}")
+# @app.get("/api/debug/cot-summary/{session_id}")
+# @app.post("/api/chat-with-cot")
 
 @app.get("/api/health")
 def health_check():
     """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0"
+    }
+
+@app.get("/api/ui-codes/{template_id}")
+async def get_ui_codes(template_id: str):
+    """Get UI codes (HTML, CSS, JS) for a specific template"""
     try:
-        # Test database connection
-        db = get_db()
-        db.command("ping")
+        from bson import ObjectId
+        from tools.ui_preview_tools import UIPreviewTools
+        
+        # Handle special case for "default" template
+        if template_id == "default":
+            return await get_default_ui_codes()
+        
+        # Validate template_id format for MongoDB ObjectId
+        try:
+            ObjectId(template_id)
+        except:
+            raise HTTPException(status_code=400, detail="Invalid template ID format")
+        
+        # Use the existing UI preview tools to get template data
+        ui_tools = UIPreviewTools()
+        result = ui_tools.get_template_code(template_id)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=404, detail=result.get("error", "Template not found"))
+        
+        # Return structured UI codes matching MongoDB structure
+        return {
+            "success": True,
+            "template_id": template_id,
+            "template_name": result["template_info"]["name"],
+            "ui_codes": {
+                "html_export": result["code_data"]["html_export"],
+                "globals_css": result["code_data"]["global_css"],
+                "style_css": result["code_data"]["style_css"],
+                "js": result["code_data"].get("js_code", ""),
+                "complete_html": result["code_data"]["complete_html"]
+            },
+            "metadata": {
+                "category": result["template_info"]["category"],
+                "description": result["template_info"]["description"]
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching UI codes for template {template_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/ui-codes/default")
+async def get_default_ui_codes():
+    """Get default UI codes for the editor (placeholder content)"""
+    try:
+        # Return a simple default template
+        default_html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Editor</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        .title {
+            font-size: 2em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">Welcome!</h1>
+        <p class="subtitle">This is your UI editor. Start customizing your template!</p>
+        <button class="button" id="demo-button">Click Me!</button>
+    </div>
+    
+    <script>
+        document.getElementById('demo-button').addEventListener('click', function() {
+            this.style.background = '#ff4444';
+            this.textContent = 'Button Clicked!';
+        });
+    </script>
+</body>
+</html>"""
         
         return {
-            "status": "healthy",
-            "database": "connected",
-            "orchestrator": "ready",
-            "session_id": orchestrator.session_id,
-            "timestamp": datetime.now().isoformat()
+            "success": True,
+            "template_id": "default",
+            "template_name": "Default Template",
+            "ui_codes": {
+                "html_export": default_html,
+                "globals_css": "",
+                "style_css": "",
+                "js": "",
+                "complete_html": default_html
+            },
+            "metadata": {
+                "category": "default",
+                "description": "Default template for the UI editor"
+            }
         }
+        
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e)
+        logger.error(f"Error fetching default UI codes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+class UICodeModification(BaseModel):
+    template_id: str
+    modification_type: str  # 'css_change', 'html_change', 'js_change', 'complete_change'
+    changes: Dict[str, Any]
+    session_id: Optional[str] = None
+
+class UICodeModificationResponse(BaseModel):
+    success: bool
+    message: str
+    updated_codes: Optional[Dict[str, Any]] = None
+    file_path: Optional[str] = None
+
+@app.post("/api/ui-codes/modify", response_model=UICodeModificationResponse)
+async def modify_ui_codes(modification: UICodeModification):
+    """Modify UI codes and store in temporary JSON files"""
+    try:
+        import json
+        import os
+        from pathlib import Path
+        
+        # Create temp directory if it doesn't exist
+        temp_dir = Path("temp_ui_files")
+        temp_dir.mkdir(exist_ok=True)
+        
+        # Generate unique filename based on template_id and session_id
+        session_id = modification.session_id or "default"
+        filename = f"ui_codes_{modification.template_id}_{session_id}.json"
+        file_path = temp_dir / filename
+        
+        # Get current UI codes (either from existing file or default)
+        current_data = {}
+        if file_path.exists():
+            with open(file_path, 'r', encoding='utf-8') as f:
+                current_data = json.load(f)
+                # Extract current codes from the flat structure
+                current_codes = current_data.get("current_codes", {})
+                history = current_data.get("history", [])
+        else:
+            # Initialize with default codes if no existing file
+            if modification.template_id == "default":
+                default_response = await get_default_ui_codes()
+                current_codes = default_response["ui_codes"]
+            else:
+                # Fetch from MongoDB
+                ui_tools = UIPreviewTools()
+                result = ui_tools.get_template_code(modification.template_id)
+                if result["success"]:
+                    current_codes = result["code_data"]
+                else:
+                    raise HTTPException(status_code=404, detail="Template not found")
+            history = []
+        
+        # Apply modifications based on type
+        updated_codes = current_codes.copy()
+        modification_description = ""
+        
+        if modification.modification_type == "css_change":
+            # Modify CSS properties
+            for selector, properties in modification.changes.items():
+                if "style_css" not in updated_codes:
+                    updated_codes["style_css"] = ""
+                
+                # Simple CSS modification - append new styles
+                new_css = f"\n{selector} {{\n"
+                for prop, value in properties.items():
+                    new_css += f"    {prop}: {value};\n"
+                new_css += "}\n"
+                updated_codes["style_css"] += new_css
+                
+                # Create modification description
+                props_list = [f"{prop} to {value}" for prop, value in properties.items()]
+                modification_description = f"Changed {selector} styles: set {', '.join(props_list)}"
+                
+        elif modification.modification_type == "html_change":
+            # Modify HTML content
+            if "html_export" in modification.changes:
+                updated_codes["html_export"] = modification.changes["html_export"]
+                modification_description = "Updated HTML content"
+                
+        elif modification.modification_type == "js_change":
+            # Modify JavaScript
+            if "js" in modification.changes:
+                updated_codes["js"] = modification.changes["js"]
+                modification_description = "Updated JavaScript code"
+                
+        elif modification.modification_type == "complete_change":
+            # Complete replacement of codes
+            updated_codes.update(modification.changes)
+            modification_description = "Complete code replacement"
+            
+        else:
+            raise HTTPException(status_code=400, detail="Invalid modification type")
+        
+        # Rebuild complete HTML
+        updated_codes["complete_html"] = _rebuild_complete_html(
+            updated_codes.get("html_export", ""),
+            updated_codes.get("globals_css", "") + updated_codes.get("style_css", ""),
+            updated_codes.get("js", "")
+        )
+        
+        # Add to history
+        history.append({
+            "timestamp": datetime.now().isoformat(),
+            "modification": modification_description
+        })
+        
+        # Save to JSON file with clean, flat structure
+        save_data = {
+            "template_id": modification.template_id,
+            "session_id": session_id,
+            "last_updated": datetime.now().isoformat(),
+            "current_codes": updated_codes,
+            "history": history
         }
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
+        
+        return UICodeModificationResponse(
+            success=True,
+            message="UI codes modified successfully",
+            updated_codes=updated_codes,
+            file_path=str(file_path)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error modifying UI codes: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+def _rebuild_complete_html(html_code: str, css_code: str, js_code: str) -> str:
+    """Rebuild complete HTML document with embedded CSS and JS"""
+    # If html_code already has DOCTYPE, use it as is
+    if html_code.strip().startswith("<!DOCTYPE"):
+        # Insert CSS into head section
+        css_insert = f'<style>\n{css_code}\n</style>' if css_code else ''
+        head_end = html_code.find("</head>")
+        if head_end != -1:
+            html_with_css = html_code[:head_end] + css_insert + html_code[head_end:]
+        else:
+            # No head section, insert at beginning
+            html_with_css = f'<head>\n{css_insert}\n</head>\n{html_code}'
+    else:
+        # Create complete HTML document
+        html_with_css = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Editor</title>
+    <style>
+{css_code}
+    </style>
+</head>
+<body>
+{html_code}
+    <script>
+{js_code}
+    </script>
+</body>
+</html>"""
+    
+    return html_with_css
+
+@app.get("/api/ui-codes/session/{session_id}")
+async def get_session_ui_codes(session_id: str):
+    """Get UI codes for a specific session from temporary files"""
+    try:
+        import json
+        from pathlib import Path
+        
+        temp_dir = Path("temp_ui_files")
+        
+        # Find the most recent file for this session
+        session_files = list(temp_dir.glob(f"ui_codes_*_{session_id}.json"))
+        
+        if not session_files:
+            # Return default if no session file exists
+            return await get_default_ui_codes()
+        
+        # Get the most recent file
+        latest_file = max(session_files, key=lambda x: x.stat().st_mtime)
+        
+        with open(latest_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        return {
+            "success": True,
+            "template_id": data["template_id"],
+            "session_id": session_id,
+            "ui_codes": data["current_codes"],
+            "metadata": {
+                "last_modified": data["last_updated"],
+                "file_path": str(latest_file),
+                "history_count": len(data.get("history", []))
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching session UI codes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/ui-editor/chat", response_model=UIEditorChatResponse)
+async def ui_editor_chat(request: UIEditorChatRequest):
+    """AI-powered chat endpoint for UI editor that can modify UI codes using enhanced orchestrator"""
+    try:
+        session_id = request.session_id or "default_session"
+        
+        # Get current UI codes if not provided
+        current_ui_codes = request.current_ui_codes
+        if not current_ui_codes:
+            # Fetch current UI codes for the session
+            try:
+                session_response = await get_session_ui_codes(session_id)
+                if session_response.get("success") and session_response.get("ui_codes"):
+                    current_ui_codes = session_response["ui_codes"]["current_codes"]
+                else:
+                    # Fallback to default template
+                    default_response = await get_default_ui_codes()
+                    current_ui_codes = default_response["ui_codes"]
+            except Exception as e:
+                logger.error(f"Error fetching current UI codes: {e}")
+                # Use default template as fallback
+                default_response = await get_default_ui_codes()
+                current_ui_codes = default_response["ui_codes"]
+        
+        # Use the enhanced orchestrator for Phase 2 editing
+        from agents.lean_flow_orchestrator import LeanFlowOrchestrator
+        orchestrator = LeanFlowOrchestrator()
+        
+        # Handle the editing phase request
+        response = orchestrator.handle_editing_phase(
+            user_message=request.message,
+            current_ui_state=current_ui_codes,
+            session_id=session_id
+        )
+        
+        # Extract modifications and new UI codes if available
+        modifications = response.get("modifications")
+        new_ui_codes = response.get("metadata", {}).get("new_ui_codes")
+        
+        return UIEditorChatResponse(
+            success=response["success"],
+            response=response["response"],
+            ui_modifications=modifications,
+            session_id=session_id,
+            metadata={
+                "intent": response.get("metadata", {}).get("intent", "unknown"),
+                "new_ui_codes": new_ui_codes,
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in UI editor chat: {e}")
+        return UIEditorChatResponse(
+            success=False,
+            response=f"Sorry, I encountered an error: {str(e)}",
+            session_id=request.session_id or "default_session"
+        )
 
 if __name__ == "__main__":
     import uvicorn
