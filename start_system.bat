@@ -45,9 +45,7 @@ start "Main Backend Server" cmd /k "cd backend && venv\Scripts\activate && pytho
 REM Wait a moment
 timeout /t 3 /nobreak >nul
 
-REM Start AutoGen API server
-echo 🤖 Starting AutoGen API server...
-start "AutoGen API Server" cmd /k "cd backend && venv\Scripts\activate && python autogen_api.py"
+REM AutoGen API server removed - no longer needed
 
 REM Wait a moment
 timeout /t 3 /nobreak >nul
@@ -64,7 +62,7 @@ echo 🎉 All services started successfully!
 echo.
 echo 📱 Services running:
 echo    • Main Backend: http://localhost:8000
-echo    • AutoGen API:  http://localhost:8001
+REM AutoGen API removed - no longer needed
 echo    • Frontend:     http://localhost:3000
 echo.
 

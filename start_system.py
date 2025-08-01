@@ -75,35 +75,7 @@ def start_backend_server():
         print(f"❌ Error starting main backend server: {e}")
         return None
 
-def start_autogen_server():
-    """Start the AutoGen API server"""
-    print("🤖 Starting AutoGen API server...")
-    
-    try:
-        # Change to backend directory
-        os.chdir("backend")
-        
-        # Activate virtual environment and start server
-        if os.name == 'nt':  # Windows
-            cmd = ["venv\\Scripts\\python.exe", "autogen_api.py"]
-        else:  # Unix/Linux/macOS
-            cmd = ["./venv/bin/python", "autogen_api.py"]
-        
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
-        # Wait a bit for server to start
-        time.sleep(3)
-        
-        if process.poll() is None:
-            print("✅ AutoGen API server started on http://localhost:8001")
-            return process
-        else:
-            print("❌ Failed to start AutoGen API server")
-            return None
-            
-    except Exception as e:
-        print(f"❌ Error starting AutoGen API server: {e}")
-        return None
+# AutoGen server function removed - no longer needed
 
 def start_frontend():
     """Start the frontend development server"""
@@ -147,9 +119,7 @@ def open_browsers():
         webbrowser.open("http://localhost:8000/docs")
         print("✅ Opened main API documentation")
         
-        # Open AutoGen API docs
-        webbrowser.open("http://localhost:8001/docs")
-        print("✅ Opened AutoGen API documentation")
+        # AutoGen API docs removed - no longer needed
         
         # Open frontend
         webbrowser.open("http://localhost:3000")
@@ -181,10 +151,7 @@ def main():
         if backend_process:
             processes.append(("Main Backend", backend_process))
         
-        # Start AutoGen API server
-        autogen_process = start_autogen_server()
-        if autogen_process:
-            processes.append(("AutoGen API", autogen_process))
+        # AutoGen API server removed - no longer needed
         
         # Start frontend server
         frontend_process = start_frontend()
@@ -192,11 +159,10 @@ def main():
             processes.append(("Frontend", frontend_process))
         
         # Check if all services started successfully
-        if len(processes) == 3:
+        if len(processes) == 2:
             print("\n🎉 All services started successfully!")
             print("\n📱 Services running:")
             print("   • Main Backend: http://localhost:8000")
-            print("   • AutoGen API:  http://localhost:8001")
             print("   • Frontend:     http://localhost:3000")
             
             # Open browsers
@@ -212,7 +178,7 @@ def main():
                 print("\n🛑 Stopping all services...")
                 
         else:
-            print(f"\n❌ Only {len(processes)}/3 services started successfully")
+            print(f"\n❌ Only {len(processes)}/2 services started successfully")
             print("Please check the error messages above")
     
     except KeyboardInterrupt:

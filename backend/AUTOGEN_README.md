@@ -219,7 +219,7 @@ Each agent can be configured with different models and parameters in their respe
 class CustomUserProxyAgent(UserProxyAgent):
     def __init__(self):
         super().__init__()
-        self.model = "claude-3-5-sonnet-20241022"  # Different model
+        self.model = "claude-3-5-haiku-20241022"  # Different model
 ```
 
 ## 🧪 Testing

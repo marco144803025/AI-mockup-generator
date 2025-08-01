@@ -9,8 +9,8 @@ import anthropic
 from db import get_db
 from datetime import datetime
 
-# Import the new layered orchestrator
-from layered_orchestrator import LayeredOrchestrator
+# Import the lean flow orchestrator with focused agents
+from agents.lean_flow_orchestrator import LeanFlowOrchestrator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,8 +27,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize the layered orchestrator
-orchestrator = LayeredOrchestrator()
+# Initialize the lean flow orchestrator
+orchestrator = LeanFlowOrchestrator()
 
 # Claude API configuration
 CLAUDE_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -63,13 +63,13 @@ class ClaudeResponse(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"message": "Layered AI UI Workflow API"}
+    return {"message": "Enhanced AI UI Workflow API"}
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_with_ai(chat_message: ChatMessage):
-    """Main chat endpoint using the layered orchestrator"""
+    """Main chat endpoint using the lean flow orchestrator with focused agents"""
     try:
-        # Process the message through the layered orchestrator
+        # Process the message through the flow orchestrator
         result = await orchestrator.process_user_message(
             chat_message.message, 
             chat_message.context
@@ -81,7 +81,7 @@ async def chat_with_ai(chat_message: ChatMessage):
                 session_id=result["session_id"],
                 success=True,
                 metadata=result.get("metadata"),
-                validation_results=result.get("validation_results")
+                validation_results=result.get("validation_results", [])
             )
         else:
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
@@ -174,8 +174,7 @@ def get_session_status():
 def reset_session():
     """Reset the current session"""
     try:
-        result = orchestrator.reset_session()
-        return result
+        return orchestrator.reset_session()
     except Exception as e:
         logger.error(f"Error resetting session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -184,36 +183,54 @@ def reset_session():
 def get_template_categories():
     """Get available template categories"""
     try:
-        db = get_db()
-        # Get categories from direct category field
-        direct_categories = db.templates.distinct("category")
+        # First, try to get categories from database with a timeout
+        import asyncio
+        import concurrent.futures
         
-        # Get categories from metadata.category field
-        metadata_categories = db.templates.distinct("metadata.category")
+        def fetch_categories_from_db():
+            try:
+                db = get_db()
+                # Get categories from direct category field
+                direct_categories = db.templates.distinct("category")
+                
+                # Get categories from metadata.category field
+                metadata_categories = db.templates.distinct("metadata.category")
+                
+                # Combine and deduplicate categories
+                all_categories = list(set(direct_categories + metadata_categories))
+                
+                # Remove None/empty values
+                all_categories = [cat for cat in all_categories if cat]
+                
+                # Normalize categories to lowercase for consistency
+                normalized_categories = []
+                category_mapping = {
+                    'About': 'about',
+                    'sign-up': 'signup',
+                    'Login': 'login',
+                    'Profile': 'profile',
+                    'Landing': 'landing',
+                    'Portfolio': 'portfolio'
+                }
+                
+                for category in all_categories:
+                    normalized = category_mapping.get(category, category.lower())
+                    if normalized not in normalized_categories:
+                        normalized_categories.append(normalized)
+                
+                return normalized_categories
+            except Exception as e:
+                logger.error(f"Database error fetching categories: {e}")
+                return []
         
-        # Combine and deduplicate categories
-        all_categories = list(set(direct_categories + metadata_categories))
-        
-        # Remove None/empty values
-        all_categories = [cat for cat in all_categories if cat]
-        
-        # Normalize categories to lowercase for consistency
-        normalized_categories = []
-        category_mapping = {
-            'About': 'about',
-            'sign-up': 'signup',
-            'Sign-up': 'signup',
-            'Signup': 'signup',
-            'Login': 'login',
-            'Profile': 'profile',
-            'Landing': 'landing',
-            'Portfolio': 'portfolio'
-        }
-        
-        for category in all_categories:
-            normalized = category_mapping.get(category, category.lower())
-            if normalized not in normalized_categories:
-                normalized_categories.append(normalized)
+        # Try to fetch from database with 3-second timeout
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(fetch_categories_from_db)
+            try:
+                normalized_categories = future.result(timeout=3.0)
+            except concurrent.futures.TimeoutError:
+                logger.warning("Database query timed out, using default categories")
+                normalized_categories = []
         
         # If no categories found in database, provide default categories
         if not normalized_categories:
@@ -234,44 +251,25 @@ def get_template_categories():
 
 @app.get("/api/templates/category-constraints/{category}")
 def get_category_constraints(category: str):
-    """Get category-specific constraints for prompt engineering"""
+    """Get category-specific constraints for prompt engineering using MongoDB tools"""
     try:
-        db = get_db()
+        # Use the MongoDB tools to get templates by category
+        from tools.mongodb_tools import MongoDBTools
+        mongodb_tools = MongoDBTools()
         
-        # Normalize the input category
-        category_mapping = {
-            'About': 'about',
-            'sign-up': 'signup',
-            'Sign-up': 'signup',
-            'Signup': 'signup',
-            'Login': 'login',
-            'Profile': 'profile',
-            'Landing': 'landing',
-            'Portfolio': 'portfolio'
-        }
+        result = mongodb_tools.get_templates_by_category(category, limit=50)  # Get more templates for better analysis
         
-        # Find templates in this category (check both direct and metadata fields)
-        # Also check for variations of the category name
-        possible_categories = [category]
-        for original, normalized in category_mapping.items():
-            if normalized == category:
-                possible_categories.append(original)
-            elif original == category:
-                possible_categories.append(normalized)
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=f"Error fetching templates for category: {category}")
         
-        category_templates = list(db.templates.find({
-            "$or": [
-                {"category": {"$in": possible_categories}},
-                {"metadata.category": {"$in": possible_categories}}
-            ]
-        }))
+        templates = result.get("templates", [])
         
-        if not category_templates:
+        if not templates:
             raise HTTPException(status_code=404, detail=f"No templates found for category: {category}")
         
         # Extract unique tags from all templates in this category
         all_tags = []
-        for template in category_templates:
+        for template in templates:
             tags = template.get('tags', [])
             if isinstance(tags, list):
                 all_tags.extend(tags)
@@ -300,7 +298,7 @@ def get_category_constraints(category: str):
         
         return {
             "category": category,
-            "templates_count": len(category_templates),
+            "templates_count": len(templates),
             "category_tags": unique_tags,
             "styles": styles,
             "themes": themes,
@@ -310,7 +308,7 @@ def get_category_constraints(category: str):
                 {
                     "name": template.get('name', 'Unknown'),
                     "tags": template.get('tags', [])
-                } for template in category_templates
+                } for template in templates
             ]
         }
     except HTTPException:
@@ -321,131 +319,137 @@ def get_category_constraints(category: str):
 
 @app.get("/api/templates")
 def get_templates(category: Optional[str] = None, limit: int = 10):
-    """Get templates with optional category filter"""
+    """Get templates with optional category filter using MongoDB tools"""
     try:
-        db = get_db()
+        # Use the MongoDB tools to get templates
+        from tools.mongodb_tools import MongoDBTools
+        mongodb_tools = MongoDBTools()
         
-        # Build query
-        query = {}
         if category:
-            # Normalize the input category and check for variations
-            category_mapping = {
-                'About': 'about',
-                'sign-up': 'signup',
-                'Sign-up': 'signup',
-                'Signup': 'signup',
-                'Login': 'login',
-                'Profile': 'profile',
-                'Landing': 'landing',
-                'Portfolio': 'portfolio'
-            }
-            
-            possible_categories = [category]
-            for original, normalized in category_mapping.items():
-                if normalized == category:
-                    possible_categories.append(original)
-                elif original == category:
-                    possible_categories.append(normalized)
-            
-            query["$or"] = [
-                {"category": {"$in": possible_categories}},
-                {"metadata.category": {"$in": possible_categories}}
-            ]
+            # Get templates by category
+            result = mongodb_tools.get_templates_by_category(category, limit)
+        else:
+            # Get all templates by fetching from all available categories
+            categories_result = mongodb_tools.get_available_categories()
+            if categories_result.get("success"):
+                all_templates = []
+                for cat in categories_result.get("categories", []):
+                    cat_result = mongodb_tools.get_templates_by_category(cat, limit // len(categories_result.get("categories", [1])))
+                    if cat_result.get("success"):
+                        all_templates.extend(cat_result.get("templates", []))
+                result = {"success": True, "templates": all_templates}
+            else:
+                # Fallback to a default category if categories can't be fetched
+                result = mongodb_tools.get_templates_by_category("landing", limit)
         
-        # Execute query
-        templates = list(db.templates.find(query).limit(limit))
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=f"Error fetching templates: {result.get('error', 'Unknown error')}")
         
-        # Convert ObjectId to string for JSON serialization
+        templates = result.get("templates", [])
+        
+        # Convert the template format to match the expected API response
+        formatted_templates = []
         for template in templates:
-            if '_id' in template:
-                template['_id'] = str(template['_id'])
+            formatted_template = {
+                "_id": template.get("template_id", ""),
+                "name": template.get("name", "Unknown"),
+                "category": template.get("category", category or "unknown"),
+                "tags": template.get("tags", []),
+                "metadata": {
+                    "category": template.get("category", category or "unknown"),
+                    "description": template.get("description", ""),
+                    "figma_url": template.get("figma_url", "")
+                }
+            }
+            formatted_templates.append(formatted_template)
         
         return {
-            "templates": templates,
-            "count": len(templates),
+            "templates": formatted_templates,
+            "count": len(formatted_templates),
             "category": category
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching templates: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching templates: {str(e)}")
 
 @app.get("/api/debug/session/{session_id}")
 def get_session_debug_info(session_id: str):
-    """Get detailed debug information for a session"""
+    """Get detailed session debug information"""
     try:
-        logger.info(f"Debug endpoint called for session: {session_id}")
+        logger.info(f"Debug: Requesting session info for session_id: {session_id}")
+        logger.info(f"Debug: Current orchestrator session_id: {orchestrator.session_id}")
         
-        # Get session state from memory
-        session_state = orchestrator.memory.retrieve_project_state(session_id)
-        logger.info(f"Retrieved session state: {session_state is not None}")
-        
-        conversation_context = orchestrator.memory.retrieve_conversation_context(session_id)
-        logger.info(f"Retrieved conversation context: {conversation_context is not None}")
-        
-        # Get conversation history from control layer
-        conversation_history = orchestrator.control.conversation_history
-        logger.info(f"Conversation history length: {len(conversation_history)}")
-        
-        # Get validation summary
-        validation_summary = orchestrator.validation.get_validation_summary()
-        logger.info(f"Validation summary retrieved")
-        
-        # Get tool statistics
-        tool_stats = orchestrator.tools.get_tool_statistics()
-        logger.info(f"Tool statistics retrieved")
-        
-        # Convert datetime objects to strings for JSON serialization
-        def convert_datetime(obj):
-            if hasattr(obj, 'isoformat'):  # datetime objects
-                return obj.isoformat()
-            elif isinstance(obj, dict):
-                return {k: convert_datetime(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [convert_datetime(item) for item in obj]
-            return obj
-        
-        response_data = {
-            "session_id": session_id,
-            "session_state": convert_datetime(session_state),
-            "conversation_context": convert_datetime(conversation_context),
-            "conversation_history": convert_datetime(conversation_history),
-            "validation_summary": convert_datetime(validation_summary),
-            "tool_statistics": convert_datetime(tool_stats),
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        logger.info(f"Debug response prepared successfully")
-        return response_data
-        
+        # Check if this is the current session
+        if session_id == orchestrator.session_id:
+            session_status = orchestrator.get_session_status()
+            conversation_history = orchestrator.session_state.get("conversation_history", [])
+            current_plan = orchestrator.session_state.get("current_plan", [])
+            
+            debug_response = {
+                "session_id": session_id,
+                "session_status": session_status,
+                "session_state": orchestrator.session_state,
+                "conversation_history": conversation_history,
+                "current_plan": current_plan,
+                "debug_info": {
+                    "total_messages": len(conversation_history),
+                    "current_phase": orchestrator.session_state.get("current_phase", "unknown"),
+                    "plan_steps": len(current_plan),
+                    "current_plan_step": orchestrator.session_state.get("plan_step", 0),
+                    "project_state": orchestrator.session_state.get("project_state", {})
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            logger.info(f"Debug: Returning session info with {len(conversation_history)} messages and {len(current_plan)} plan steps")
+            return debug_response
+        else:
+            logger.warning(f"Debug: Session ID mismatch. Requested: {session_id}, Current: {orchestrator.session_id}")
+            return {
+                "session_id": session_id,
+                "error": "Session not found or not current session",
+                "current_session_id": orchestrator.session_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
     except Exception as e:
-        logger.error(f"Error getting debug info: {e}")
+        logger.error(f"Error getting session debug info: {e}")
+        logger.error(f"Exception details: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return {
-            "error": str(e),
             "session_id": session_id,
-            "message": "Failed to retrieve debug information"
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
         }
 
 @app.get("/api/debug/test")
 def test_debug_endpoint():
     """Simple test endpoint to check if debug endpoints are working"""
+    logger.info("Debug: Test endpoint called")
     return {
         "status": "debug_endpoints_working",
         "message": "Debug endpoints are accessible",
         "timestamp": datetime.now().isoformat(),
-        "orchestrator_session_id": orchestrator.session_id
+        "orchestrator_session_id": orchestrator.session_id,
+        "orchestrator_initialized": orchestrator is not None,
+        "session_state_keys": list(orchestrator.session_state.keys()) if orchestrator else []
     }
 
 @app.get("/api/debug/logs")
 def get_recent_logs(limit: int = 50):
     """Get recent application logs"""
     try:
-        # This would require setting up a log handler that stores logs in memory
-        # For now, return a message about where to find logs
+        logger.info(f"Debug: Logs endpoint called with limit: {limit}")
         return {
             "message": "Logs are written to console and agent_debug.log file",
             "log_file": "agent_debug.log",
             "console_logging": "Enabled with DEBUG level",
-            "note": "Run the backend with --log-level debug for more detailed logs"
+            "note": "Run the backend with --log-level debug for more detailed logs",
+            "current_log_level": "DEBUG",
+            "orchestrator_status": "Initialized" if orchestrator else "Not initialized"
         }
     except Exception as e:
         logger.error(f"Error getting logs: {e}")
@@ -455,31 +459,175 @@ def get_recent_logs(limit: int = 50):
 async def test_agent_pipeline(request: ChatMessage):
     """Test the agent pipeline with detailed output"""
     try:
-        # Process the message and capture detailed information
-        result = await orchestrator.process_user_message(request.message, request.context)
+        logger.info(f"Debug: Testing agent pipeline with message: {request.message[:100]}...")
         
-        # Get additional debug information
-        session_state = orchestrator.memory.retrieve_project_state(result["session_id"])
-        conversation_history = orchestrator.control.conversation_history[-5:]  # Last 5 entries
+        # Test the orchestrator with a simple message
+        result = await orchestrator.process_user_message(
+            request.message, 
+            request.context
+        )
+        
+        logger.info(f"Debug: Agent pipeline test completed successfully")
         
         return {
             "success": True,
-            "result": result,
+            "test_result": result,
+            "orchestrator_session_id": orchestrator.session_id,
             "debug_info": {
-                "session_state": session_state,
-                "recent_conversation_history": conversation_history,
-                "validation_summary": orchestrator.validation.get_validation_summary(),
-                "tool_statistics": orchestrator.tools.get_tool_statistics()
+                "message_processed": request.message,
+                "session_state": orchestrator.session_state,
+                "conversation_history_length": len(orchestrator.session_state.get("conversation_history", [])),
+                "current_phase": orchestrator.session_state.get("current_phase", "unknown")
             }
         }
     except Exception as e:
-        logger.error(f"Error in test agent pipeline: {e}")
+        logger.error(f"Debug test failed: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return {
             "success": False,
             "error": str(e),
             "debug_info": {
-                "error_traceback": str(e)
+                "error_traceback": str(e),
+                "orchestrator_session_id": orchestrator.session_id
             }
+        }
+
+@app.get("/api/debug/reasoning/{session_id}")
+async def get_reasoning_chain(session_id: str):
+    """Get the complete reasoning chain for a session"""
+    try:
+        logger.info(f"Debug: Requesting reasoning chain for session_id: {session_id}")
+        
+        # Check if this is the current session
+        if session_id == orchestrator.session_id:
+            conversation_history = orchestrator.session_state.get("conversation_history", [])
+            current_plan = orchestrator.session_state.get("current_plan", [])
+            
+            logger.info(f"Debug: Returning reasoning chain with {len(conversation_history)} steps")
+            
+            return {
+                "session_id": session_id,
+                "reasoning_chain": conversation_history,
+                "agent_thinking": {
+                    "current_plan": current_plan,
+                    "plan_step": orchestrator.session_state.get("plan_step", 0),
+                    "total_plan_steps": len(current_plan)
+                },
+                "total_reasoning_steps": len(conversation_history),
+                "agents_involved": ["lean_flow_orchestrator", "requirements_analysis", "template_recommendation", "question_generation", "user_proxy"],
+                "current_phase": orchestrator.session_state.get("current_phase", "unknown"),
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            logger.warning(f"Debug: Session ID mismatch for reasoning chain. Requested: {session_id}, Current: {orchestrator.session_id}")
+            return {
+                "session_id": session_id,
+                "error": "Session not found or not current session",
+                "current_session_id": orchestrator.session_id,
+                "timestamp": datetime.now().isoformat()
+            }
+    except Exception as e:
+        logger.error(f"Error getting reasoning chain: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return {
+            "session_id": session_id,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/debug/cot-summary/{session_id}")
+async def get_cot_summary(session_id: str):
+    """Get a summary of chain-of-thought reasoning for a session"""
+    try:
+        # Check if this is the current session
+        if session_id == orchestrator.session_id:
+            conversation_history = orchestrator.session_state.get("conversation_history", [])
+            current_plan = orchestrator.session_state.get("current_plan", [])
+            
+            # Analyze conversation history
+            user_messages = [msg for msg in conversation_history if msg.get("role") == "user"]
+            assistant_messages = [msg for msg in conversation_history if msg.get("role") == "assistant"]
+            
+            # Count step types
+            step_types = {}
+            for step in current_plan:
+                step_type = step.get("action", "unknown")
+                step_types[step_type] = step_types.get(step_type, 0) + 1
+            
+            return {
+                "session_id": session_id,
+                "summary": {
+                    "total_steps": len(conversation_history),
+                    "user_messages": len(user_messages),
+                    "assistant_messages": len(assistant_messages),
+                    "agents_used": ["lean_flow_orchestrator", "requirements_analysis", "template_recommendation", "question_generation", "user_proxy"],
+                    "layer_activity": {
+                        "conversation_history_length": len(conversation_history),
+                        "current_plan_length": len(current_plan),
+                        "current_phase": orchestrator.session_state.get("current_phase", "unknown")
+                    },
+                    "step_types": step_types,
+                    "first_step": conversation_history[0] if conversation_history else None,
+                    "last_step": conversation_history[-1] if conversation_history else None
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "session_id": session_id,
+                "error": "Session not found or not current session",
+                "current_session_id": orchestrator.session_id,
+                "timestamp": datetime.now().isoformat()
+            }
+    except Exception as e:
+        logger.error(f"Error getting COT summary: {e}")
+        return {
+            "session_id": session_id,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/api/chat-with-cot")
+async def chat_with_cot(chat_message: ChatMessage):
+    """Enhanced chat endpoint that returns reasoning chain along with response"""
+    try:
+        # Process the message through the orchestrator
+        result = await orchestrator.process_user_message(
+            chat_message.message, 
+            chat_message.context
+        )
+        
+        # Get reasoning chain
+        conversation_history = orchestrator.session_state.get("conversation_history", [])
+        current_plan = orchestrator.session_state.get("current_plan", [])
+        
+        return {
+            "response": result.get("response", "No response generated"),
+            "session_id": result.get("session_id", orchestrator.session_id),
+            "success": result.get("success", False),
+            "metadata": result.get("metadata", {}),
+            "validation_results": result.get("validation_results", []),
+            "reasoning_chain": conversation_history,
+            "current_plan": current_plan,
+            "cot_enhanced": True,
+            "debug_info": {
+                "current_phase": orchestrator.session_state.get("current_phase", "unknown"),
+                "total_conversation_steps": len(conversation_history),
+                "plan_steps": len(current_plan)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error in chat-with-cot: {e}")
+        return {
+            "response": f"Error: {str(e)}",
+            "session_id": orchestrator.session_id,
+            "success": False,
+            "metadata": {"error": str(e)},
+            "validation_results": [],
+            "reasoning_chain": [],
+            "cot_enhanced": False
         }
 
 @app.get("/api/health")
@@ -490,15 +638,12 @@ def health_check():
         db = get_db()
         db.command("ping")
         
-        # Test orchestrator
-        status = orchestrator.get_session_status()
-        
         return {
             "status": "healthy",
             "database": "connected",
             "orchestrator": "ready",
-            "session_id": status.get("session_id"),
-            "timestamp": status.get("session_state", {}).get("created_at")
+            "session_id": orchestrator.session_id,
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")

@@ -1,0 +1,120 @@
+All unique tags from database:
+========================================
+
+Admin Dashboard: 1 occurrences
+Business Intelligence: 1 occurrences
+Form-based: 1 occurrences
+Informative: 1 occurrences
+Input Fields: 1 occurrences
+Organized: 1 occurrences
+SaaS: 1 occurrences
+Soft: 1 occurrences
+about me: 1 occurrences
+about section: 1 occurrences
+abstract gradients: 2 occurrences
+account activity: 1 occurrences
+account creation: 2 occurrences
+analytics: 1 occurrences
+asymmetrical: 1 occurrences
+authentication: 1 occurrences
+banner image header: 1 occurrences
+bold typography: 1 occurrences
+business: 1 occurrences
+call-to-action: 2 occurrences
+card-based: 1 occurrences
+charts & graphs: 1 occurrences
+clean: 3 occurrences
+clean forms: 1 occurrences
+clean input fields: 1 occurrences
+colorful: 1 occurrences
+community: 1 occurrences
+community platform: 1 occurrences
+connections: 1 occurrences
+creative: 1 occurrences
+dark theme: 1 occurrences
+dark theme login: 1 occurrences
+dashboard: 1 occurrences
+data visualization: 1 occurrences
+designer: 1 occurrences
+digital interface: 1 occurrences
+elegant form: 1 occurrences
+engaging: 1 occurrences
+expressive headline: 1 occurrences
+feed: 1 occurrences
+flat design: 1 occurrences
+form: 2 occurrences
+form-centric: 1 occurrences
+futuristic aesthetic: 2 occurrences
+gallery: 1 occurrences
+green accents: 2 occurrences
+half-width: 1 occurrences
+hero section: 1 occurrences
+homepage: 1 occurrences
+illustration-heavy: 1 occurrences
+image-heavy: 5 occurrences
+informational: 1 occurrences
+interactive: 1 occurrences
+landing page: 1 occurrences
+light theme: 4 occurrences
+login: 1 occurrences
+minimalist: 2 occurrences
+minimalist aesthetic: 1 occurrences
+minimalist dark: 1 occurrences
+minimalist form: 1 occurrences
+modern: 3 occurrences
+modern dark: 1 occurrences
+modular cards: 1 occurrences
+natural: 1 occurrences
+natural aesthetic: 1 occurrences
+natural background: 1 occurrences
+networking: 1 occurrences
+onboarding: 1 occurrences
+onboarding flow: 1 occurrences
+organic: 1 occurrences
+pastel palette: 1 occurrences
+performance monitoring: 1 occurrences
+personal: 1 occurrences
+personal branding: 1 occurrences
+playful: 1 occurrences
+portfolio: 1 occurrences
+posts: 1 occurrences
+product showcase: 1 occurrences
+professional: 2 occurrences
+profile management: 1 occurrences
+purple accent: 1 occurrences
+purple accents: 2 occurrences
+registration: 1 occurrences
+secure access: 1 occurrences
+service showcase: 1 occurrences
+setting dashboard: 1 occurrences
+sidebar: 2 occurrences
+sidebar navigation: 1 occurrences
+sign-in: 1 occurrences
+sign-up: 1 occurrences
+sign-up form: 1 occurrences
+simple navigation: 1 occurrences
+skills showcase: 1 occurrences
+sleek design: 1 occurrences
+sleek form: 1 occurrences
+social authentication: 1 occurrences
+social login: 2 occurrences
+social login integration: 1 occurrences
+social media: 1 occurrences
+social signup: 1 occurrences
+soft aesthetic: 1 occurrences
+spotlight image: 1 occurrences
+structured: 1 occurrences
+tech: 1 occurrences
+top navigation: 1 occurrences
+unique layout: 1 occurrences
+user authentication: 2 occurrences
+user engagement: 1 occurrences
+user profile: 1 occurrences
+user registration: 1 occurrences
+user-friendly: 2 occurrences
+username/password login: 1 occurrences
+visitor view: 1 occurrences
+web application signup: 1 occurrences
+welcome back message: 1 occurrences
+welcome back screen: 1 occurrences
+work history: 1 occurrences
