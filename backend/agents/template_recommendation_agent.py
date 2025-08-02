@@ -26,18 +26,27 @@ You focus ONLY on template recommendation and scoring. You do not analyze requir
         
         # Get templates from database
         templates = self._get_templates_from_database(requirements, category)
+        print(f"DEBUG: Templates after database fetch: {len(templates)} templates")
         
         if not templates:
+            print("DEBUG: No templates found, returning empty list")
             return []
         
         # Let the LLM do the scoring and recommendation
         scored_templates = self._score_templates_with_llm(requirements, templates, context)
+        print(f"DEBUG: Scored templates result: {len(scored_templates)} templates")
         
         return scored_templates[:self.keyword_manager.get_default_values()["max_templates"]]
     
     def _get_templates_from_database(self, requirements: Dict[str, Any], category: str = None) -> List[Dict[str, Any]]:
         """Get templates from database based on requirements"""
         templates = []
+        
+        # DEBUG: Print what we received
+        print(f"DEBUG: _get_templates_from_database called with:")
+        print(f"  requirements type: {type(requirements)}")
+        print(f"  requirements content: {requirements}")
+        print(f"  category parameter: {category}")
         
         # Get category from requirements or use provided category
         target_category = requirements.get("page_type") or category or self.keyword_manager.get_default_values()["fallback_category"]
@@ -79,10 +88,15 @@ You focus ONLY on template recommendation and scoring. You do not analyze requir
     def _score_templates_with_llm(self, requirements: Dict[str, Any], templates: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Use LLM to score templates based on requirements"""
         
+        print(f"DEBUG: Starting LLM scoring with {len(templates)} templates")
         prompt = self._build_scoring_prompt(requirements, templates, context)
         response = self._call_claude_with_tools(prompt)
+        print(f"DEBUG: LLM response length: {len(response)} characters")
+        print(f"DEBUG: LLM response preview: {response[:200]}...")
         
-        return self._parse_scoring_response(response, templates)
+        result = self._parse_scoring_response(response, templates)
+        print(f"DEBUG: Parsed result: {len(result)} templates")
+        return result
     
     def _build_scoring_prompt(self, requirements: Dict[str, Any], templates: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None) -> str:
         """Build prompt for LLM-based template scoring"""
@@ -174,7 +188,7 @@ IMPORTANT:
                 max_tokens=4000,
                 messages=messages,
                 tools=tools if tools else None,
-                tool_choice="auto" if tools else None
+                tool_choice={"type": "auto"} if tools else None
             )
             
             # Handle tool calls if any
@@ -233,14 +247,19 @@ IMPORTANT:
     def _parse_scoring_response(self, response: str, templates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Parse the LLM response and convert to the expected format"""
         
+        print(f"DEBUG: Parsing response with {len(templates)} templates available")
         try:
             # Extract JSON from the response using multiple strategies
             json_str = self._extract_json_from_response(response)
             if not json_str:
                 print("No JSON found in response, using fallback scoring")
-                return self._fallback_scoring(templates)
+                fallback_result = self._fallback_scoring(templates)
+                print(f"DEBUG: Fallback scoring returned {len(fallback_result)} templates")
+                return fallback_result
             
+            print(f"DEBUG: Extracted JSON: {json_str[:200]}...")
             recommendations = json.loads(json_str)
+            print(f"DEBUG: Parsed JSON has {len(recommendations)} recommendations")
             
             scored_templates = []
             

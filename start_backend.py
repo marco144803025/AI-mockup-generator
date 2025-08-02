@@ -23,40 +23,45 @@ def main():
     # Check if virtual environment exists
     venv_path = os.path.join(backend_dir, "venv_new")
     if not os.path.exists(venv_path):
-        print("❌ Virtual environment not found. Please run setup first.")
-        return 1
+        print("Virtual environment not found. Please run setup first.")
+        return False
     
-    # Activate virtual environment and start server
+    print("Starting FastAPI server...")
+    
     try:
-        print("🔧 Starting FastAPI server...")
-        
-        # Use uvicorn to start the server
-        cmd = [
-            sys.executable, "-m", "uvicorn", 
-            "main:app", 
-            "--host", "0.0.0.0", 
-            "--port", "8000",
-            "--reload"
-        ]
-        
-        print(f"📡 Server will be available at: http://localhost:8000")
-        print(f"🏥 Health check: http://localhost:8000/api/health")
-        print(f"📋 Categories: http://localhost:8000/api/templates/categories")
-        print("⏹️  Press Ctrl+C to stop the server")
-        print("-" * 50)
+        # Activate virtual environment and start server
+        if os.name == 'nt':  # Windows
+            python_path = os.path.join(venv_path, "Scripts", "python.exe")
+        else:  # Unix/Linux/Mac
+            python_path = os.path.join(venv_path, "bin", "python")
         
         # Start the server
-        subprocess.run(cmd, check=True)
+        process = subprocess.Popen([
+            python_path, "-m", "uvicorn", "main:app", 
+            "--host", "0.0.0.0", "--port", "8000", "--reload"
+        ], cwd=backend_dir)
+        
+        print(f"Server started with PID: {process.pid}")
+        print("Server running on http://localhost:8000")
+        print("API documentation available at http://localhost:8000/docs")
+        print("Press Ctrl+C to stop the server")
+        
+        # Wait for the process to complete
+        process.wait()
         
     except KeyboardInterrupt:
-        print("\n🛑 Server stopped by user")
-        return 0
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Failed to start server: {e}")
-        return 1
+        print("\nShutting down server...")
+        if 'process' in locals():
+            process.terminate()
+        print("Server stopped")
+        
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
-        return 1
+        print(f"Failed to start server: {e}")
+        return False
+        
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return False
 
 if __name__ == "__main__":
     sys.exit(main()) 

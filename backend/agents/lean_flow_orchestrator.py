@@ -18,11 +18,12 @@ from .user_proxy_agent import UserProxyAgent
 from .ui_editing_agent import UIEditingAgent
 from .report_generation_agent import ReportGenerationAgent
 from config.keyword_config import KeywordManager
+from session_manager import session_manager
 
 class LeanFlowOrchestrator:
     """Intelligent orchestrator for the lean UI mockup generation workflow"""
     
-    def __init__(self):
+    def __init__(self, session_id: Optional[str] = None):
         self.logger = logging.getLogger(__name__)
         
         # Initialize agents
@@ -36,21 +37,21 @@ class LeanFlowOrchestrator:
         # Initialize keyword manager
         self.keyword_manager = KeywordManager()
         
-        # Session state
-        self.session_state = {
-            "current_phase": "initial",
-            "conversation_history": [],
-            "requirements": {},
-            "recommendations": [],
-            "questions": {},
-            "selected_template": None,
-            "modifications": [],
-            "report": None,
-            "created_at": datetime.now()
-        }
-        
-        # Session ID
-        self.session_id = str(uuid.uuid4())
+        # Session management
+        if session_id:
+            self.session_id = session_id
+            # Load existing session
+            session_data = session_manager.get_session(session_id)
+            if session_data:
+                self.session_state = session_data
+            else:
+                # Create new session if not found
+                self.session_id = session_manager.create_session()
+                self.session_state = session_manager.get_session(self.session_id)
+        else:
+            # Create new session
+            self.session_id = session_manager.create_session()
+            self.session_state = session_manager.get_session(self.session_id)
         
         # Phase definitions
         self.phases = ["initial", "requirements", "template_recommendation", "template_selection", "editing", "report_generation"]
@@ -62,6 +63,8 @@ class LeanFlowOrchestrator:
             "content": message,
             "timestamp": datetime.now().isoformat()
         })
+        # Update session in global manager
+        session_manager.update_session(self.session_id, self.session_state)
     
     async def process_user_message(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Main entry point: Coordinate workflow between focused agents"""
@@ -412,20 +415,45 @@ class LeanFlowOrchestrator:
         """Handle template selection phase"""
         
         selected_template = self.session_state.get("selected_template")
+        recommendations = self.session_state.get("recommendations", [])
+        
+        self.logger.info(f"Selection phase - Message: '{message}', Current selected_template: {selected_template}, Recommendations count: {len(recommendations)}")
+        
+        # Check if user is selecting a template
+        if not selected_template and recommendations:
+            # Try to detect template selection from user message
+            selected_template = await self._parse_template_selection_llm(message, recommendations)
+            
+            self.logger.info(f"Template selection result: {selected_template}")
+            
+            if selected_template:
+                self.session_state["selected_template"] = selected_template
+                # Store in global session manager
+                session_manager.set_selected_template(self.session_id, selected_template)
+                self.logger.info(f"Template selected: {selected_template.get('name', 'Unknown')}")
+                
+                # Immediately trigger Phase 2 transition when template is first selected
+                self.logger.info("Triggering immediate phase transition...")
+                return await self._handle_phase_transition(selected_template)
         
         # If no template is selected, try to select one from recommendations
-        if not selected_template:
-            recommendations = self.session_state.get("recommendations", [])
-            if recommendations:
-                # Auto-select the first/best template
-                selected_template = recommendations[0]
-                self.session_state["selected_template"] = selected_template
+        if not selected_template and recommendations:
+            # Auto-select the first/best template
+            selected_template = recommendations[0]
+            self.session_state["selected_template"] = selected_template
+            # Store in global session manager
+            session_manager.set_selected_template(self.session_id, selected_template)
+            self.logger.info(f"Auto-selected template: {selected_template.get('name', 'Unknown')}")
+            
+            # Immediately trigger Phase 2 transition when template is auto-selected
+            return await self._handle_phase_transition(selected_template)
         
         # If still no template, go back to recommendation phase
         if not selected_template:
             self.session_state["current_phase"] = "template_recommendation"
             return await self._handle_recommendation_phase(message, context)
         
+        # If we already have a selected template, handle additional user input
         # Use LLM to detect user intent
         user_intent = await self._detect_user_intent(message, "template_selection", context)
         
@@ -437,6 +465,10 @@ class LeanFlowOrchestrator:
         elif user_intent == "report":
             # User wants to generate a report
             return await self._handle_report_generation(message, context)
+        
+        elif user_intent == "template_confirmation" or user_intent == "template_selection":
+            # User confirmed template selection - trigger Phase 2 transition
+            return await self._handle_phase_transition(selected_template)
         
         elif user_intent == "not_understand":
             # User's intent is unclear - use UserProxyAgent
@@ -457,12 +489,20 @@ class LeanFlowOrchestrator:
                 "response": response,
                 "session_id": self.session_id,
                 "phase": "template_selection",
-                "intent": "not_understand"
+                "intent": "not_understand",
+                "selected_template": selected_template,
+                "session_state": self.session_state
             }
         
         else:
             # Default: confirm selection and ask for next steps
-            response = self.user_proxy_agent.template_selected_confirmation(selected_template)
+            response = self.user_proxy_agent.create_response_from_instructions(
+                "template_selected_confirmation",
+                {
+                    "selected_template": selected_template,
+                    "next_steps": "You can now edit this template or generate a report"
+                }
+            )
             
             self._add_to_conversation_history(response, "assistant")
             
@@ -471,7 +511,9 @@ class LeanFlowOrchestrator:
                 "response": response,
                 "session_id": self.session_id,
                 "phase": "template_selection",
-                "selected_template": selected_template
+                "selected_template": selected_template,
+                "session_state": self.session_state,
+                "transition_ready": True  # Signal that transition is ready
             }
     
     async def _handle_editing_phase(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -650,13 +692,13 @@ Selected template: {self.session_state.get("selected_template", {}).get("name", 
 
 Determine the user's intent from this message. Choose from:
 
-1. "editing" - User wants to modify the selected template (e.g., "change the color", "make it more modern", "edit this", "modify")
-2. "report" - User wants to generate a report or summary (e.g., "generate report", "create summary", "show me the details")
-3. "confirmation" - User is confirming the selection (e.g., "yes", "perfect", "that's good", "proceed")
+1. "template_confirmation" - User is confirming the selection and wants to proceed (e.g., "yes", "perfect", "that's good", "proceed", "view the preview", "show me the preview", "let's see it", "continue", "go ahead")
+2. "editing" - User wants to modify the selected template (e.g., "change the color", "make it more modern", "edit this", "modify")
+3. "report" - User wants to generate a report or summary (e.g., "generate report", "create summary", "show me the details")
 4. "not_understand" - User's intent is unclear, ambiguous, or cannot be determined
 5. "general" - General conversation that doesn't fit other categories
 
-Return ONLY the intent type (e.g., "editing").
+Return ONLY the intent type (e.g., "template_confirmation").
 """
             else:
                 prompt = f"""
@@ -690,7 +732,7 @@ Return ONLY the intent type (e.g., "clarification").
                 else:
                     return "general"
             elif current_phase == "template_selection":
-                valid_intents = ["editing", "report", "confirmation", "not_understand", "general"]
+                valid_intents = ["template_confirmation", "editing", "report", "not_understand", "general"]
                 if intent in valid_intents:
                     return intent
                 else:
@@ -709,6 +751,9 @@ Return ONLY the intent type (e.g., "clarification").
     async def _parse_template_selection_llm(self, message: str, recommendations: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Use LLM to parse which template the user is selecting"""
         try:
+            self.logger.info(f"Parsing template selection from message: '{message}'")
+            self.logger.info(f"Available recommendations: {[rec.get('template', {}).get('name', 'Unknown') for rec in recommendations]}")
+            
             # Build template list for LLM
             template_list = []
             for i, rec in enumerate(recommendations, 1):
@@ -726,7 +771,8 @@ Available templates:
 {template_info}
 
 Parse which template the user is selecting. Consider:
-- Number references: "1", "first", "option 1"
+- Number references: "1", "first", "option 1", "template 1"
+- Ordinal references: "third one", "second option", "first template", "last one"
 - Name references: "landing 1", "login template"
 - Implicit references: "that one", "this template", "the first option"
 - Partial matches: "landing" when there's only one landing template
@@ -738,6 +784,8 @@ Return ONLY the template number (1, 2, 3, etc.) or "unclear" if the selection ca
 
             # Call LLM for parsing
             response = self.requirements_agent.call_claude_with_cot(prompt, enable_cot=False)
+            
+            self.logger.info(f"LLM response for template selection: '{response}'")
             
             # Parse response
             try:
@@ -752,13 +800,31 @@ Return ONLY the template number (1, 2, 3, etc.) or "unclear" if the selection ca
                 if number_match:
                     template_index = int(number_match.group()) - 1
                     if 0 <= template_index < len(recommendations):
-                        return recommendations[template_index].get("template", {})
+                        selected_template = recommendations[template_index].get("template", {})
+                        self.logger.info(f"Selected template {template_index + 1}: {selected_template.get('name', 'Unknown')}")
+                        return selected_template
+                
+                # Try to match by ordinal words
+                ordinal_mapping = {
+                    "first": 0, "1st": 0, "one": 0,
+                    "second": 1, "2nd": 1, "two": 1,
+                    "third": 2, "3rd": 2, "three": 2,
+                    "fourth": 3, "4th": 3, "four": 3,
+                    "fifth": 4, "5th": 4, "five": 4
+                }
+                
+                for ordinal_word, index in ordinal_mapping.items():
+                    if ordinal_word in selection and index < len(recommendations):
+                        selected_template = recommendations[index].get("template", {})
+                        self.logger.info(f"Selected template by ordinal '{ordinal_word}': {selected_template.get('name', 'Unknown')}")
+                        return selected_template
                 
                 # Try to match by name
                 for rec in recommendations:
                     template = rec.get("template", {})
                     template_name = template.get("name", "").lower()
                     if template_name in selection.lower():
+                        self.logger.info(f"Selected template by name '{template_name}': {template.get('name', 'Unknown')}")
                         return template
                 
                 # If we get here, the selection was unclear
@@ -983,36 +1049,48 @@ EXAMPLES:
                     
                 elif agent_name == "question_generation":
                     try:
-                        templates = current_output or self.session_state.get("recommendations", [])
+                        # Extract templates from current_output (which is from template_recommendation agent)
+                        templates = []
+                        if isinstance(current_output, list):
+                            templates = current_output
+                        elif isinstance(current_output, dict) and "data" in current_output:
+                            templates = current_output["data"].get("primary_result", [])
+                        else:
+                            templates = self.session_state.get("recommendations", [])
+                        
                         requirements = self.session_state.get("requirements", {})
                         result = self.question_agent.generate_questions(templates, requirements)
-                        # Standardize the output
-                        result = self.question_agent.enhance_agent_output(result, agent_context)
-                        current_output = result["data"]["primary_result"]
+                        # The result is already a dictionary, not standardized format
+                        current_output = result
                         agent_results[agent_name] = result
                     except Exception as e:
                         self.logger.error(f"Error in question_generation: {e}")
                         # Create error response
-                        result = self.question_agent.create_standardized_response(
-                            success=False,
-                            data={
-                                "primary_result": {"questions": [], "focus_areas": []},
-                                "error": str(e),
-                                "requires_clarification": True,
-                                "clarification_questions": ["Could you please provide more details?"]
-                            },
-                            metadata={"context_used": agent_context}
-                        )
-                        current_output = result["data"]["primary_result"]
+                        result = {
+                            "questions": [],
+                            "focus_areas": [],
+                            "template_count": 0,
+                            "error": str(e)
+                        }
+                        current_output = result
                         agent_results[agent_name] = result
                     
                 elif agent_name == "user_proxy":
                     # UserProxyAgent handles response formatting - this should be the final output
+                    # Extract templates from agent results
+                    templates = []
+                    if "template_recommendation" in agent_results:
+                        rec_result = agent_results["template_recommendation"]
+                        if isinstance(rec_result, dict) and "data" in rec_result:
+                            templates = rec_result["data"].get("primary_result", [])
+                        else:
+                            templates = rec_result
+                    
                     result = self.user_proxy_agent.create_response_from_instructions(
                         "template recommendations",
                         {
                             "requirements": self.session_state.get("requirements"),
-                            "templates": self.session_state.get("recommendations"),
+                            "templates": templates,
                             "targeted_questions": self.session_state.get("questions"),
                             "agent_results": agent_results
                         }
@@ -1144,6 +1222,7 @@ EXAMPLES:
             "modifications": [],
             "report": None
         }
+        session_manager.update_session(self.session_id, self.session_state)
         
         return {
             "success": True,
@@ -1469,3 +1548,163 @@ EXAMPLES:
                 "timestamp": datetime.now().isoformat()
             }
         } 
+
+    async def _handle_phase_transition(self, selected_template: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle the complete transition from Phase 1 to Phase 2"""
+        try:
+            self.logger.info(f"Starting Phase 1 → Phase 2 transition for template: {selected_template.get('name', 'Unknown')}")
+            self.logger.info(f"Selected template structure: {selected_template}")
+            
+            # Step 1: Save conversation history to session
+            self.session_state["phase1_conversation_history"] = self.session_state.get("conversation_history", [])
+            
+            # Step 2: Extract the actual template data from the recommendation structure
+            # The selected_template might be a recommendation wrapper with template data inside
+            actual_template = selected_template
+            if "template" in selected_template:
+                actual_template = selected_template["template"]
+                self.logger.info(f"Extracted actual template from recommendation wrapper: {actual_template.get('name', 'Unknown')}")
+            
+            # Step 3: Create JSON file for the selected template
+            template_id = actual_template.get('template_id') or actual_template.get('_id')
+            if not template_id:
+                self.logger.error(f"No template ID found in selected template: {actual_template}")
+                raise ValueError("No template ID found in selected template")
+            
+            self.logger.info(f"Template ID for transition: {template_id}")
+            
+            # Step 4: Call the template-to-json endpoint to create the JSON file
+            from tools.ui_preview_tools import UIPreviewTools
+            ui_tools = UIPreviewTools()
+            template_result = ui_tools.get_template_code(template_id)
+            
+            self.logger.info(f"Template result: {template_result}")
+            
+            if not template_result or not template_result.get("success", False):
+                error_msg = template_result.get("error", "Unknown error") if template_result else "No result returned"
+                raise ValueError(f"Failed to fetch template code for ID: {template_id}. Error: {error_msg}")
+            
+            # Step 5: Create the JSON structure for Phase 2
+            ui_codes_data = {
+                "template_id": template_id,
+                "session_id": self.session_id,
+                "last_updated": datetime.now().isoformat(),
+                "current_codes": {
+                    "html_export": template_result.get("html_export", ""),
+                    "globals_css": template_result.get("global_css", ""),
+                    "style_css": template_result.get("style_css", ""),
+                    "js": "",
+                    "complete_html": self._create_complete_html(template_result)
+                },
+                "history": [
+                    {
+                        "timestamp": datetime.now().isoformat(),
+                        "modification": f"Template '{actual_template.get('name', 'Unknown')}' selected from Phase 1"
+                    }
+                ],
+                "template_info": {
+                    "name": actual_template.get("name", "Unknown"),
+                    "category": actual_template.get("category", "unknown"),
+                    "description": actual_template.get("description", ""),
+                    "tags": actual_template.get("tags", [])
+                }
+            }
+            
+            # Step 6: Save the JSON file
+            import json
+            import os
+            
+            # Ensure temp_ui_files directory exists
+            temp_dir = "temp_ui_files"
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir)
+            
+            # Save the JSON file
+            json_filename = f"ui_codes_{self.session_id}.json"
+            json_filepath = os.path.join(temp_dir, json_filename)
+            
+            with open(json_filepath, 'w') as f:
+                json.dump(ui_codes_data, f, indent=2)
+            
+            self.logger.info(f"JSON file created: {json_filepath}")
+            
+            # Step 7: Update session state
+            self.session_state["current_phase"] = "editing"
+            self.session_state["selected_template"] = selected_template
+            self.session_state["ui_codes_file"] = json_filepath
+            self.session_state["phase_transition_completed"] = True
+            
+            # Update global session manager
+            session_manager.update_session(self.session_id, self.session_state)
+            
+            # Step 8: Create transition response
+            transition_response = self.user_proxy_agent.create_response_from_instructions({
+                "response_type": "phase_transition_complete",
+                "selected_template": selected_template,
+                "session_id": self.session_id,
+                "transition_data": {
+                    "fromPhase1": True,
+                    "sessionId": self.session_id,
+                    "selectedTemplate": selected_template,
+                    "category": selected_template.get("category"),
+                    "ui_codes_file": json_filename
+                }
+            })
+            
+            self.logger.info(f"Phase transition response: {transition_response}")
+            
+            final_response = {
+                "success": True,
+                "response": transition_response,
+                "session_id": self.session_id,
+                "phase": "editing",
+                "intent": "phase_transition",
+                "selected_template": selected_template,
+                "session_state": self.session_state,
+                "transition_data": {
+                    "fromPhase1": True,
+                    "sessionId": self.session_id,
+                    "selectedTemplate": selected_template,
+                    "category": selected_template.get("category"),
+                    "ui_codes_file": json_filename
+                }
+            }
+            
+            self.logger.info(f"Final phase transition response: {final_response}")
+            return final_response
+            
+        except Exception as e:
+            self.logger.error(f"Error during phase transition: {e}")
+            return {
+                "success": False,
+                "response": f"Error during transition: {str(e)}",
+                "session_id": self.session_id,
+                "phase": "template_selection"
+            }
+    
+    def _create_complete_html(self, template_result: Dict[str, Any]) -> str:
+        """Create complete HTML with embedded CSS"""
+        html_export = template_result.get("html_export", "")
+        globals_css = template_result.get("globals_css", "")
+        style_css = template_result.get("style_css", "")
+        
+        # Combine all CSS
+        combined_css = f"{globals_css}\n{style_css}"
+        
+        # Create complete HTML
+        complete_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Template</title>
+    <style>
+{combined_css}
+    </style>
+</head>
+<body>
+{html_export}
+</body>
+</html>"""
+        
+        return complete_html 

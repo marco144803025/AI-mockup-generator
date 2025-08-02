@@ -598,6 +598,28 @@ This will help me find the perfect template for you!"""
                 return self._create_general_response(instructions)
             elif response_type == "error_response":
                 return self._create_error_response(instructions)
+            elif response_type == "phase_transition_complete":
+                selected_template = instructions.get("selected_template", {})
+                transition_data = instructions.get("transition_data", {})
+                
+                response = f"""Perfect! I've successfully prepared your selected template for editing.
+
+**Template Selected:** {selected_template.get('name', 'Unknown')}
+**Category:** {selected_template.get('category', 'Unknown')}
+
+I've automatically:
+- Saved our conversation history
+- Fetched the template code from the database
+- Created a JSON file with all the UI components
+- Prepared everything for the editing phase
+
+You're now ready to move to the UI Editor where you can:
+• View your template in real-time
+• Make modifications through our chat interface
+• See the code changes instantly
+• Export your final design
+
+The system will now transition you to the editing interface. You'll see your template loaded and ready for customization!"""
             else:
                 return self._create_default_response(instructions)
                 

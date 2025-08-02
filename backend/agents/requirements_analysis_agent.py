@@ -208,7 +208,7 @@ IMPORTANT:
                 max_tokens=4000,
                 messages=messages,
                 tools=tools if tools else None,
-                tool_choice="auto" if tools else None
+                tool_choice={"type": "auto"} if tools else None
             )
             
             # Handle tool calls if any

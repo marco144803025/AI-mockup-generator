@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './ChatScreen.css';
 import DebugPanel from './DebugPanel';
 
@@ -14,7 +15,10 @@ function ChatScreen() {
   const [useMultiAgent, setUseMultiAgent] = useState(false);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [phase, setPhase] = useState('phase1'); // 'phase1' or 'phase2'
   const messagesEndRef = useRef(null);
+  const navigate = useNavigate();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -98,7 +102,7 @@ function ChatScreen() {
     const predefinedPrompt = `I want to create a ${category} UI mockup.  Fetch the templates from the database from mongoDB, the . Use the currently available template that suits the user's request the most then further modify it as user requests.`;
     
     // Send to multi-agent system with the predefined prompt
-    await sendToMultiAgent(predefinedPrompt);
+    await sendToMultiAgent(predefinedPrompt, userMessage);
   };
 
   const resetToCategorySelection = async () => {
@@ -153,13 +157,13 @@ function ChatScreen() {
     setLoading(true);
 
     if (useMultiAgent) {
-      await sendToMultiAgent(inputMessage);
+      await sendToMultiAgent(inputMessage, userMessage);
     } else {
       await sendToClaude(inputMessage);
     }
   };
 
-  const sendToMultiAgent = async (message) => {
+  const sendToMultiAgent = async (message, userMessage) => {
     try {
       const requestData = {
         message: message,
@@ -211,6 +215,42 @@ function ChatScreen() {
           }
         }
 
+        // Check for phase transition signal from orchestrator
+        console.log('Checking for transition data:', data.transition_data);
+        console.log('Checking for intent:', data.intent);
+        console.log('Full response data:', data);
+        
+        if (data.transition_data && data.intent === "phase_transition") {
+          console.log('Phase transition detected! Navigating to editor...');
+          
+          // Create the complete conversation history including the latest messages
+          const completeHistory = [
+            ...messages,
+            userMessage, // Include the user message that was just sent
+            {
+              id: Date.now() + 0.5,
+              text: data.response,
+              sender: "ai",
+              timestamp: new Date().toLocaleTimeString()
+            }
+          ];
+          
+          console.log('Saving complete chat history to localStorage:', completeHistory);
+          console.log('History length:', completeHistory.length);
+          console.log('Last user message:', userMessage);
+          console.log('Last AI message:', data.response);
+          
+          // Save conversation history to localStorage
+          localStorage.setItem('phase1ChatHistory', JSON.stringify(completeHistory));
+          
+          // Navigate to editor page with transition data
+          navigate('/editor', { 
+            state: data.transition_data
+          });
+        } else {
+          console.log('No phase transition detected. Intent:', data.intent, 'Transition data:', data.transition_data);
+        }
+
         // Log session state for debugging
         if (data.session_state) {
           console.log("Session state:", data.session_state);
@@ -235,6 +275,21 @@ function ChatScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkForTemplateSelection = async (userMessage, aiResponse) => {
+    // This function is no longer needed - the orchestrator handles everything
+    console.log('Template selection handled by orchestrator');
+  };
+
+  const getSelectedTemplateFromSession = async () => {
+    // This function is no longer needed - the orchestrator handles everything
+    return null;
+  };
+
+  const transitionToPhase2 = async (selectedTemplate) => {
+    // This function is no longer needed - the orchestrator handles everything
+    console.log('Transition handled by orchestrator');
   };
 
   const sendToClaude = async (prompt) => {

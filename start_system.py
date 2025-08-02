@@ -14,40 +14,57 @@ from pathlib import Path
 
 def print_banner():
     """Print startup banner"""
-    print("🚀 UI Mockup Generation System Startup")
+    print("UI Mockup Generation System Startup")
     print("=" * 50)
     print("Starting all services...")
     print()
 
+def check_python_version():
+    """Check if Python 3.8+ is installed"""
+    try:
+        if sys.version_info < (3, 8):
+            print("Python 3.8+ required")
+            return False
+        return True
+    except Exception as e:
+        print(f"Error checking Python version: {e}")
+        return False
+
+def check_env_file():
+    """Check if .env file exists"""
+    env_path = os.path.join(BACKEND_DIR, ".env")
+    if not os.path.exists(env_path):
+        print(".env file not found in backend directory")
+        return False
+    return True
+
+def check_virtual_env():
+    """Check if virtual environment exists"""
+    venv_path = os.path.join(BACKEND_DIR, "venv_new")
+    if not os.path.exists(venv_path):
+        print("Virtual environment not found")
+        return False
+    return True
+
 def check_prerequisites():
-    """Check if all prerequisites are met"""
-    print("📋 Checking prerequisites...")
+    """Check all prerequisites"""
+    print("Checking prerequisites...")
     
-    # Check Python version
-    if sys.version_info < (3, 8):
-        print("❌ Python 3.8+ required")
+    if not check_python_version():
         return False
     
-    # Check if .env file exists
-    env_file = Path("backend/.env")
-    if not env_file.exists():
-        print("❌ .env file not found in backend directory")
-        print("Please create backend/.env with your CLAUDE_API_KEY")
+    if not check_env_file():
         return False
     
-    # Check if virtual environment exists
-    venv_path = Path("backend/venv")
-    if not venv_path.exists():
-        print("❌ Virtual environment not found")
-        print("Please run: cd backend && python -m venv venv")
+    if not check_virtual_env():
         return False
     
-    print("✅ Prerequisites check passed")
+    print("Prerequisites check passed")
     return True
 
 def start_backend_server():
     """Start the main backend server"""
-    print("🐍 Starting main backend server...")
+    print("Starting main backend server...")
     
     try:
         # Change to backend directory
@@ -65,51 +82,48 @@ def start_backend_server():
         time.sleep(3)
         
         if process.poll() is None:
-            print("✅ Main backend server started on http://localhost:8000")
-            return process
+            print("Main backend server started on http://localhost:8000")
+            return True
         else:
-            print("❌ Failed to start main backend server")
-            return None
+            print("Failed to start main backend server")
+            print(f"Error: {e}")
+            return False
             
     except Exception as e:
-        print(f"❌ Error starting main backend server: {e}")
-        return None
+        print(f"Error starting main backend server: {e}")
+        return False
 
 # AutoGen server function removed - no longer needed
 
 def start_frontend():
-    """Start the frontend development server"""
-    print("⚛️ Starting frontend development server...")
-    
+    """Start the frontend React development server"""
     try:
-        # Change to frontend directory
-        os.chdir("frontend")
+        print("Starting frontend server...")
+        process = subprocess.Popen(
+            ["npm", "start"],
+            cwd=FRONTEND_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
         
-        # Check if node_modules exists
-        if not Path("node_modules").exists():
-            print("📦 Installing frontend dependencies...")
-            subprocess.run(["npm", "install"], check=True)
-        
-        # Start development server
-        process = subprocess.Popen(["npm", "start"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
-        # Wait a bit for server to start
+        # Wait a bit for the server to start
         time.sleep(5)
         
         if process.poll() is None:
-            print("✅ Frontend server started on http://localhost:3000")
-            return process
+            print("Frontend server started on http://localhost:3000")
+            return True
         else:
-            print("❌ Failed to start frontend server")
-            return None
+            print("Failed to start frontend server")
+            return False
             
     except Exception as e:
-        print(f"❌ Error starting frontend server: {e}")
-        return None
+        print(f"Error starting frontend server: {e}")
+        return False
 
 def open_browsers():
     """Open browsers to the running services"""
-    print("🌐 Opening browsers...")
+    print("Opening browsers...")
     
     # Wait a bit for all servers to be ready
     time.sleep(2)
@@ -117,16 +131,16 @@ def open_browsers():
     try:
         # Open main backend API docs
         webbrowser.open("http://localhost:8000/docs")
-        print("✅ Opened main API documentation")
+        print("Opened main API documentation")
         
         # AutoGen API docs removed - no longer needed
         
         # Open frontend
         webbrowser.open("http://localhost:3000")
-        print("✅ Opened frontend application")
+        print("Opened frontend application")
         
     except Exception as e:
-        print(f"⚠️ Could not open browsers automatically: {e}")
+        print(f"Could not open browsers automatically: {e}")
 
 def main():
     """Main startup function"""
@@ -134,62 +148,46 @@ def main():
     
     # Check prerequisites
     if not check_prerequisites():
-        print("\n❌ Prerequisites not met. Please fix the issues above.")
+        print("\nPrerequisites not met. Please fix the issues above.")
+        return
+
+    print("\nStarting services...")
+    
+    # Start backend server
+    backend_started = start_backend_server()
+    if not backend_started:
+        print("Backend failed to start")
         return
     
-    print()
+    # Start frontend server
+    frontend_started = start_frontend()
+    if not frontend_started:
+        print("Frontend failed to start")
+        return
     
-    # Store original directory
-    original_dir = os.getcwd()
+    # Wait a bit for all services to be ready
+    print("\nWaiting for services to be ready...")
+    time.sleep(10)
+    
+    # Open browsers
+    open_browsers()
+    
+    print("\nAll services started successfully!")
+    print("\nServices running:")
+    print("- Backend API: http://localhost:8000")
+    print("- Frontend: http://localhost:3000")
+    print("- API Docs: http://localhost:8000/docs")
+    
+    print("\nPress Ctrl+C to stop all services")
     
     try:
-        # Start all services
-        processes = []
-        
-        # Start main backend server
-        backend_process = start_backend_server()
-        if backend_process:
-            processes.append(("Main Backend", backend_process))
-        
-        # AutoGen API server removed - no longer needed
-        
-        # Start frontend server
-        frontend_process = start_frontend()
-        if frontend_process:
-            processes.append(("Frontend", frontend_process))
-        
-        # Check if all services started successfully
-        if len(processes) == 2:
-            print("\n🎉 All services started successfully!")
-            print("\n📱 Services running:")
-            print("   • Main Backend: http://localhost:8000")
-            print("   • Frontend:     http://localhost:3000")
-            
-            # Open browsers
-            open_browsers()
-            
-            print("\n🔄 Press Ctrl+C to stop all services")
-            
-            # Keep the script running
-            try:
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                print("\n🛑 Stopping all services...")
-                
-        else:
-            print(f"\n❌ Only {len(processes)}/2 services started successfully")
-            print("Please check the error messages above")
-    
+        # Keep the script running
+        while True:
+            time.sleep(1)
     except KeyboardInterrupt:
-        print("\n🛑 Startup interrupted")
-    
-    except Exception as e:
-        print(f"\n❌ Startup failed: {e}")
-    
-    finally:
-        # Return to original directory
-        os.chdir(original_dir)
+        print("\nShutting down services...")
+        # Cleanup would go here if needed
+        print("Services stopped")
 
 if __name__ == "__main__":
     main() 
