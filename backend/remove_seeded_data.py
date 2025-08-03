@@ -11,7 +11,6 @@ def remove_seeded_data():
     # Names of the seeded templates
     seeded_names = [
         "Modern SaaS Landing",
-        "Creative Portfolio", 
         "Corporate Business",
         "E-commerce Store"
     ]

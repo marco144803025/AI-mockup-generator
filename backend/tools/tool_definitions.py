@@ -160,12 +160,7 @@ AGENT_TOOLS = {
         "get_available_categories"
     ],
     "ui_editing_agent": [
-        "get_template_metadata",
-        "get_templates_by_category",
-        "search_templates_by_tags",
-        "generate_ui_preview",
-        "get_template_code",
-        "validate_template_code"
+        # UI editing agent doesn't need database tools - it works with provided UI code
     ],
     "user_proxy_agent": [
         "get_available_categories",

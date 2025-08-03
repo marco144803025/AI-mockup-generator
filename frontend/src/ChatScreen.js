@@ -33,7 +33,7 @@ function ChatScreen() {
     // Initialize with AI greeting asking for category
     const initialMessage = {
       id: Date.now(),
-      text: "Hello! I'm here to help you build UI mockups using our advanced multi-agent system. Please select a category below to get started with your UI mockup creation.",
+      text: "Hello! I'm here to help you build UI. Please select a category below to get started.",
       sender: "ai",
       timestamp: new Date().toLocaleTimeString()
     };
@@ -65,16 +65,16 @@ function ChatScreen() {
         const errorText = await response.text();
         console.error("Error response:", errorText);
         
-        // Fallback to default categories if API fails
-        console.log("Using fallback categories...");
-        setCategories(['landing', 'login', 'signup', 'profile', 'about', 'portfolio']);
+        // No fallback - let the user know the API is unavailable
+        console.log("API unavailable - no categories loaded");
+        setCategories([]);
       }
     } catch (error) {
       console.error("Error fetching categories:", error);
       
-      // Fallback to default categories if network error
-      console.log("Using fallback categories due to network error...");
-      setCategories(['landing', 'login', 'signup', 'profile', 'about', 'portfolio']);
+      // No fallback - let the user know the network is unavailable
+      console.log("Network error - no categories loaded");
+      setCategories([]);
     } finally {
       setCategoriesLoading(false);
     }
@@ -90,19 +90,14 @@ function ChatScreen() {
     // Add user message
     const userMessage = {
       id: Date.now(),
-      text: `I want to build a ${category} UI mockup.`,
+      text: `I want to build a ${category} UI.`,
       sender: "user",
       timestamp: new Date().toLocaleTimeString()
     };
     setMessages(prevMessages => [...prevMessages, userMessage]);
 
-    // Multi-agent system is activated silently
 
-    // Create predefined prompt for the orchestrator
-    const predefinedPrompt = `I want to create a ${category} UI mockup.  Fetch the templates from the database from mongoDB, the . Use the currently available template that suits the user's request the most then further modify it as user requests.`;
-    
-    // Send to multi-agent system with the predefined prompt
-    await sendToMultiAgent(predefinedPrompt, userMessage);
+    await sendToMultiAgent(`I want to build a ${category} UI.`, userMessage);
   };
 
   const resetToCategorySelection = async () => {
@@ -135,7 +130,7 @@ function ChatScreen() {
     // Initialize with AI greeting
     const initialMessage = {
       id: Date.now(),
-      text: "Hello! I'm here to help you build UI mockups. Please select a category below to get started with your UI mockup creation.",
+      text: "Hello! I'm here to help you build UI. Please select a category below to get started.",
       sender: "ai",
       timestamp: new Date().toLocaleTimeString()
     };
@@ -167,14 +162,7 @@ function ChatScreen() {
     try {
       const requestData = {
         message: message,
-        session_id: sessionId,
-        context: {
-          selected_category: selectedCategory,
-          current_phase: selectedCategory ? "requirements_gathering" : "initial",
-          user_intent: "create_ui_mockup",
-          category_type: selectedCategory,
-          project_type: "ui_mockup_generation"
-        }
+        session_id: sessionId
       };
 
       const response = await fetch("http://localhost:8000/api/chat", {
@@ -294,62 +282,10 @@ function ChatScreen() {
 
   const sendToClaude = async (prompt) => {
     try {
-      // Add database constraints context if we have a selected category
-      let enhancedPrompt = prompt;
-      if (selectedCategory) {
-        // Get category-specific constraints from backend
-        try {
-          const constraintsResponse = await fetch(`http://localhost:8000/api/templates/category-constraints/${selectedCategory}`);
-          if (constraintsResponse.ok) {
-            const constraints = await constraintsResponse.json();
-            enhancedPrompt = `Context: The user wants to build a ${selectedCategory} UI mockup. 
-
-CATEGORY-SPECIFIC CONSTRAINTS for "${selectedCategory}":
-- Available Templates: ${constraints.templates_count} templates
-- Available Design Tags for this category: ${constraints.category_tags.join(', ')}
-- Available Styles: ${constraints.styles.join(', ')}
-- Available Features: ${constraints.features.join(', ')}
-
-IMPORTANT: Only suggest design elements that exist for ${selectedCategory} pages. If the user requests something not available for this category, suggest the closest alternative from the available options above.
-
-User Request: ${prompt}
-
-Please respond as a helpful UI design assistant, asking questions within these ${selectedCategory}-specific constraints.`;
-          } else {
-            // Fallback to general constraints
-            enhancedPrompt = `Context: The user wants to build a ${selectedCategory} UI mockup. 
-
-Database Constraints - You can ONLY work with these available options:
-- Available Categories: profile, sign-up, signup, login, About me, landing
-- Available Design Tags: modern, minimal, dark theme, light theme, colorful, clean, professional, user-friendly, interactive, sleek design, flat design, card-based, minimalist aesthetic, modern dark, tech, bold typography, social authentication, user registration, form-centric, dashboard, analytics, portfolio, business, SaaS, community, networking, gallery, hero section, call-to-action, and many more...
-
-IMPORTANT: Only suggest categories and design elements that exist in the database. If the user requests something not available, suggest the closest alternative from the available options.
-
-User Request: ${prompt}
-
-Please respond as a helpful UI design assistant, asking questions within these database constraints.`;
-          }
-        } catch (error) {
-          console.error("Error fetching category constraints:", error);
-          // Fallback to general constraints
-          enhancedPrompt = `Context: The user wants to build a ${selectedCategory} UI mockup. 
-
-Database Constraints - You can ONLY work with these available options:
-- Available Categories: profile, sign-up, signup, login, About me, landing
-- Available Design Tags: modern, minimal, dark theme, light theme, colorful, clean, professional, user-friendly, interactive, sleek design, flat design, card-based, minimalist aesthetic, modern dark, tech, bold typography, social authentication, user registration, form-centric, dashboard, analytics, portfolio, business, SaaS, community, networking, gallery, hero section, call-to-action, and many more...
-
-IMPORTANT: Only suggest categories and design elements that exist in the database. If the user requests something not available, suggest the closest alternative from the available options.
-
-User Request: ${prompt}
-
-Please respond as a helpful UI design assistant, asking questions within these database constraints.`;
-        }
-      }
-      
       const response = await fetch("http://localhost:8000/api/claude", {
         method: "POST",
         headers: {"Content-Type": "application/json" },
-        body: JSON.stringify({prompt: enhancedPrompt, model: "claude-3-5-haiku-20241022"})
+        body: JSON.stringify({prompt: prompt, model: "claude-3-5-haiku-20241022"})
       });
       if (response.ok) {
         const data = await response.json();
@@ -405,7 +341,7 @@ Please respond as a helpful UI design assistant, asking questions within these d
   return (
     <div className="chat-screen">
       <div className="chat-header">
-        <h1>AI UI Mockup Generator</h1>
+        <h1>AI UI Generator</h1>
         <div className="header-buttons">
           <button
             onClick={() => setShowDebugPanel(!showDebugPanel)}
@@ -450,7 +386,7 @@ Please respond as a helpful UI design assistant, asking questions within these d
                 <span></span>
               </div>
               <div className="text-sm text-gray-500 mt-2">
-                {useMultiAgent ? "Multi-agent system is processing..." : "AI is thinking..."}
+                {"Processing..."}
               </div>
             </div>
           </div>
@@ -462,10 +398,10 @@ Please respond as a helpful UI design assistant, asking questions within these d
         <div className="category-selection">
           <div className="max-w-2xl mx-auto p-6">
             <h3 className="text-xl font-semibold text-gray-800 mb-4 text-center">
-              Select Your UI Mockup Category
+              Select Your UI Category
             </h3>
             <p className="text-gray-600 mb-6 text-center">
-              Choose a category to start building your UI mockup with our multi-agent system
+                              Choose a category to start building your UI
             </p>
             <div className="text-center mb-4">
               <p className="text-sm text-gray-500">

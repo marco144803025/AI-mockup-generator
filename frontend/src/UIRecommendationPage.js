@@ -11,11 +11,7 @@ const figmaTemplates = [
     image: "https://s3-alpha.figma.com/hub/file/1122334/1a2b3c4d5e6f7g8h9i0j-cover.png",
     url: "https://www.figma.com/community/file/1166028047678464422"
   },
-  {
-    title: "Portfolio Website Template",
-    image: "https://s3-alpha.figma.com/hub/file/2233445/2b3c4d5e6f7g8h9i0j1a-cover.png",
-    url: "https://www.figma.com/community/file/1123581321345581321"
-  }
+
 ];
 
 export default function UIRecommendationPage() {

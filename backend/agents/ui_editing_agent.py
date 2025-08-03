@@ -1,7 +1,6 @@
 from .base_agent import BaseAgent
 from typing import Dict, Any, List, Optional
 import json
-import re
 import logging
 from tools.tool_utility import ToolUtility
 from config.keyword_config import KeywordManager
@@ -10,58 +9,357 @@ class UIEditingAgent(BaseAgent):
     """Advanced UI Editing Agent with sophisticated modification capabilities"""
     
     def __init__(self):
-        system_message = """You are an Advanced UI Editing Agent specialized in:
-1. Analyzing user modification requests with deep understanding
+        system_message = """You are an Advanced UI mockup Editing Agent specialized in:
+1. Analyzing user modification requests with deep understanding of mockup
 2. Creating detailed modification plans with step-by-step instructions
-3. Applying changes while maintaining design integrity
-4. Validating modifications for quality and consistency
+3. Validating modifications of mockup for quality and consistency
 
-You focus on sophisticated UI modifications and improvements."""
+You focus on sophisticated mockup UI modifications and improvements."""
         
         super().__init__("UIEditing", system_message)
         self.tool_utility = ToolUtility("ui_editing_agent")
         self.keyword_manager = KeywordManager()
         self.logger = logging.getLogger(__name__)
     
-    def process_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
-        """Complete workflow: analyze request, plan modifications, and apply them using advanced prompt engineering"""
-        
-        # Step 1: Analyze the modification request with sophisticated prompt engineering
-        modification_request = self.analyze_modification_request_advanced(user_feedback, current_template)
-        
-        # Step 2: Generate detailed modification plan
-        modification_plan = self.generate_modification_plan_advanced(modification_request, current_template)
-        
-        # Step 3: Apply modifications with validation
-        modified_template = self.apply_modifications_advanced(current_template, modification_plan)
-        
-        # Step 4: Validate modifications comprehensively
-        validation_result = self.validate_modifications_advanced(current_template, modified_template)
-        
-        return {
-            "success": validation_result.get("is_valid", False),
-            "original_template": current_template,
-            "modified_template": modified_template,
-            "modification_request": modification_request,
-            "modification_plan": modification_plan,
-            "validation_result": validation_result,
-            "changes_summary": self._generate_changes_summary_advanced(current_template, modified_template)
-        }
+    def _extract_json_from_response(self, response: str, context: str = "response") -> Optional[Dict[str, Any]]:
+        """Robust JSON extraction from LLM responses"""
+        try:
+            self.logger.debug(f"Extracting JSON from {context}: {response[:200]}...")
+            
+            # Strategy 1: Find JSON block with markers
+            if "```json" in response:
+                start = response.find("```json") + 7
+                end = response.find("```", start)
+                if end > start:
+                    json_str = response[start:end].strip()
+                    try:
+                        return json.loads(json_str)
+                    except json.JSONDecodeError:
+                        pass
+            
+            # Strategy 2: Find first complete JSON object with proper brace matching
+            if "{" in response and "}" in response:
+                brace_count = 0
+                start_pos = -1
+                
+                for i, char in enumerate(response):
+                    if char == "{":
+                        if brace_count == 0:
+                            start_pos = i
+                        brace_count += 1
+                    elif char == "}":
+                        brace_count -= 1
+                        if brace_count == 0 and start_pos >= 0:
+                            # Found complete JSON object
+                            json_str = response[start_pos:i+1]
+                            try:
+                                return json.loads(json_str)
+                            except json.JSONDecodeError:
+                                continue
+            
+            # Strategy 3: Extract content between first { and last } (fallback)
+            if "{" in response and "}" in response:
+                start = response.find("{")
+                end = response.rfind("}") + 1
+                json_str = response[start:end]
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    self.logger.warning(f"Failed to parse JSON in {context}: {e}")
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting JSON from {context}: {e}")
+            return None
     
-    def analyze_modification_request_advanced(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
+    def process_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Orchestrates the new, efficient two-step modification workflow.
+        
+        Step 1: Analysis & Planning (1 API call)
+        Step 2: Apply, Validate & Summarize (1 API call)
+        
+        This approach uses dynamic prompt engineering to handle any request type.
+        """
+        try:
+            self.logger.info(f"Starting two-step modification process for: {user_feedback}")
+            
+            # STEP 1: Analysis and Planning
+            analysis_prompt = self._build_analysis_and_planning_prompt(user_feedback, current_template)
+            
+            self.logger.debug("Sending analysis and planning request to Claude...")
+            analysis_response = self.call_claude_with_cot(analysis_prompt, enable_cot=False)
+            
+            # Parse the analysis and plan
+            modification_plan = self._parse_plan_from_response(analysis_response)
+            
+            if not modification_plan:
+                return {
+                    "success": False,
+                    "error": "Failed to generate modification plan",
+                    "original_template": current_template,
+                    "user_feedback": user_feedback
+                }
+            
+            # STEP 2: Apply, Validate and Summarize
+            execution_prompt = self._build_apply_validate_summary_prompt(modification_plan, current_template)
+            
+            self.logger.debug("Sending execution, validation, and summary request to Claude...")
+            execution_response = self.call_claude_with_cot(execution_prompt, enable_cot=False)
+            
+            # Parse the final results
+            final_results = self._parse_final_output_from_response(execution_response, current_template)
+            
+            if not final_results:
+                return {
+                    "success": False,
+                    "error": "Failed to execute modification plan",
+                    "original_template": current_template,
+                    "modification_plan": modification_plan,
+                    "user_feedback": user_feedback
+                }
+            
+            # Combine all results into final response
+            return {
+                "success": final_results.get("validation_report", {}).get("is_valid", True),
+                "original_template": current_template,
+                "modified_template": final_results.get("modified_template"),
+                "modification_request": modification_plan.get("analysis", {}),
+                "modification_plan": modification_plan.get("modification_plan", {}),
+                "validation_result": final_results.get("validation_report", {}),
+                "changes_summary": final_results.get("changes_summary", [])
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error in two-step modification process: {e}")
+            return {
+                "success": False,
+                "error": f"Modification process failed: {str(e)}",
+                "original_template": current_template,
+                "user_feedback": user_feedback
+            }
+    
+    def _build_analysis_and_planning_prompt(self, user_feedback: str, current_template: Dict[str, Any]) -> str:
+        """
+        [PROMPT ENGINEERING] Creates the prompt for the first API call,
+        asking the LLM to both analyze the request and create an implementation plan.
+        """
+        # Extract template information for context
+        html_content = current_template.get('html_export', '')
+        global_css = current_template.get('globals_css', '')
+        style_css = current_template.get('style_css', '')
+        
+        # Combine CSS for analysis
+        css_content = f"{global_css}\n{style_css}"
+        
+        template_name = current_template.get('name', 'Unknown Template')
+        template_category = current_template.get('category', 'general')
+        
+        prompt = f"""You are an expert UI/UX analyst and implementation strategist.
+Your task is to analyze a user's modification request and create a detailed, step-by-step implementation plan.
+
+## CONTEXT
+- Template: {template_name} ({template_category})
+- User Request: "{user_feedback}"
+- Current HTML Code Length: {len(html_content)} characters
+- Current CSS Code Length: {len(css_content)} characters
+
+## CURRENT CODE FOR ANALYSIS
+### HTML:
+{html_content}
+
+### CSS:
+{css_content}
+
+## YOUR TASK
+Analyze the user's intent and the current code to produce a comprehensive plan.
+Return a single JSON object with the exact structure below, containing two main keys: "analysis" and "modification_plan".
+
+## OUTPUT STRUCTURE
+```json
+{{
+  "analysis": {{
+    "overall_intent": "A summary of what the user is trying to achieve.",
+    "modification_type": "A single keyword (e.g., 'styling', 'layout', 'content', 'color', 'sizing').",
+    "affected_elements": ["A list of CSS selectors or element descriptions that will be changed."],
+    "complexity_level": "simple|moderate|complex",
+    "confidence_score": 0.9
+  }},
+  "modification_plan": {{
+    "implementation_strategy": "A brief, high-level approach for the changes.",
+    "modification_steps": [
+      {{
+        "step_number": 1,
+        "description": "Describe the change for this step.",
+        "change_type": "A keyword like 'modify-css', 'add-html', 'remove-html', 'update-text'.",
+        "target_element": "The CSS selector for the element to modify.",
+        "detailed_instructions": "Specific instructions for what code to add, change, or remove. For CSS, specify the properties and new values."
+      }}
+    ]
+  }}
+}}
+```
+
+Focus on understanding the user's intent and providing precise, actionable instructions that will result in exactly what the user requested."""
+        
+        return prompt
+    
+    def _parse_plan_from_response(self, response: str) -> Optional[Dict[str, Any]]:
+        """
+        Parses the JSON response from the first API call to extract the modification plan.
+        """
+        try:
+            parsed_response = self._extract_json_from_response(response, "analysis_and_planning")
+            
+            if parsed_response:
+                # Validate that both required sections are present
+                if "analysis" in parsed_response and "modification_plan" in parsed_response:
+                    self.logger.info(f"Successfully parsed modification plan with {len(parsed_response.get('modification_plan', {}).get('modification_steps', []))} steps")
+                    return parsed_response
+                else:
+                    self.logger.warning("Missing required sections in parsed plan")
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error parsing plan from response: {e}")
+            return None
+    
+    def _build_apply_validate_summary_prompt(self, modification_plan: Dict[str, Any], original_template: Dict[str, Any]) -> str:
+        """
+        [PROMPT ENGINEERING] Creates the prompt for the second API call,
+        providing the plan and asking the LLM to execute, validate, and summarize.
+        """
+        import json
+        
+        # Extract original code
+        original_html = original_template.get('html_export', '')
+        original_global_css = original_template.get('globals_css', '')
+        original_style_css = original_template.get('style_css', '')
+        
+        # Convert modification plan to JSON string for inclusion in prompt
+        modification_plan_json = json.dumps(modification_plan, indent=2)
+        
+        prompt = f"""You are an expert web developer tasked with executing a pre-defined modification plan, validating your work, and summarizing the results.
+
+## CONTEXT
+You will be modifying the provided original code based only on the instructions in the modification plan.
+
+## MODIFICATION PLAN
+```json
+{modification_plan_json}
+```
+
+## ORIGINAL CODE
+### HTML
+```html
+{original_html}
+```
+
+### GLOBAL CSS
+```css
+{original_global_css}
+```
+
+### STYLE CSS
+```css
+{original_style_css}
+```
+
+## YOUR TASK
+Perform three actions in sequence:
+
+1. **EXECUTE**: Apply the steps in the modification plan to the original code.
+2. **VALIDATE**: Critically review your own changes for correctness, quality, and adherence to the plan.
+3. **SUMMARIZE**: Describe the changes you made in a user-friendly way.
+
+Return a single JSON object with the exact structure below. Do not include any other text or explanation.
+
+## OUTPUT STRUCTURE
+```json
+{{
+  "modified_code": {{
+    "html_export": "The complete, new HTML code.",
+    "globals_css": "The complete, new global CSS code.",
+    "style_css": "The complete, new style CSS code."
+  }},
+  "validation_report": {{
+    "is_valid": true,
+    "quality_score": 0.9,
+    "warnings": ["List any potential issues or deviations from the plan."],
+    "reasoning": "Explain why the changes are valid and meet the plan's requirements."
+  }},
+  "changes_summary": [
+    "A bullet point describing the first major change.",
+    "A bullet point describing the second major change."
+  ]
+}}
+```
+
+Execute the plan precisely, validate your work thoroughly, and provide clear summaries of what was accomplished."""
+        
+        return prompt
+    
+    def _parse_final_output_from_response(self, response: str, original_template: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parses the final JSON response containing the modified code, validation, and summary.
+        """
+        try:
+            parsed_response = self._extract_json_from_response(response, "final_output")
+            
+            if parsed_response:
+                # Validate that all required sections are present
+                required_keys = ["modified_code", "validation_report", "changes_summary"]
+                if all(key in parsed_response for key in required_keys):
+                    
+                    # Create the modified template structure
+                    modified_template = original_template.copy()
+                    modified_code = parsed_response["modified_code"]
+                    
+                    # Update with new code
+                    if "html_export" in modified_code:
+                        modified_template["html_export"] = modified_code["html_export"]
+                    if "globals_css" in modified_code:
+                        modified_template["globals_css"] = modified_code["globals_css"]
+                    if "style_css" in modified_code:
+                        modified_template["style_css"] = modified_code["style_css"]
+                    
+                    # Add modification metadata
+                    modified_template["modification_metadata"] = {
+                        "changes_applied": parsed_response.get("changes_summary", []),
+                        "modification_type": "dynamic_two_step",
+                        "modified_at": "2025-01-27T12:00:00Z"
+                    }
+                    
+                    return {
+                        "modified_template": modified_template,
+                        "validation_report": parsed_response["validation_report"],
+                        "changes_summary": parsed_response["changes_summary"]
+                    }
+                else:
+                    self.logger.warning("Missing required sections in final output")
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error parsing final output from response: {e}")
+            return None
+    
+    def analyze_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze user feedback using advanced prompt engineering for sophisticated understanding"""
         
         # Build comprehensive prompt for advanced analysis
-        prompt = self._build_advanced_analysis_prompt(user_feedback, current_template)
+        prompt = self._build_analysis_prompt(user_feedback, current_template)
         
         # Call Claude with advanced reasoning
         response = self.call_claude_with_cot(prompt, enable_cot=True)
         
         # Parse the response with enhanced error handling
-        return self._parse_advanced_analysis_response(response, user_feedback)
+        return self._parse_analysis_response(response, user_feedback)
     
-    def _build_advanced_analysis_prompt(self, user_feedback: str, current_template: Dict[str, Any]) -> str:
-        """Build sophisticated prompt for advanced modification analysis"""
+    def _build_analysis_prompt(self, user_feedback: str, current_template: Dict[str, Any]) -> str:
+        """Build sophisticated prompt for modification analysis"""
         
         # Extract template information
         template_name = current_template.get('name', 'Unknown Template')
@@ -71,31 +369,33 @@ You focus on sophisticated UI modifications and improvements."""
         
         # Get HTML and CSS content for analysis
         html_content = current_template.get('html_export', '')
-        css_content = current_template.get('style_css', '') + '\n' + current_template.get('global_css', '')
-        
-        # Analyze current structure
-        structure_analysis = self._analyze_current_structure(html_content, css_content)
+        global_css = current_template.get('globals_css', '')
+        style_css = current_template.get('style_css', '')
         
         prompt = f"""
-You are an expert UI/UX modification analyst with deep understanding of web design principles, user psychology, and technical implementation. Your task is to analyze a user's modification request and provide a comprehensive, structured analysis.
+You are an expert UI/UX modification analyst with deep understanding of web design principles, user psychology, and technical implementation. Your task is to analyze a user's UI mockup modification request and provide a comprehensive, structured analysis.
 
 ## CURRENT TEMPLATE CONTEXT
 - **Template Name**: {template_name}
 - **Category**: {template_category}
 - **Description**: {template_description}
 - **Tags**: {', '.join(template_tags)}
-- **Current Structure**: {structure_analysis}
+
+## CURRENT CODE STRUCTURE
+**HTML Content Length**: {len(html_content)} characters
+**Global CSS Length**: {len(global_css)} characters  
+**Component CSS Length**: {len(style_css)} characters
 
 ## USER FEEDBACK
 "{user_feedback}"
 
 ## ANALYSIS TASK
-Using Chain-of-Thought reasoning, analyze the user's modification request and provide a comprehensive specification. Consider:
+Using Chain-of-Thought reasoning, analyze the user's UI mockup modification request and provide a comprehensive specification. Consider:
 
 1. **Intent Analysis**: What is the user trying to achieve?
 2. **Context Understanding**: How does this fit with the current template?
 3. **Technical Feasibility**: What changes are technically possible?
-4. **Design Impact**: How will changes affect the overall design?
+4. **Design Impact**: How will changes affect the overall mockup design?
 5. **User Experience**: Will changes improve or hinder UX?
 6. **Implementation Strategy**: What's the best approach to implement changes?
 
@@ -140,37 +440,14 @@ Remember: Focus on understanding the user's underlying goals, not just their exp
         
         return prompt
     
-    def _analyze_current_structure(self, html_content: str, css_content: str) -> str:
-        """Analyze the current template structure for context"""
-        
-        # Basic structure analysis
-        html_lines = html_content.split('\n')
-        css_lines = css_content.split('\n')
-        
-        # Count elements
-        div_count = sum(1 for line in html_lines if '<div' in line)
-        class_count = sum(1 for line in css_lines if '.' in line and '{' in line)
-        
-        # Identify main sections
-        main_sections = []
-        for line in html_lines:
-            line_lower = line.lower()
-            if any(section in line_lower for section in self.keyword_manager.get_component_keywords()["html_sections"]):
-                main_sections.append(line.strip())
-        
-        return f"HTML: {len(html_lines)} lines, {div_count} divs; CSS: {len(css_lines)} lines, {class_count} classes; Main sections: {len(main_sections)}"
-    
-    def _parse_advanced_analysis_response(self, response: str, user_feedback: str) -> Dict[str, Any]:
-        """Parse the advanced analysis response with enhanced error handling"""
+    def _parse_analysis_response(self, response: str, user_feedback: str) -> Dict[str, Any]:
+        """Parse the analysis response with enhanced error handling"""
         
         try:
-            # Try to extract JSON from response
-            if "{" in response and "}" in response:
-                start = response.find("{")
-                end = response.rfind("}") + 1
-                json_str = response[start:end]
-                parsed_response = json.loads(json_str)
-                
+            # Try multiple JSON extraction strategies
+            parsed_response = self._extract_json_from_response(response, "analysis")
+            
+            if parsed_response:
                 # Validate required fields
                 required_fields = self.keyword_manager.get_required_fields()["modification_request"]
                 for field in required_fields:
@@ -179,13 +456,14 @@ Remember: Focus on understanding the user's underlying goals, not just their exp
                 
                 return parsed_response
             else:
-                return self._get_default_modification_request_advanced(user_feedback)
+                self.logger.warning("No valid JSON found in analysis response, using default")
+                return self._get_default_modification_request(user_feedback)
                 
-        except json.JSONDecodeError as e:
-            print(f"Error parsing advanced analysis response: {e}")
-            return self._get_default_modification_request_advanced(user_feedback)
+        except Exception as e:
+            self.logger.error(f"Error parsing analysis response: {e}")
+            return self._get_default_modification_request(user_feedback)
     
-    def _get_default_modification_request_advanced(self, user_feedback: str) -> Dict[str, Any]:
+    def _get_default_modification_request(self, user_feedback: str) -> Dict[str, Any]:
         """Return sophisticated default modification request when analysis fails"""
         return {
             "modification_type": "general",
@@ -230,20 +508,20 @@ Remember: Focus on understanding the user's underlying goals, not just their exp
         }
         return defaults.get(field, "Not specified")
     
-    def generate_modification_plan_advanced(self, modification_request: Dict[str, Any], current_template: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_modification_plan(self, modification_request: Dict[str, Any], current_template: Dict[str, Any]) -> Dict[str, Any]:
         """Generate detailed modification plan using advanced prompt engineering"""
         
         # Build sophisticated planning prompt
-        prompt = self._build_advanced_planning_prompt(modification_request, current_template)
+        prompt = self._build_planning_prompt(modification_request, current_template)
         
         # Call Claude with advanced reasoning
         response = self.call_claude_with_cot(prompt, enable_cot=True)
         
         # Parse the response
-        return self._parse_advanced_planning_response(response, modification_request)
+        return self._parse_planning_response(response, modification_request)
     
-    def _build_advanced_planning_prompt(self, modification_request: Dict[str, Any], current_template: Dict[str, Any]) -> str:
-        """Build sophisticated prompt for advanced modification planning"""
+    def _build_planning_prompt(self, modification_request: Dict[str, Any], current_template: Dict[str, Any]) -> str:
+        """Build sophisticated prompt for modification planning"""
         
         # Extract modification details
         modification_type = modification_request.get("modification_type", "general")
@@ -252,7 +530,8 @@ Remember: Focus on understanding the user's underlying goals, not just their exp
         
         # Get template content
         html_content = current_template.get('html_export', '')
-        css_content = current_template.get('style_css', '') + '\n' + current_template.get('global_css', '')
+        global_css = current_template.get('globals_css', '')
+        style_css = current_template.get('style_css', '')
         
         prompt = f"""
 You are an expert UI/UX implementation strategist with deep knowledge of web development, design systems, and user experience optimization. Your task is to create a comprehensive modification plan for implementing UI changes.
@@ -264,7 +543,8 @@ You are an expert UI/UX implementation strategist with deep knowledge of web dev
 
 ## CURRENT TEMPLATE
 - **HTML Content**: {len(html_content)} characters
-- **CSS Content**: {len(css_content)} characters
+- **Global CSS**: {len(global_css)} characters
+- **Component CSS**: {len(style_css)} characters
 
 ## PLANNING TASK
 Create a detailed implementation plan that considers:
@@ -273,9 +553,8 @@ Create a detailed implementation plan that considers:
 2. **Code Quality**: Maintain clean, maintainable code
 3. **Performance Impact**: Minimize performance degradation
 4. **Responsive Design**: Ensure changes work across devices
-5. **Accessibility**: Maintain or improve accessibility
-6. **Testing Strategy**: How to validate changes
-7. **Rollback Plan**: How to revert if needed
+5. **Testing Strategy**: How to validate changes
+6. **Rollback Plan**: How to revert if needed
 
 ## OUTPUT FORMAT
 Return a JSON object with this exact structure:
@@ -291,7 +570,8 @@ Return a JSON object with this exact structure:
             "implementation_details": "string (detailed implementation instructions)",
             "code_changes": {{
                 "html_changes": "string (specific HTML modifications)",
-                "css_changes": "string (specific CSS modifications)",
+                "global_css_changes": "string (specific global CSS modifications)",
+                "style_css_changes": "string (specific component CSS modifications)",
                 "new_elements": ["list", "of", "new", "elements", "to", "add"],
                 "removed_elements": ["list", "of", "elements", "to", "remove"]
             }},
@@ -324,17 +604,14 @@ Remember: Focus on creating a robust, maintainable implementation that achieves 
         
         return prompt
     
-    def _parse_advanced_planning_response(self, response: str, modification_request: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse the advanced planning response"""
+    def _parse_planning_response(self, response: str, modification_request: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse the planning response with enhanced JSON extraction"""
         
         try:
-            # Try to extract JSON from response
-            if "{" in response and "}" in response:
-                start = response.find("{")
-                end = response.rfind("}") + 1
-                json_str = response[start:end]
-                parsed_response = json.loads(json_str)
-                
+            # Use shared robust JSON extraction
+            parsed_response = self._extract_json_from_response(response, "planning")
+            
+            if parsed_response:
                 # Validate required fields
                 if "modification_steps" not in parsed_response:
                     parsed_response["modification_steps"] = []
@@ -343,10 +620,11 @@ Remember: Focus on creating a robust, maintainable implementation that achieves 
                 
                 return parsed_response
             else:
+                self.logger.warning("No valid JSON found in planning response, using default")
                 return self._get_default_modification_plan(modification_request)
                 
-        except json.JSONDecodeError as e:
-            print(f"Error parsing advanced planning response: {e}")
+        except Exception as e:
+            self.logger.error(f"Error parsing planning response: {e}")
             return self._get_default_modification_plan(modification_request)
     
     def _get_default_modification_plan(self, modification_request: Dict[str, Any]) -> Dict[str, Any]:
@@ -363,7 +641,8 @@ Remember: Focus on creating a robust, maintainable implementation that achieves 
                     "implementation_details": "Apply general improvements based on user feedback",
                     "code_changes": {
                         "html_changes": "Apply HTML modifications as needed",
-                        "css_changes": "Apply CSS modifications as needed",
+                        "global_css_changes": "Apply global CSS modifications as needed",
+                        "style_css_changes": "Apply component CSS modifications as needed",
                         "new_elements": [],
                         "removed_elements": []
                     },
@@ -381,378 +660,360 @@ Remember: Focus on creating a robust, maintainable implementation that achieves 
             "confidence_level": 0.5
         }
     
-    def apply_modifications_advanced(self, template: Dict[str, Any], modification_plan: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply modifications using advanced implementation strategy"""
+    def apply_modifications(self, template: Dict[str, Any], modification_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply modifications using prompt engineering to let the LLM do the work"""
         
-        # Create a copy of the template for modification
-        modified_template = template.copy()
+        # Build comprehensive prompt for code modification
+        prompt = self._build_apply_modifications_prompt(template, modification_plan)
         
-        # Get current content
-        html_content = template.get('html_export', '')
-        css_content = template.get('style_css', '') + '\n' + template.get('global_css', '')
+        # Call Claude to apply the modifications
+        response = self.call_claude_with_cot(prompt, enable_cot=True)
         
-        # Apply each modification step
-        modification_steps = modification_plan.get("modification_steps", [])
-        
-        for step in modification_steps:
-            html_content = self._apply_html_modifications_advanced(html_content, step)
-            css_content = self._apply_css_modifications_advanced(css_content, step)
-        
-        # Update the modified template
-        modified_template['html_export'] = html_content
-        modified_template['style_css'] = css_content
+        # Parse the modified code from the response
+        modified_template = self._parse_modified_code_response(response, template)
         
         return modified_template
     
-    def _apply_html_modifications_advanced(self, html_content: str, step: Dict[str, Any]) -> str:
-        """Apply HTML modifications using advanced techniques"""
+    def _build_apply_modifications_prompt(self, template: Dict[str, Any], modification_plan: Dict[str, Any]) -> str:
+        """Build prompt for applying modifications using LLM"""
         
-        # TODO: Implement sophisticated HTML modification logic
-        # This would include:
-        # - Element selection and modification
-        # - Content updates
-        # - Structure changes
-        # - Attribute modifications
+        html_content = template.get('html_export', '')
+        global_css = template.get('globals_css', '')
+        style_css = template.get('style_css', '')
         
-        print(f"TODO: Apply HTML modifications for step {step.get('step_number', 1)}")
-        return html_content
-    
-    def _apply_css_modifications_advanced(self, css_content: str, step: Dict[str, Any]) -> str:
-        """Apply CSS modifications using advanced techniques"""
+        implementation_strategy = modification_plan.get("implementation_strategy", "")
+        modification_steps = modification_plan.get("modification_steps", [])
         
-        # TODO: Implement sophisticated CSS modification logic
-        # This would include:
-        # - Style rule updates
-        # - New style rules
-        # - Responsive design considerations
-        # - Performance optimizations
-        
-        print(f"TODO: Apply CSS modifications for step {step.get('step_number', 1)}")
-        return css_content
-    
-    def validate_modifications_advanced(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate modifications using advanced validation techniques"""
-        
-        # TODO: Implement comprehensive validation
-        # This would include:
-        # - HTML validation
-        # - CSS validation
-        # - Responsive design validation
-        # - Accessibility validation
-        # - Performance validation
-        
-        print("TODO: Implement advanced validation logic")
-        
-        return {
-            "is_valid": True,
-            "validation_details": "Advanced validation not yet implemented",
-            "warnings": [],
-            "errors": [],
-            "recommendations": ["Implement comprehensive validation logic"]
-        }
-    
-    def _generate_changes_summary_advanced(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> List[str]:
-        """Generate advanced changes summary"""
-        
-        # TODO: Implement sophisticated changes summary
-        # This would include:
-        # - Detailed change descriptions
-        # - Impact analysis
-        # - Performance implications
-        # - Accessibility considerations
-        
-        print("TODO: Implement advanced changes summary")
-        
-        return [
-            "Advanced changes summary not yet implemented",
-            "Consider implementing detailed change tracking",
-            "Include impact analysis and recommendations"
-        ]
-    
-    # Legacy methods for backward compatibility
-    def analyze_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
-        """Legacy method - redirects to advanced version"""
-        return self.analyze_modification_request_advanced(user_feedback, current_template)
-    
-    def generate_modification_plan(self, modification_request: Dict[str, Any], current_template: Dict[str, Any]) -> Dict[str, Any]:
-        """Legacy method - redirects to advanced version"""
-        return self.generate_modification_plan_advanced(modification_request, current_template)
-    
-    def apply_modifications(self, template: Dict[str, Any], modification_plan: Dict[str, Any]) -> Dict[str, Any]:
-        """Legacy method - redirects to advanced version"""
-        return self.apply_modifications_advanced(template, modification_plan)
-    
-    def validate_modifications(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> Dict[str, Any]:
-        """Legacy method - redirects to advanced version"""
-        return self.validate_modifications_advanced(original_template, modified_template) 
-
-    def analyze_ui_request(self, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze UI editing requests from chat and return modifications"""
-        try:
-            current_ui_codes = context.get("current_ui_codes", {})
-            
-            # Build a focused prompt for UI editing
-            prompt = self._build_ui_editing_prompt(message, current_ui_codes)
-            
-            # Call Claude with tools for UI modification
-            response = self.call_claude(prompt)
-            
-            # Parse the response to extract modifications
-            modifications = self._parse_ui_editing_response(response, message)
-            
-            # Debug logging
-            self.logger.info(f"AI Response: {response[:200]}...")
-            self.logger.info(f"Parsed modifications: {modifications}")
-            
-            # If no modifications were found, try fallback
-            if not modifications:
-                self.logger.info("No modifications found, trying fallback...")
-                modifications = self._create_fallback_modification(message)
-                self.logger.info(f"Fallback modifications: {modifications}")
-            
-            # Create a user-friendly response
-            user_response = self._generate_user_response(message, modifications)
-            
-            return self.create_standardized_response(
-                success=True,
-                data={
-                    "modifications": modifications,
-                    "response": user_response,
-                    "reasoning": "Successfully analyzed UI editing request"
-                }
-            )
-            
-        except Exception as e:
-            self.logger.error(f"Error analyzing UI request: {e}")
-            # Try fallback modification
-            try:
-                fallback_modifications = self._create_fallback_modification(message)
-                if fallback_modifications:
-                    user_response = self._generate_user_response(message, fallback_modifications)
-                    return self.create_standardized_response(
-                        success=True,
-                        data={
-                            "modifications": fallback_modifications,
-                            "response": user_response,
-                            "reasoning": f"Used fallback modification due to error: {str(e)}"
-                        }
-                    )
-            except Exception as fallback_error:
-                self.logger.error(f"Fallback modification also failed: {fallback_error}")
-            
-            return self.create_standardized_response(
-                success=False,
-                data={
-                    "modifications": None,
-                    "response": f"I'm sorry, I couldn't process your request: {str(e)}",
-                    "reasoning": f"Error occurred: {str(e)}"
-                }
-            )
-    
-    def _build_ui_editing_prompt(self, message: str, current_ui_codes: Dict[str, Any]) -> str:
-        """Build prompt for UI editing analysis"""
-        
-        html_content = current_ui_codes.get("html_export", "")
-        css_content = current_ui_codes.get("style_css", "") + "\n" + current_ui_codes.get("globals_css", "")
-        
-        # Extract key elements from HTML for context
-        elements = self._extract_key_elements(html_content)
+        # Format modification steps for the prompt
+        steps_text = ""
+        for step in modification_steps:
+            steps_text += f"""
+Step {step.get('step_number', 1)}: {step.get('step_type', 'general')}
+- Element: {step.get('element_selector', 'general')}
+- Current State: {step.get('current_state', 'unknown')}
+- Target State: {step.get('target_state', 'unknown')}
+- Implementation: {step.get('implementation_details', 'Apply changes')}
+- HTML Changes: {step.get('code_changes', {}).get('html_changes', 'None')}
+- Global CSS Changes: {step.get('code_changes', {}).get('global_css_changes', 'None')}
+- Style CSS Changes: {step.get('code_changes', {}).get('style_css_changes', 'None')}
+"""
         
         prompt = f"""
-You are an expert UI editor. The user wants to make changes to their UI.
+You are an expert web developer with deep knowledge of HTML, CSS, and modern web development practices. Your task is to apply specific modifications to a web template based on a detailed modification plan.
 
-## CURRENT UI STATE
-**HTML Elements Found**: {', '.join(elements) if elements else 'No specific elements found'}
+## IMPLEMENTATION STRATEGY
+{implementation_strategy}
 
-**Current CSS Classes**: {self._extract_css_classes(css_content)}
+## MODIFICATION STEPS
+{steps_text}
 
-## USER REQUEST
-"{message}"
+## CURRENT CODE
+
+### HTML Content
+```html
+{html_content}
+```
+
+### Global CSS
+```css
+{global_css}
+```
+
+### Component CSS
+```css
+{style_css}
+```
 
 ## YOUR TASK
-Analyze the user's request and determine what UI modifications are needed.
+Apply the specified modifications to the code above. You must:
 
-## AVAILABLE MODIFICATION TYPES
-- `css_change`: Modify CSS properties for existing elements
-- `html_change`: Modify HTML content
-- `js_change`: Modify JavaScript code
-- `complete_change`: Complete replacement of code sections
+1. **Follow the modification plan exactly**: Implement each step as specified
+2. **Maintain code quality**: Ensure the modified code is clean, valid, and well-structured
+3. **Preserve existing functionality**: Don't break any existing features
+4. **Apply changes to the correct files**: 
+   - HTML changes go to the HTML content
+   - Global CSS changes go to the global_css section
+   - Component CSS changes go to the style_css section
+5. **Ensure compatibility**: Make sure all changes work together
 
 ## OUTPUT FORMAT
-Return a JSON object with:
+Return a JSON object with this exact structure:
 ```json
 {{
-    "type": "css_change|html_change|js_change|complete_change",
-    "changes": {{
-        // For css_change: {{"selector": {{"property": "value"}}}}
-        // For html_change: {{"html_export": "new_html_content"}}
-        // For js_change: {{"js": "new_js_content"}}
-        // For complete_change: {{"html_export": "...", "style_css": "...", "js": "..."}}
-    }},
-    "reasoning": "Explanation of what changes were made and why"
+    "html_export": "complete modified HTML content",
+    "globals_css": "complete modified global CSS content", 
+    "style_css": "complete modified component CSS content",
+    "changes_applied": [
+        {{
+            "step_number": 1,
+            "description": "What was changed",
+            "success": true
+        }}
+    ],
+    "validation_notes": "Any notes about the modifications made"
 }}
 ```
 
-Focus on practical, implementable changes that match the user's intent.
+## IMPORTANT REQUIREMENTS
+- Return ONLY the JSON object, no additional text
+- Ensure all HTML and CSS is properly formatted and valid
+- Maintain the original structure where possible
+- Apply all specified changes from the modification plan
+- If a change cannot be applied exactly as specified, apply the closest possible modification
+
+Remember: You are rewriting the code to implement the requested changes. Be precise and thorough.
 """
+        
         return prompt
     
-    def _extract_key_elements(self, html_content: str) -> List[str]:
-        """Extract key HTML elements for context"""
+    def _parse_modified_code_response(self, response: str, original_template: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse the modified code from the LLM response"""
+        
         try:
-            # Simple regex to find common HTML elements
-            import re
-            elements = re.findall(r'<(?!\/)([a-zA-Z][a-zA-Z0-9]*)(?:\s|>)', html_content)
-            # Remove duplicates and common elements
-            unique_elements = list(set(elements))
-            # Filter out common structural elements
-            filtered_elements = [elem for elem in unique_elements if elem not in ['html', 'head', 'body', 'meta', 'title', 'style', 'script']]
-            return filtered_elements[:10]  # Limit to 10 elements
-        except Exception:
-            return []
-    
-    def _extract_css_classes(self, css_content: str) -> List[str]:
-        """Extract CSS classes for context"""
-        try:
-            import re
-            classes = re.findall(r'\.([a-zA-Z][a-zA-Z0-9_-]*)\s*{', css_content)
-            return list(set(classes))[:10]  # Limit to 10 classes
-        except Exception:
-            return []
-    
-    def _parse_ui_editing_response(self, response: str, original_message: str) -> Optional[Dict[str, Any]]:
-        """Parse the AI response to extract modifications"""
-        try:
-            # Try to extract JSON from the response
-            import re
-            json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
+            # Use shared robust JSON extraction
+            parsed_response = self._extract_json_from_response(response, "modified_code")
+            
+            if parsed_response:
+                # Create modified template
+                modified_template = original_template.copy()
+                
+                # Update with modified code
+                if "html_export" in parsed_response:
+                    modified_template["html_export"] = parsed_response["html_export"]
+                if "globals_css" in parsed_response:
+                    modified_template["globals_css"] = parsed_response["globals_css"]
+                if "style_css" in parsed_response:
+                    modified_template["style_css"] = parsed_response["style_css"]
+                
+                # Add modification metadata
+                modified_template["modification_metadata"] = {
+                    "changes_applied": parsed_response.get("changes_applied", []),
+                    "validation_notes": parsed_response.get("validation_notes", ""),
+                    "modified_at": "2025-01-27T12:00:00Z"
+                }
+                
+                return modified_template
             else:
-                # Try to find JSON without markdown
-                json_match = re.search(r'\{.*\}', response, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(0)
-                else:
-                    # Fallback: try to parse the entire response as JSON
-                    json_str = response
-            
-            modifications = json.loads(json_str)
-            
-            # Validate the modifications structure
-            if not isinstance(modifications, dict):
-                return None
-            
-            if "type" not in modifications or "changes" not in modifications:
-                return None
-            
-            return modifications
-            
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Failed to parse UI editing response as JSON: {e}")
-            # Fallback: create a simple CSS modification based on common patterns
-            return self._create_fallback_modification(original_message)
+                # If parsing fails, return original template
+                self.logger.warning("Could not parse modified code response, returning original template")
+                return original_template
+                
         except Exception as e:
-            self.logger.error(f"Error parsing UI editing response: {e}")
-            # Fallback: create a simple CSS modification based on common patterns
-            return self._create_fallback_modification(original_message)
+            self.logger.error(f"Error parsing modified code response: {e}")
+            return original_template
     
-    def _create_fallback_modification(self, message: str) -> Optional[Dict[str, Any]]:
-        """Create a fallback modification based on common patterns"""
-        message_lower = message.lower()
+    def validate_modifications(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate modifications using prompt engineering"""
         
-        # Common color change patterns
-        if any(color in message_lower for color in ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'black', 'white']):
-            color_map = {
-                'red': '#ff4444', 'blue': '#4444ff', 'green': '#44ff44',
-                'yellow': '#ffff44', 'purple': '#ff44ff', 'orange': '#ff8844',
-                'pink': '#ff88ff', 'black': '#000000', 'white': '#ffffff'
-            }
-            
-            for color_name, hex_code in color_map.items():
-                if color_name in message_lower:
-                    return {
-                        "type": "css_change",
-                        "changes": {
-                            ".button": {
-                                "background": hex_code,
-                                "color": "#ffffff" if color_name != 'white' else "#000000"
-                            }
-                        }
-                    }
+        # Build validation prompt
+        prompt = self._build_validation_prompt(original_template, modified_template)
         
-        # Size change patterns
-        if any(size in message_lower for size in ['bigger', 'larger', 'smaller']):
-            size_change = "2em" if any(size in message_lower for size in ['bigger', 'larger']) else "0.8em"
-            return {
-                "type": "css_change",
-                "changes": {
-                    ".button": {
-                        "font-size": size_change
-                    }
-                }
-            }
+        # Call Claude for validation
+        response = self.call_claude_with_cot(prompt, enable_cot=True)
         
-        # Button-specific patterns
-        if "button" in message_lower:
-            if "red" in message_lower:
-                return {
-                    "type": "css_change",
-                    "changes": {
-                        ".button": {
-                            "background": "#ff4444",
-                            "color": "#ffffff"
-                        }
-                    }
-                }
-            elif "blue" in message_lower:
-                return {
-                    "type": "css_change",
-                    "changes": {
-                        ".button": {
-                            "background": "#4444ff",
-                            "color": "#ffffff"
-                        }
-                    }
-                }
-            elif "green" in message_lower:
-                return {
-                    "type": "css_change",
-                    "changes": {
-                        ".button": {
-                            "background": "#44ff44",
-                            "color": "#000000"
-                        }
-                    }
-                }
-        
-        return None
+        # Parse validation result
+        return self._parse_validation_response(response)
     
-    def _generate_user_response(self, message: str, modifications: Optional[Dict[str, Any]]) -> str:
-        """Generate a user-friendly response about the modifications"""
-        if not modifications:
-            return "I understand your request, but I couldn't determine what specific changes to make. Could you please be more specific about what you'd like to modify?"
+    def _build_validation_prompt(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> str:
+        """Build prompt for validating modifications"""
         
-        mod_type = modifications.get("type", "")
-        changes = modifications.get("changes", {})
+        original_html = original_template.get('html_export', '')
+        original_global_css = original_template.get('globals_css', '')
+        original_style_css = original_template.get('style_css', '')
         
-        if mod_type == "css_change":
-            selectors = list(changes.keys())
-            if len(selectors) == 1:
-                selector = selectors[0]
-                properties = list(changes[selector].keys())
-                return f"I've updated the {selector} styles to change {', '.join(properties)}."
+        modified_html = modified_template.get('html_export', '')
+        modified_global_css = modified_template.get('globals_css', '')
+        modified_style_css = modified_template.get('style_css', '')
+        
+        prompt = f"""
+You are an expert web developer and quality assurance specialist. Your task is to validate the modifications made to a web template.
+
+## ORIGINAL CODE
+
+### Original HTML
+```html
+{original_html}
+```
+
+### Original Global CSS
+```css
+{original_global_css}
+```
+
+### Original Component CSS
+```css
+{original_style_css}
+```
+
+## MODIFIED CODE
+
+### Modified HTML
+```html
+{modified_html}
+```
+
+### Modified Global CSS
+```css
+{modified_global_css}
+```
+
+### Modified Component CSS
+```css
+{modified_style_css}
+```
+
+## VALIDATION TASK
+Analyze the modifications and validate:
+
+1. **Code Quality**: Is the modified code clean, valid, and well-structured?
+2. **Functionality**: Do the modifications maintain existing functionality?
+3. **Compatibility**: Are all changes compatible with each other?
+4. **Best Practices**: Do the modifications follow web development best practices?
+5. **Performance**: Will the modifications impact performance negatively?
+
+## OUTPUT FORMAT
+Return a JSON object with this exact structure:
+```json
+{{
+    "is_valid": true,
+    "validation_details": "Detailed explanation of validation results",
+    "warnings": ["list", "of", "warnings", "if", "any"],
+    "errors": ["list", "of", "errors", "if", "any"],
+    "recommendations": ["list", "of", "improvement", "recommendations"],
+    "quality_score": 0.85,
+    "performance_impact": "low|medium|high",
+    "accessibility_impact": "improved|maintained|degraded"
+}}
+```
+
+## VALIDATION CRITERIA
+- **HTML**: Must be valid HTML5
+- **CSS**: Must be valid CSS3
+- **Structure**: Must maintain logical document structure
+- **Functionality**: Must preserve interactive elements
+- **Responsiveness**: Must maintain responsive design
+- **Accessibility**: Must maintain or improve accessibility
+
+Return ONLY the JSON object, no additional text.
+"""
+        
+        return prompt
+    
+    def _parse_validation_response(self, response: str) -> Dict[str, Any]:
+        """Parse validation response"""
+        
+        try:
+            # Try to extract JSON from response
+            if "{" in response and "}" in response:
+                start = response.find("{")
+                end = response.rfind("}") + 1
+                json_str = response[start:end]
+                return json.loads(json_str)
             else:
-                return f"I've updated the styles for {len(selectors)} elements."
+                return {
+                    "is_valid": False,
+                    "validation_details": "Could not parse validation response",
+                    "warnings": ["Validation parsing failed"],
+                    "errors": ["Unable to validate modifications"],
+                    "recommendations": ["Review modifications manually"],
+                    "quality_score": 0.0,
+                    "performance_impact": "unknown",
+                    "accessibility_impact": "unknown"
+                }
+                
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Error parsing validation response: {e}")
+            return {
+                "is_valid": False,
+                "validation_details": f"Validation parsing error: {str(e)}",
+                "warnings": ["Validation parsing failed"],
+                "errors": ["Unable to validate modifications"],
+                "recommendations": ["Review modifications manually"],
+                "quality_score": 0.0,
+                "performance_impact": "unknown",
+                "accessibility_impact": "unknown"
+            }
+    
+    def _generate_changes_summary(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> List[str]:
+        """Generate precise changes summary for user communication"""
         
-        elif mod_type == "html_change":
-            return "I've updated the HTML content as requested."
+        # First try to extract changes from modification metadata if available
+        modification_metadata = modified_template.get("modification_metadata", {})
+        if modification_metadata.get("changes_applied"):
+            # Use the precise changes from the modification process
+            return modification_metadata["changes_applied"]
         
-        elif mod_type == "js_change":
-            return "I've updated the JavaScript functionality."
+        # Fallback: Generate summary using prompt engineering for complex cases
+        prompt = self._build_changes_summary_prompt(original_template, modified_template)
         
-        elif mod_type == "complete_change":
-            return "I've made comprehensive changes to your UI."
+        # Call Claude for summary (disable CoT for faster response)
+        response = self.call_claude_with_cot(prompt, enable_cot=False)
         
-        else:
-            return "I've made the requested changes to your UI." 
+        # Parse summary
+        parsed_summary = self._parse_changes_summary_response(response)
+        
+        # Ensure we always return a meaningful summary
+        if not parsed_summary or len(parsed_summary) == 0:
+            return ["Applied the requested modifications to the template"]
+        
+        return parsed_summary
+    
+    def _build_changes_summary_prompt(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> str:
+        """Build prompt for generating user-friendly changes summary"""
+        
+        original_html = original_template.get('html_export', '')
+        original_global_css = original_template.get('globals_css', '')
+        original_style_css = original_template.get('style_css', '')
+        
+        modified_html = modified_template.get('html_export', '')
+        modified_global_css = modified_template.get('globals_css', '')
+        modified_style_css = modified_template.get('style_css', '')
+        
+        prompt = f"""
+You are a UX designer explaining changes to a client. Compare the original and modified code and create user-friendly descriptions of what changed.
+
+ORIGINAL CSS:
+{original_global_css}
+{original_style_css}
+
+MODIFIED CSS:
+{modified_global_css}
+{modified_style_css}
+
+Focus on visual changes that users would notice. Write descriptions as complete sentences that explain:
+- What specific element was changed (button, background, text, etc.)
+- What property was modified (color, size, spacing, etc.)  
+- What the change accomplishes (better visibility, improved design, etc.)
+
+Return ONLY a JSON object:
+{{
+    "summary_points": [
+        "Changed the background color from [old] to [new] for better visual appeal",
+        "Increased button height from [old] to [new] to improve accessibility",
+        "Updated text color to enhance readability"
+    ]
+}}
+
+Be specific about what changed and use user-friendly language. Focus on the 2-3 most important changes."""
+        
+        return prompt
+    
+    def _parse_changes_summary_response(self, response: str) -> List[str]:
+        """Parse changes summary response"""
+        
+        try:
+            # Try to extract JSON from response
+            if "{" in response and "}" in response:
+                start = response.find("{")
+                end = response.rfind("}") + 1
+                json_str = response[start:end]
+                parsed_response = json.loads(json_str)
+                
+                # Return summary points
+                return parsed_response.get("summary_points", ["Changes summary not available"])
+            else:
+                return ["Could not generate changes summary"]
+                
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Error parsing changes summary response: {e}")
+            return ["Error generating changes summary"] 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 
 function EditorPage() {
@@ -13,6 +13,12 @@ function EditorPage() {
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef(null);
   
+  // Logo upload state
+  const [uploadedLogo, setUploadedLogo] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [isAnalyzingLogo, setIsAnalyzingLogo] = useState(false);
+  const fileInputRef = useRef(null);
+  
   // Phase transition state
   const [isFromPhase1, setIsFromPhase1] = useState(false);
   const [sessionId, setSessionId] = useState("demo_session");
@@ -25,7 +31,61 @@ function EditorPage() {
   // Store original UI template state for reset functionality
   const [originalUICodes, setOriginalUICodes] = useState(null);
   
+  // Zoom state for preview
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const previewContainerRef = useRef(null);
+  
   const location = useLocation();
+
+  // Zoom control functions
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(prev + 0.25, 3)); // Max zoom 3x
+  };
+
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(prev - 0.25, 0.25)); // Min zoom 0.25x
+  };
+
+  const handleZoomReset = () => {
+    setZoomLevel(1);
+    setPanPosition({ x: 0, y: 0 });
+  };
+
+  const handleMouseDown = (e) => {
+    if (zoomLevel > 1) {
+      setIsDragging(true);
+      setLastMousePos({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (isDragging && zoomLevel > 1) {
+      const deltaX = e.clientX - lastMousePos.x;
+      const deltaY = e.clientY - lastMousePos.y;
+      setPanPosition(prev => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY
+      }));
+      setLastMousePos({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleWheel = (e) => {
+    // Only zoom when holding Ctrl key
+    if (e.ctrlKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setZoomLevel(prev => Math.max(0.25, Math.min(3, prev + delta)));
+    }
+    // Otherwise, allow normal scrolling (don't preventDefault)
+  };
 
   // Handle transition from Phase 1
   useEffect(() => {
@@ -91,7 +151,7 @@ function EditorPage() {
       const transitionMessage = {
         id: Date.now(),
         type: 'ai',
-        content: `🎉 Perfect! I've loaded your selected template. You're now in the UI Editor where you can make modifications to your ${category || 'template'}. What would you like to change?`,
+        content: `🎉 Welcome to the UI Editor! You can now make modifications to your ${category || 'template'}. What would you like to change?`,
         timestamp: new Date().toISOString()
       };
       setChatMessages(prev => [...prev, transitionMessage]);
@@ -125,7 +185,7 @@ function EditorPage() {
         ]);
       }
     }
-  }, [location.state]);
+  }, [location.state, category]);
 
   // Save chat history to localStorage whenever it changes
   useEffect(() => {
@@ -143,20 +203,7 @@ function EditorPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  // Fetch UI codes from backend on component mount
-  useEffect(() => {
-    fetchUICodes();
-  }, [isFromPhase1, sessionId]);
-
-  // Force refresh on component mount to clear any cached data
-  useEffect(() => {
-    // Clear any cached data by forcing a fresh fetch
-    const timestamp = Date.now();
-    console.log('Forcing fresh UI codes fetch at:', timestamp);
-    fetchUICodes();
-  }, []);
-
-  const fetchUICodes = async () => {
+  const fetchUICodes = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -212,20 +259,27 @@ function EditorPage() {
       console.log('UI codes response:', data);
       
       if (data.success) {
-        setUiCodes(data.ui_codes);
+        // Combine UI codes with screenshot preview
+        const combinedData = {
+          ...data.ui_codes,
+          screenshot_preview: data.screenshot_preview
+        };
+        
+        setUiCodes(combinedData);
         
         // Store original UI codes for reset functionality (only on first load or when not already stored)
         if (!originalUICodes || Object.keys(originalUICodes).length === 0) {
-          setOriginalUICodes(data.ui_codes);
+          setOriginalUICodes(combinedData);
           console.log('Original UI codes stored for reset functionality');
         }
         
-        console.log('UI codes loaded successfully:', data.ui_codes ? 'with data' : 'empty');
-        if (data.ui_codes) {
-          console.log('UI codes structure:', Object.keys(data.ui_codes));
-          console.log('Template name:', data.ui_codes.template_info?.name || data.ui_codes.current_codes?.template_info?.name);
-          console.log('HTML content length:', data.ui_codes.current_codes?.html_export?.length || data.ui_codes.html_export?.length || 0);
-          console.log('Complete HTML available:', !!data.ui_codes.current_codes?.complete_html || !!data.ui_codes.complete_html);
+        console.log('UI codes loaded successfully:', combinedData ? 'with data' : 'empty');
+        if (combinedData) {
+          console.log('UI codes structure:', Object.keys(combinedData));
+          console.log('Template name:', combinedData.template_info?.name || combinedData.current_codes?.template_info?.name);
+          console.log('HTML content length:', combinedData.current_codes?.html_export?.length || combinedData.html_export?.length || 0);
+          console.log('HTML export available:', !!combinedData.current_codes?.html_export || !!combinedData.html_export);
+          console.log('Screenshot preview available:', !!combinedData.screenshot_preview);
         }
       } else {
         throw new Error(data.error || 'Failed to fetch UI codes');
@@ -236,7 +290,15 @@ function EditorPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isFromPhase1, sessionId, selectedTemplate]);
+
+  // Fetch UI codes from backend on component mount
+  useEffect(() => {
+    // Clear any cached data by forcing a fresh fetch
+    const timestamp = Date.now();
+    console.log('Forcing fresh UI codes fetch at:', timestamp);
+    fetchUICodes();
+  }, [fetchUICodes]);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isSending) return;
@@ -285,9 +347,11 @@ function EditorPage() {
         };
         setChatMessages(prev => [...prev, aiMessage]);
         
-        // Apply modifications if they exist
+        // Refresh UI codes if modifications were made
         if (data.ui_modifications && data.metadata?.intent === "modification_request") {
-          await applyModifications(data.ui_modifications);
+          console.log('Modifications detected, refreshing UI codes from session...');
+          // Refresh the UI codes from the session file to get the updated version
+          await fetchUICodes();
         }
       } else {
         throw new Error(data.response || 'Failed to get AI response');
@@ -392,23 +456,117 @@ function EditorPage() {
     }
   };
 
-  const clearChatHistory = () => {
-    const defaultMessage = {
-      id: Date.now(),
-      type: 'ai',
-      content: isFromPhase1 
-        ? `🎉 Perfect! I've loaded your selected template. You're now in the UI Editor where you can make modifications to your ${category || 'template'}. What would you like to change?`
-        : "I'm ready to help you edit your UI! What would you like to change?",
-      timestamp: new Date().toISOString()
-    };
+
+
+  // Logo upload functions
+  const handleLogoUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file (PNG, JPG, JPEG, etc.)');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+      
+      setUploadedLogo(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setLogoPreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const analyzeLogoWithPrompt = async () => {
+    if (!uploadedLogo || !inputMessage.trim()) {
+      alert('Please upload a logo and enter a prompt for analysis');
+      return;
+    }
+
+    setIsAnalyzingLogo(true);
     
-    setChatMessages([defaultMessage]);
-    
-    // Clear appropriate localStorage
-    if (isFromPhase1) {
-      localStorage.removeItem('phase2ChatHistory');
-    } else {
-      localStorage.removeItem('editorChatHistory');
+    try {
+      // Convert file to base64
+      const base64Logo = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64 = e.target.result.split(',')[1]; // Remove data:image/...;base64, prefix
+          resolve(base64);
+        };
+        reader.readAsDataURL(uploadedLogo);
+      });
+
+      // Send logo analysis request
+      const response = await fetch('/api/ui-editor/analyze-logo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: inputMessage,
+          logo_image: base64Logo,
+          logo_filename: uploadedLogo.name,
+          session_id: sessionId,
+          current_ui_codes: uiCodes?.current_codes || uiCodes
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Add the analysis request and response to chat
+        const userMessage = {
+          id: Date.now(),
+          type: 'user',
+          content: `📎 [Logo Analysis Request] ${inputMessage}`,
+          timestamp: new Date().toISOString(),
+          hasLogo: true,
+          logoPreview: logoPreview
+        };
+        
+        const aiMessage = {
+          id: Date.now() + 1,
+          type: 'ai',
+          content: data.response,
+          timestamp: new Date().toISOString(),
+          logoAnalysis: data.logo_analysis
+        };
+        
+        setChatMessages(prev => [...prev, userMessage, aiMessage]);
+        setInputMessage('');
+        
+        // Update UI codes if modifications were applied
+        if (data.ui_modifications) {
+          await applyModifications(data.ui_modifications);
+        }
+      } else {
+        throw new Error(data.error || 'Failed to analyze logo');
+      }
+    } catch (error) {
+      console.error('Error analyzing logo:', error);
+      alert(`Error analyzing logo: ${error.message}`);
+    } finally {
+      setIsAnalyzingLogo(false);
+    }
+  };
+
+  const removeLogo = () => {
+    setUploadedLogo(null);
+    setLogoPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -418,7 +576,7 @@ function EditorPage() {
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading UI preview...</p>
+            <p className="text-gray-600">Generating UI preview...</p>
           </div>
         </div>
       );
@@ -448,21 +606,102 @@ function EditorPage() {
       );
     }
 
+    // Check if we have a screenshot preview from the backend
+    const screenshotPreview = uiCodes.screenshot_preview;
+    
+    if (screenshotPreview && screenshotPreview.length > 0) {
+      return (
+        <div className="bg-white rounded-lg shadow-lg h-full overflow-hidden flex flex-col">
+          {/* Header with Live Preview indicator and Zoom Controls */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+            <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+              <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+              Live Preview
+            </div>
+            
+            {/* Zoom Controls */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleZoomOut}
+                className="p-1 hover:bg-gray-100 rounded text-gray-600 text-sm"
+                disabled={zoomLevel <= 0.25}
+              >
+                🔍−
+              </button>
+              <span className="text-xs text-gray-500 min-w-[50px] text-center">
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <button
+                onClick={handleZoomIn}
+                className="p-1 hover:bg-gray-100 rounded text-gray-600 text-sm"
+                disabled={zoomLevel >= 3}
+              >
+                🔍+
+              </button>
+              <button
+                onClick={handleZoomReset}
+                className="p-1 hover:bg-gray-100 rounded text-gray-600 text-xs"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+
+          {/* Preview Container */}
+          <div className="flex-1 overflow-hidden relative">
+            <div 
+              ref={previewContainerRef}
+              className="w-full h-full overflow-auto cursor-grab active:cursor-grabbing"
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onWheel={handleWheel}
+              style={{
+                cursor: zoomLevel > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+              }}
+            >
+              <div className="flex justify-center items-start p-4">
+                <img 
+                  src={`data:image/png;base64,${screenshotPreview}`}
+                  alt="UI Preview"
+                  className="rounded-lg shadow-lg border border-gray-200 select-none"
+                  style={{
+                    transform: `scale(${zoomLevel}) translate(${panPosition.x / zoomLevel}px, ${panPosition.y / zoomLevel}px)`,
+                    transformOrigin: 'center top',
+                    transition: isDragging ? 'none' : 'transform 0.1s ease',
+                    maxWidth: 'none'
+                  }}
+                  draggable={false}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-2 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center">
+              Preview generated from headless browser • Ctrl+scroll to zoom • Drag when zoomed • Use zoom buttons for control
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // Fallback: Show loading state while generating screenshot
     return (
       <div className="bg-white rounded-lg shadow-lg h-full overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-auto">
-          <iframe 
-            id="preview-frame"
-            className="w-full border-0 rounded-lg"
-            title="UI Preview"
-            srcDoc={`${uiCodes.current_codes?.complete_html || uiCodes.complete_html || ''}<!-- Cache bust: ${Date.now()} -->`}
-            style={{
-              minHeight: '600px',
-              height: '100%',
-              maxHeight: '100vh',
-              overflow: 'auto'
-            }}
-          />
+        <div className="flex-1 overflow-auto flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Generating screenshot preview...</p>
+            <button 
+              onClick={fetchUICodes}
+              className="mt-4 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -532,18 +771,11 @@ function EditorPage() {
       {/* Chat Interface Section */}
       <div className="w-1/3 bg-white border-r border-gray-200 flex flex-col">
         {/* Chat Header */}
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+        <div className="p-4 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-bold">AI Editor Chat</h2>
             <p className="text-sm text-gray-600">Ask me to modify your UI</p>
           </div>
-          <button 
-            onClick={clearChatHistory}
-            className="text-sm text-gray-500 hover:text-gray-700 px-2 py-1 rounded"
-            title="Clear chat history"
-          >
-            Clear
-          </button>
         </div>
         
         {/* Chat Messages Area */}
@@ -557,6 +789,20 @@ function EditorPage() {
                   : 'bg-gray-50'
               }`}
             >
+              {/* Logo Preview for User Messages */}
+              {message.hasLogo && message.logoPreview && (
+                <div className="mb-2 p-2 border border-gray-200 rounded bg-white">
+                  <div className="flex items-center space-x-2">
+                    <img 
+                      src={message.logoPreview} 
+                      alt="Uploaded logo" 
+                      className="w-6 h-6 object-contain rounded"
+                    />
+                    <span className="text-xs text-gray-600">Logo uploaded for analysis</span>
+                  </div>
+                </div>
+              )}
+              
               <p className={`text-sm ${
                 message.type === 'ai' 
                   ? 'text-blue-800' 
@@ -564,6 +810,25 @@ function EditorPage() {
               }`}>
                 <strong>{message.type === 'ai' ? 'AI:' : 'You:'}</strong> {message.content}
               </p>
+              
+              {/* Logo Analysis Results for AI Messages */}
+              {message.logoAnalysis && (
+                <div className="mt-2 p-2 bg-blue-100 rounded border border-blue-200">
+                  <p className="text-xs text-blue-700 font-semibold mb-1"> Logo Analysis Results:</p>
+                  <div className="text-xs text-blue-600">
+                    {message.logoAnalysis.colors && (
+                      <p><strong>Colors:</strong> {message.logoAnalysis.colors.join(', ')}</p>
+                    )}
+                    {message.logoAnalysis.style && (
+                      <p><strong>Style:</strong> {message.logoAnalysis.style}</p>
+                    )}
+                    {message.logoAnalysis.fonts && (
+                      <p><strong>Fonts:</strong> {message.logoAnalysis.fonts.join(', ')}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               <p className="text-xs text-gray-500 mt-1">
                 {new Date(message.timestamp).toLocaleTimeString()}
               </p>
@@ -582,19 +847,71 @@ function EditorPage() {
         
         {/* Chat Input */}
         <div className="p-4 border-t border-gray-200">
+          {/* Logo Upload Section */}
+          <div className="mb-4">
+            <div className="flex items-center space-x-2 mb-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition"
+              >
+                📎 Upload Logo
+              </button>
+              {uploadedLogo && (
+                <button
+                  onClick={removeLogo}
+                  className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition"
+                >
+                  ✕ Remove
+                </button>
+              )}
+            </div>
+            
+            {/* Logo Preview */}
+            {logoPreview && (
+              <div className="mb-3 p-2 border border-gray-200 rounded bg-gray-50">
+                <div className="flex items-center space-x-2">
+                  <img 
+                    src={logoPreview} 
+                    alt="Logo preview" 
+                    className="w-8 h-8 object-contain rounded"
+                  />
+                  <span className="text-sm text-gray-600">{uploadedLogo?.name}</span>
+                </div>
+              </div>
+            )}
+            
+            {/* Logo Analysis Button */}
+            {uploadedLogo && (
+              <button
+                onClick={analyzeLogoWithPrompt}
+                disabled={!inputMessage.trim() || isAnalyzingLogo}
+                className="w-full bg-purple-500 text-white px-3 py-2 rounded text-sm hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition mb-3"
+              >
+                {isAnalyzingLogo ? '🔍 Analyzing...' : '🔍 Analyze Logo with Prompt'}
+              </button>
+            )}
+          </div>
+          
           <div className="flex space-x-2">
             <input 
               type="text" 
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your request here..."
-              disabled={isSending}
+              placeholder={uploadedLogo ? "Describe what you want to do with the logo..." : "Type your request here..."}
+              disabled={isSending || isAnalyzingLogo}
               className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             />
             <button 
               onClick={handleSendMessage}
-              disabled={!inputMessage.trim() || isSending}
+              disabled={!inputMessage.trim() || isSending || isAnalyzingLogo}
               className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSending ? 'Sending...' : 'Send'}

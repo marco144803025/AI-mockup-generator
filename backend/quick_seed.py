@@ -30,14 +30,7 @@ def quick_seed():
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         },
-        {
-            "name": "Creative Portfolio",
-            "category": "portfolio", 
-            "tags": ["creative", "portfolio", "artistic"],
-            "description": "Creative portfolio template",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
-        },
+
         {
             "name": "Corporate Business",
             "category": "corporate",

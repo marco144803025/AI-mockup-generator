@@ -575,6 +575,95 @@ This will help me find the perfect template for you!"""
 
         Just tell me what changes you'd like to make!"""
             
+            elif "modification_success" in instructions.lower():
+                modification_result = final_data.get("modification_result", {})
+                changes_summary = final_data.get("changes_summary", [])
+                
+                response = f"✅ I've successfully applied your modifications!\n\n"
+                
+                if changes_summary and len(changes_summary) > 0:
+                    response += "**Changes Made:**\n"
+                    for change in changes_summary[:5]:  # Limit to 5 changes
+                        response += f"• {change}\n"
+                
+                response += "\nThe changes have been applied to your template. You can continue making modifications or ask me to generate a report when you're satisfied."
+            
+            elif "modification_error" in instructions.lower():
+                error = final_data.get("error", "Unknown error")
+                user_message = final_data.get("user_message", "")
+                
+                response = f"❌ I encountered an issue while applying your modifications: {error}\n\n"
+                response += "Could you please try rephrasing your request or be more specific about what you'd like to change?"
+            
+            elif "editing_clarification" in instructions.lower():
+                suggestions = final_data.get("suggestions", [])
+                template = final_data.get("template", {})
+                template_name = template.get("name", "your template")
+                
+                response = f"Here are some things you can modify in {template_name}:\n\n"
+                
+                if suggestions and len(suggestions) > 0:
+                    for i, suggestion in enumerate(suggestions[:6], 1):  # Limit to 6 suggestions
+                        response += f"{i}. {suggestion}\n"
+                else:
+                    response += "• Change colors and styling\n• Modify layout and positioning\n• Adjust typography and text\n• Add or remove elements\n• Change spacing and padding\n• Modify interactive elements"
+                
+                response += "\n\nJust tell me what you'd like to change, and I'll help you implement it!"
+            
+            elif "editing_preview" in instructions.lower():
+                current_ui_state = final_data.get("current_ui_state", {})
+                modifications = final_data.get("modifications", {})
+                
+                response = "Here's your current template state:\n\n"
+                
+                if current_ui_state:
+                    html_elements = current_ui_state.get("html_structure", {}).get("total_elements", 0)
+                    css_selectors = current_ui_state.get("css_structure", {}).get("selectors", 0)
+                    layout_system = current_ui_state.get("layout_system", "Unknown")
+                    
+                    response += f"**Template Overview:**\n"
+                    response += f"• HTML Elements: {html_elements}\n"
+                    response += f"• CSS Selectors: {css_selectors}\n"
+                    response += f"• Layout System: {layout_system}\n"
+                
+                if modifications:
+                    response += f"\n**Recent Modifications:**\n"
+                    for key, value in modifications.items():
+                        response += f"• {key}: {value}\n"
+                
+                response += "\nYou can continue making modifications or ask me to generate a report when you're ready."
+            
+            elif "editing_completion" in instructions.lower():
+                template = final_data.get("template", {})
+                modifications = final_data.get("modifications", {})
+                session_id = final_data.get("session_id", "")
+                
+                template_name = template.get("name", "your template")
+                
+                response = f"🎉 Perfect! You've completed editing {template_name}.\n\n"
+                
+                if modifications:
+                    response += "**Summary of Changes:**\n"
+                    for key, value in modifications.items():
+                        response += f"• {key}: {value}\n"
+                
+                response += f"\nI'll now generate a comprehensive report of your project. This will include all the modifications, reasoning, and a final preview."
+            
+            elif "editing_general" in instructions.lower():
+                user_message = final_data.get("user_message", "")
+                available_actions = final_data.get("available_actions", [])
+                
+                response = f"I understand you said: '{user_message}'\n\n"
+                
+                if available_actions:
+                    response += "Here's what you can do:\n"
+                    for action in available_actions:
+                        response += f"• {action}\n"
+                else:
+                    response += "You can:\n• Modify colors, fonts, or styling\n• Change layout and positioning\n• Add or remove elements\n• Ask for suggestions\n• Request a preview\n• Generate a report when done"
+                
+                response += "\n\nWhat would you like to modify in your template?"
+            
             else:
                 response = instructions
             
@@ -590,6 +679,8 @@ This will help me find the perfect template for you!"""
             
             if response_type == "modification_success":
                 return self._create_modification_success_response(instructions)
+            elif response_type == "logo_analysis_success":
+                return self._create_logo_analysis_success_response(instructions)
             elif response_type == "clarification_response":
                 return self._create_clarification_response(instructions)
             elif response_type == "completion_response":
@@ -628,42 +719,205 @@ The system will now transition you to the editing interface. You'll see your tem
             return "I understand your request. Let me process that for you."
     
     def _create_modification_success_response(self, instructions: Dict[str, Any]) -> str:
-        """Create response for successful modifications"""
+        """Create precise, tailored response for successful modifications"""
         try:
             modification_result = instructions.get("modification_result", {})
             user_message = instructions.get("user_message", "")
-            context = instructions.get("context", {})
+            selected_template = instructions.get("selected_template", {})
             
-            # Get the change summary
-            change_summary = modification_result.get("change_summary", "Changes applied successfully")
+            # Extract detailed information from modification result
+            changes_summary = modification_result.get("changes_summary", [])
+            modification_request = modification_result.get("modification_request", {})
+            modified_template = modification_result.get("modified_template", {})
             
-            # Create a friendly response
+            # Create detailed, personalized response
+            response = self._build_personalized_modification_response(
+                user_request=user_message,
+                changes_applied=changes_summary,
+                modification_details=modification_request,
+                template_info=selected_template
+            )
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error creating modification success response: {e}")
+            return f"According to your request to '{user_message}', I have applied the changes successfully. Is there anything else you'd like to modify, or would you like me to generate a detailed report?"
+    
+    def _build_personalized_modification_response(self, user_request: str, changes_applied: List[str], modification_details: Dict[str, Any], template_info: Dict[str, Any]) -> str:
+        """Build a personalized response explaining exactly what was changed and why"""
+        
+        # Extract key information
+        user_request_clean = user_request.strip()
+        template_name = template_info.get('name', 'your template')
+        modification_type = modification_details.get('modification_type', 'general')
+        
+        response_parts = []
+        
+        # 1. Acknowledge the specific request
+        response_parts.append(f"According to your request to '{user_request_clean}', ")
+        
+        # 2. Explain what was actually changed
+        if changes_applied and len(changes_applied) > 0:
+            if len(changes_applied) == 1:
+                response_parts.append(f"I have {changes_applied[0].lower()}. ")
+            else:
+                changes_text = ", ".join(changes_applied[:-1]) + f", and {changes_applied[-1]}"
+                response_parts.append(f"I have made the following changes: {changes_text.lower()}. ")
+        else:
+            # Infer changes from the request if changes_summary is empty
+            inferred_change = self._infer_change_from_request(user_request_clean)
+            response_parts.append(f"I have {inferred_change}. ")
+        
+        # 3. Explain the reasoning/benefit (contextual)
+        reasoning = self._generate_change_reasoning(user_request_clean, modification_type)
+        if reasoning:
+            response_parts.append(f"{reasoning} ")
+        
+        # 4. Add appropriate follow-up question
+        follow_up = self._generate_contextual_follow_up(user_request_clean, template_name)
+        response_parts.append(follow_up)
+        
+        return "".join(response_parts)
+    
+    def _infer_change_from_request(self, user_request: str) -> str:
+        """Infer what change was made based on the user request"""
+        user_request_lower = user_request.lower()
+        
+        if re.search(r'change.*color.*to\s+(\w+)', user_request_lower):
+            color_match = re.search(r'to\s+(\w+(?:\s+\w+)?)', user_request_lower)
+            color = color_match.group(1) if color_match else "the requested color"
+            if "background" in user_request_lower:
+                return f"changed the background color to {color}"
+            elif "button" in user_request_lower:
+                return f"changed the button color to {color}"
+            elif "text" in user_request_lower:
+                return f"changed the text color to {color}"
+            else:
+                return f"changed the color to {color}"
+        
+        elif re.search(r'increase.*height', user_request_lower):
+            if "button" in user_request_lower:
+                return "increased the button height to make it more prominent"
+            else:
+                return "increased the height as requested"
+        
+        elif re.search(r'decrease.*height', user_request_lower):
+            return "decreased the height to create a more compact design"
+        
+        elif re.search(r'make.*bigger', user_request_lower):
+            return "increased the size to improve visibility"
+        
+        elif re.search(r'make.*smaller', user_request_lower):
+            return "reduced the size for better proportions"
+        
+        elif re.search(r'add.*padding', user_request_lower):
+            return "added padding to improve spacing and readability"
+        
+        elif re.search(r'change.*font', user_request_lower):
+            return "updated the font family to enhance the visual appeal"
+        
+        else:
+            return "applied the requested modifications"
+    
+    def _generate_change_reasoning(self, user_request: str, modification_type: str) -> str:
+        """Generate contextual reasoning for why the change was made"""
+        user_request_lower = user_request.lower()
+        
+        if "color" in user_request_lower:
+            if "green" in user_request_lower:
+                return "This creates a more natural and calming visual experience."
+            elif "blue" in user_request_lower:
+                return "This provides a more professional and trustworthy appearance."
+            elif "red" in user_request_lower:
+                return "This creates a more vibrant and attention-grabbing element."
+            else:
+                return "This enhances the visual hierarchy and brand consistency."
+        
+        elif "height" in user_request_lower or "bigger" in user_request_lower:
+            return "This improves accessibility and makes the element more prominent for users."
+        
+        elif "smaller" in user_request_lower:
+            return "This creates better visual balance and prevents overwhelming the layout."
+        
+        elif "padding" in user_request_lower:
+            return "This improves the user experience by providing better spacing and readability."
+        
+        elif "font" in user_request_lower:
+            return "This enhances readability and maintains design consistency."
+        
+        return ""
+    
+    def _generate_contextual_follow_up(self, user_request: str, template_name: str) -> str:
+        """Generate appropriate follow-up question based on the modification type"""
+        user_request_lower = user_request.lower()
+        
+        if "color" in user_request_lower:
+            return "Would you like to adjust any other colors, make additional modifications, or generate a detailed report of all changes?"
+        
+        elif "button" in user_request_lower:
+            return "Would you like to modify other buttons, adjust additional elements, or generate a detailed report?"
+        
+        elif "height" in user_request_lower or "size" in user_request_lower:
+            return "Would you like to adjust the size of other elements, make further modifications, or generate a detailed report?"
+        
+        elif "font" in user_request_lower or "text" in user_request_lower:
+            return "Would you like to modify other text elements, adjust additional styling, or generate a detailed report?"
+        
+        else:
+            return "Is there anything else you'd like to modify, or would you like me to generate a detailed report of all changes made?"
+    
+    def _create_logo_analysis_success_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response for successful logo analysis and UI modifications"""
+        try:
+            logo_analysis = instructions.get("logo_analysis", {})
+            modification_result = instructions.get("modification_result", {})
+            user_message = instructions.get("user_message", "")
+            
             response_parts = []
             
-            # Acknowledge the change
-            if "button" in user_message.lower():
-                response_parts.append("✅ Button updated successfully!")
-            elif "color" in user_message.lower():
-                response_parts.append("🎨 Color changed as requested!")
-            elif "text" in user_message.lower():
-                response_parts.append("📝 Text updated!")
-            elif "size" in user_message.lower() or "bigger" in user_message.lower() or "smaller" in user_message.lower():
-                response_parts.append("📏 Size adjusted!")
-            else:
-                response_parts.append("✅ Changes applied successfully!")
+            # Acknowledge the logo analysis
+            response_parts.append("🎨 Logo analysis complete! I've analyzed your logo and applied the design preferences to your UI.\n\n")
             
-            # Add the specific change summary
-            if change_summary and change_summary != "Changes applied successfully":
-                response_parts.append(f" {change_summary}")
+            # Add logo analysis summary
+            if logo_analysis:
+                response_parts.append("**Logo Analysis Results:**\n")
+                
+                # Colors
+                if logo_analysis.get("colors"):
+                    colors = logo_analysis["colors"]
+                    response_parts.append(f"• **Colors:** {', '.join(colors)}\n")
+                
+                # Style
+                if logo_analysis.get("style"):
+                    style = logo_analysis["style"]
+                    response_parts.append(f"• **Style:** {style.title()}\n")
+                
+                # Fonts
+                if logo_analysis.get("fonts"):
+                    fonts = logo_analysis["fonts"]
+                    response_parts.append(f"• **Fonts:** {', '.join(fonts)}\n")
+                
+                # Brand personality
+                if logo_analysis.get("brand_personality"):
+                    personality = logo_analysis["brand_personality"]
+                    response_parts.append(f"• **Brand Personality:** {personality}\n")
+                
+                response_parts.append("\n")
+            
+            # Add modification summary
+            change_summary = modification_result.get("change_summary", "Design preferences applied successfully")
+            if change_summary and change_summary != "Design preferences applied successfully":
+                response_parts.append(f"**Applied Changes:** {change_summary}\n\n")
             
             # Add next step suggestion
-            response_parts.append(" What would you like to change next?")
+            response_parts.append("Your UI now reflects your logo's design aesthetic! What else would you like to customize?")
             
             return "".join(response_parts)
             
         except Exception as e:
-            self.logger.error(f"Error creating modification success response: {e}")
-            return "✅ Changes applied successfully! What would you like to modify next?"
+            self.logger.error(f"Error creating logo analysis success response: {e}")
+            return "🎨 Logo analysis complete! I've applied your logo's design preferences to the UI. What would you like to customize next?"
     
     def _create_clarification_response(self, instructions: Dict[str, Any]) -> str:
         """Create response for clarification requests"""

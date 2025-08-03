@@ -26,16 +26,7 @@ sample_templates = [
         "metadata": {"category": "ecommerce", "style": "minimal"},
         "thumbnail_url": None
     },
-    {
-        "name": "Dark Portfolio",
-        "figma_url": "https://figma.com/file/dark-portfolio",
-        "html_export": "<html><!-- portfolio html --></html>",
-        "globals_css": "/* global portfolio css */",
-        "style_css": "/* portfolio style css */",
-        "tags": ["portfolio", "dark", "personal", "creative"],
-        "metadata": {"category": "portfolio", "style": "dark"},
-        "thumbnail_url": None
-    }
+
 ]
 
 def post_samples():

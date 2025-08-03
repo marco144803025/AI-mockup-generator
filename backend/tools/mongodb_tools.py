@@ -24,8 +24,7 @@ class MongoDBTools:
                 'Signup': 'signup',
                 'Login': 'login',
                 'Profile': 'profile',
-                'Landing': 'landing',
-                'Portfolio': 'portfolio'
+                'Landing': 'landing'
             }
             
             normalized_category = category_mapping.get(category, category.lower())
@@ -137,8 +136,7 @@ class MongoDBTools:
                     'Signup': 'signup',
                     'Login': 'login',
                     'Profile': 'profile',
-                    'Landing': 'landing',
-                    'Portfolio': 'portfolio'
+                    'Landing': 'landing'
                 }
                 
                 normalized_category = category_mapping.get(category, category.lower())

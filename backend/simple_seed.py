@@ -65,14 +65,7 @@ def simple_seed():
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         },
-        {
-            "name": "Portfolio Gallery",
-            "category": "portfolio",
-            "tags": ["portfolio", "gallery", "creative", "showcase"],
-            "description": "Portfolio gallery template",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
-        }
+
     ]
     
     try:

@@ -54,6 +54,214 @@ You focus ONLY on requirements analysis. You do not recommend templates or gener
             metadata={"page_type": detected_page_type, "context_used": merged_context}
         )
     
+    def analyze_logo_and_requirements(self, user_message: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze uploaded logo and extract design preferences for UI modification"""
+        try:
+            self.logger.info("Starting logo analysis and requirements extraction")
+            
+            # Extract logo image from context
+            logo_image = context.get("logo_image")
+            logo_filename = context.get("logo_filename", "uploaded_logo")
+            current_ui_codes = context.get("current_ui_codes", {})
+            
+            if not logo_image:
+                return self.create_standardized_response(
+                    success=False,
+                    error="No logo image provided"
+                )
+            
+            # Build logo analysis prompt
+            prompt = self._build_logo_analysis_prompt(user_message, logo_filename, current_ui_codes)
+            
+            # Call Claude with vision capabilities
+            response = self._call_claude_with_vision(prompt, logo_image)
+            
+            # Parse logo analysis results
+            logo_analysis = self._parse_logo_analysis_response(response)
+            
+            # Create design preferences based on logo analysis
+            design_preferences = self._create_design_preferences_from_logo(logo_analysis, user_message)
+            
+            return self.create_standardized_response(
+                success=True,
+                data={
+                    "logo_analysis": logo_analysis,
+                    "design_preferences": design_preferences,
+                    "user_request": user_message
+                },
+                metadata={
+                    "logo_filename": logo_filename,
+                    "analysis_type": "logo_design_extraction"
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error in logo analysis: {e}")
+            return self.create_standardized_response(
+                success=False,
+                error=f"Failed to analyze logo: {str(e)}"
+            )
+    
+    def _build_logo_analysis_prompt(self, user_message: str, logo_filename: str, current_ui_codes: Dict[str, Any]) -> str:
+        """Build prompt for logo analysis"""
+        prompt = f"""You are a design expert analyzing a logo to extract design preferences for UI modification.
+
+LOGO ANALYSIS TASK:
+Analyze the uploaded logo image and extract the following design elements:
+
+1. **Color Palette**: Identify the primary, secondary, and accent colors used in the logo
+2. **Style Characteristics**: Determine the design style (modern, classic, minimalist, bold, etc.)
+3. **Typography**: Identify font styles and characteristics if text is present
+4. **Visual Elements**: Note any shapes, patterns, or visual motifs
+5. **Brand Personality**: Infer the brand's personality and values
+
+USER REQUEST: {user_message}
+
+CURRENT UI CONTEXT:
+The user wants to apply the logo's design preferences to their current UI template.
+
+ANALYSIS REQUIREMENTS:
+- Be precise and specific about colors (use hex codes when possible)
+- Identify the overall design aesthetic and style
+- Note any unique visual elements that could be incorporated
+- Consider how the logo's design principles can be applied to UI elements
+
+Please provide a detailed analysis in the following JSON format:
+{{
+    "colors": ["#hex1", "#hex2", "#hex3"],
+    "style": "modern|classic|minimalist|bold|playful|professional",
+    "fonts": ["font_name_1", "font_name_2"],
+    "visual_elements": ["element1", "element2"],
+    "brand_personality": "description",
+    "design_principles": ["principle1", "principle2"],
+    "ui_application_notes": "specific suggestions for applying to UI"
+}}
+
+Focus on extracting actionable design information that can be used to modify the UI template."""
+        
+        return prompt
+    
+    def _call_claude_with_vision(self, prompt: str, logo_image: str) -> str:
+        """Call Claude with vision capabilities for logo analysis"""
+        try:
+            # Prepare the message with image
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        },
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": logo_image
+                            }
+                        }
+                    ]
+                }
+            ]
+            
+            # Call Claude with vision model
+            response = self.claude_client.messages.create(
+                model="claude-3-5-sonnet-20241022",  # Use vision-capable model
+                max_tokens=2000,
+                messages=messages
+            )
+            
+            return response.content[0].text
+            
+        except Exception as e:
+            self.logger.error(f"Error calling Claude with vision: {e}")
+            raise e
+    
+    def _parse_logo_analysis_response(self, response: str) -> Dict[str, Any]:
+        """Parse the logo analysis response from Claude"""
+        try:
+            # Try to extract JSON from the response
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group()
+                analysis = json.loads(json_str)
+                return analysis
+            else:
+                # Fallback: create structured analysis from text
+                return self._create_structured_analysis_from_text(response)
+                
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"Failed to parse JSON from logo analysis: {e}")
+            return self._create_structured_analysis_from_text(response)
+        except Exception as e:
+            self.logger.error(f"Error parsing logo analysis response: {e}")
+            return {
+                "colors": [],
+                "style": "modern",
+                "fonts": [],
+                "visual_elements": [],
+                "brand_personality": "professional",
+                "design_principles": [],
+                "ui_application_notes": "Apply modern design principles"
+            }
+    
+    def _create_structured_analysis_from_text(self, response: str) -> Dict[str, Any]:
+        """Create structured analysis from text response when JSON parsing fails"""
+        analysis = {
+            "colors": [],
+            "style": "modern",
+            "fonts": [],
+            "visual_elements": [],
+            "brand_personality": "professional",
+            "design_principles": [],
+            "ui_application_notes": "Apply modern design principles"
+        }
+        
+        # Extract colors (look for hex codes)
+        color_matches = re.findall(r'#[0-9A-Fa-f]{6}', response)
+        if color_matches:
+            analysis["colors"] = color_matches[:5]  # Limit to 5 colors
+        
+        # Extract style keywords
+        style_keywords = ["modern", "classic", "minimalist", "bold", "playful", "professional", "elegant", "clean"]
+        for keyword in style_keywords:
+            if keyword.lower() in response.lower():
+                analysis["style"] = keyword
+                break
+        
+        # Extract font mentions
+        font_keywords = ["sans-serif", "serif", "helvetica", "arial", "times", "roboto", "open sans"]
+        found_fonts = []
+        for font in font_keywords:
+            if font.lower() in response.lower():
+                found_fonts.append(font)
+        analysis["fonts"] = found_fonts
+        
+        return analysis
+    
+    def _create_design_preferences_from_logo(self, logo_analysis: Dict[str, Any], user_message: str) -> Dict[str, Any]:
+        """Create design preferences based on logo analysis"""
+        preferences = {
+            "color_scheme": {
+                "primary_colors": logo_analysis.get("colors", [])[:3],
+                "accent_colors": logo_analysis.get("colors", [])[3:5] if len(logo_analysis.get("colors", [])) > 3 else []
+            },
+            "style_preferences": {
+                "overall_style": logo_analysis.get("style", "modern"),
+                "brand_personality": logo_analysis.get("brand_personality", "professional")
+            },
+            "typography": {
+                "font_families": logo_analysis.get("fonts", []),
+                "font_style": "sans-serif" if "sans" in str(logo_analysis.get("fonts", [])).lower() else "serif"
+            },
+            "visual_elements": logo_analysis.get("visual_elements", []),
+            "design_principles": logo_analysis.get("design_principles", []),
+            "ui_modification_guidelines": logo_analysis.get("ui_application_notes", "")
+        }
+        
+        return preferences
+    
     def _get_database_context(self, category: str = None) -> Dict[str, Any]:
         """Get database context for requirements analysis"""
         context = {

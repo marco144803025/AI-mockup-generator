@@ -31,7 +31,7 @@ class UIPreviewTools:
             
             # Extract code files
             html_code = template.get("html_export", "")
-            global_css = template.get("global_css", "")
+            global_css = template.get("globals_css", "")  # Fixed: globals_css not global_css
             style_css = template.get("style_css", "")
             
             if not html_code:
@@ -178,7 +178,7 @@ class UIPreviewTools:
                 "template_id": str(template["_id"]),
                 "template_name": template.get("name", "Unknown"),
                 "html_export": template.get("html_export", ""),
-                "global_css": template.get("global_css", ""),
+                "global_css": template.get("globals_css", ""),  # Fixed: globals_css not global_css
                 "style_css": template.get("style_css", ""),
                 "metadata": template.get("metadata", {})
             }
@@ -202,7 +202,7 @@ class UIPreviewTools:
                 }
             
             html_code = template.get("html_export", "")
-            global_css = template.get("global_css", "")
+            global_css = template.get("globals_css", "")  # Fixed: globals_css not global_css
             style_css = template.get("style_css", "")
             
             validation_results = {
