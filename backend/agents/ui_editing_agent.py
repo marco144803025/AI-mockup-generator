@@ -16,7 +16,8 @@ class UIEditingAgent(BaseAgent):
 
 You focus on sophisticated mockup UI modifications and improvements."""
         
-        super().__init__("UIEditing", system_message)
+        # Use Sonnet model for better reasoning capabilities in UI editing
+        super().__init__("UIEditing", system_message, model="claude-3-5-sonnet-20241022")
         self.tool_utility = ToolUtility("ui_editing_agent")
         self.keyword_manager = KeywordManager()
         self.logger = logging.getLogger(__name__)
@@ -72,6 +73,51 @@ You focus on sophisticated mockup UI modifications and improvements."""
         except Exception as e:
             self.logger.error(f"Error extracting JSON from {context}: {e}")
             return None
+    
+    def _is_placeholder_content(self, content: str) -> bool:
+        """
+        Detect if content is a placeholder comment instead of actual code.
+        Returns True if content appears to be a placeholder that should be ignored.
+        """
+        if not content or not isinstance(content, str):
+            return True
+            
+        # Clean content for analysis
+        content_cleaned = content.strip()
+        
+        # Check for common placeholder patterns
+        placeholder_patterns = [
+            "/* Original CSS remains the same */",
+            "/* CSS unchanged */", 
+            "/* No changes needed */",
+            "/* Keep original CSS */",
+            "/* Same as original */",
+            "/* Unchanged */",
+            "<!-- Original HTML remains the same -->",
+            "<!-- HTML unchanged -->",
+            "<!-- No changes needed -->",
+            "// Original code remains the same",
+            "// No changes needed"
+        ]
+        
+        # Check if content is only a placeholder comment
+        for pattern in placeholder_patterns:
+            if content_cleaned == pattern:
+                return True
+        
+        # Check if content is only whitespace and comments
+        lines = content_cleaned.split('\n')
+        non_comment_lines = []
+        for line in lines:
+            line = line.strip()
+            if line and not (line.startswith('/*') or line.startswith('//') or line.startswith('<!--') or line == '*/'):
+                non_comment_lines.append(line)
+        
+        # If no substantial content beyond comments, consider it a placeholder
+        if len(non_comment_lines) == 0:
+            return True
+            
+        return False
     
     def process_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -302,9 +348,9 @@ Return a single JSON object with the exact structure below. Do not include any o
 ```json
 {{
   "modified_code": {{
-    "html_export": "The complete, new HTML code.",
-    "globals_css": "The complete, new global CSS code.",
-    "style_css": "The complete, new style CSS code."
+    "html_export": "The complete, new HTML code (if modified) OR empty string if unchanged.",
+    "globals_css": "The complete, new global CSS code (if modified) OR empty string if unchanged.", 
+    "style_css": "The complete, new style CSS code (if modified) OR empty string if unchanged."
   }},
   "validation_report": {{
     "is_valid": true,
@@ -318,6 +364,8 @@ Return a single JSON object with the exact structure below. Do not include any o
   ]
 }}
 ```
+
+**IMPORTANT**: Only include complete code in the response fields if you actually modified that code. If HTML, CSS, or other code sections are unchanged, return an empty string ("") for those fields. Do not return placeholder comments like "/* CSS unchanged */" - use empty strings instead.
 
 Execute the plan precisely, validate your work thoroughly, and provide clear summaries of what was accomplished."""
         
@@ -345,18 +393,28 @@ Execute the plan precisely, validate your work thoroughly, and provide clear sum
                     modified_code = parsed_response["modified_code"]
                     
                     # Update with new code, preserving existing content if LLM doesn't provide it
+                    # or if LLM returns placeholder comments
                     if "html_export" in modified_code and modified_code["html_export"]:
-                        modified_template["html_export"] = modified_code["html_export"]
+                        if not self._is_placeholder_content(modified_code["html_export"]):
+                            modified_template["html_export"] = modified_code["html_export"]
+                        else:
+                            self.logger.warning("html_export contains placeholder content, preserving original")
                     elif not modified_template.get("html_export"):
                         self.logger.warning("html_export missing from LLM response, preserving original")
                     
                     if "globals_css" in modified_code and modified_code["globals_css"]:
-                        modified_template["globals_css"] = modified_code["globals_css"]
+                        if not self._is_placeholder_content(modified_code["globals_css"]):
+                            modified_template["globals_css"] = modified_code["globals_css"]
+                        else:
+                            self.logger.warning("globals_css contains placeholder content, preserving original")
                     elif not modified_template.get("globals_css"):
                         self.logger.warning("globals_css missing from LLM response, preserving original")
                     
                     if "style_css" in modified_code and modified_code["style_css"]:
-                        modified_template["style_css"] = modified_code["style_css"]
+                        if not self._is_placeholder_content(modified_code["style_css"]):
+                            modified_template["style_css"] = modified_code["style_css"]
+                        else:
+                            self.logger.warning("style_css contains placeholder content, preserving original")
                     elif not modified_template.get("style_css"):
                         self.logger.warning("style_css missing from LLM response, preserving original")
                     

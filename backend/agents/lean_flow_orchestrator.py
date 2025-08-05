@@ -85,12 +85,17 @@ class LeanFlowOrchestrator:
                         self.session_state["ui_codes"] = context["ui_codes"]
                     return await self._handle_editing_phase(message, context)
             
-            # Step 2: Detect initial intent (new phase)
-            initial_intent = await self._detect_initial_intent(message, context)
-            print(f"DEBUG: Detected initial intent: {initial_intent}")
-            
-            # Step 3: Determine current phase and execute appropriate workflow
+            # Step 2: Determine current phase and execute appropriate workflow
             current_phase = self.session_state["current_phase"]
+            
+            # Only detect initial intent if we're in initial or unknown phase
+            initial_intent = None
+            if current_phase in ["initial", "unknown"]:
+                initial_intent = await self._detect_initial_intent(message, context)
+                print(f"DEBUG: Detected initial intent: {initial_intent}")
+            else:
+                print(f"DEBUG: Skipping initial intent detection for phase: {current_phase}")
+                
             print(f"DEBUG: Current phase: {current_phase}")
             print(f"DEBUG: Session state keys: {list(self.session_state.keys())}")
             
@@ -686,7 +691,7 @@ Return ONLY the intent type (e.g., "modification_request").
             current_ui_state = await self._get_current_ui_state(selected_template)
             
             # Step 2: Use UI editing agent to analyze and apply modifications
-            modification_result = self.editing_agent.process_modification_request(message, selected_template)
+            modification_result = self.editing_agent.process_modification_request(message, current_ui_state)
             
             if not modification_result.get("success", False):
                 # Handle modification failure
@@ -874,13 +879,21 @@ Return ONLY the intent type (e.g., "modification_request").
     async def _get_current_ui_state(self, selected_template: Dict[str, Any]) -> Dict[str, Any]:
         """Get current UI state including any modifications"""
         try:
-            # Get base template state
+            # First try to load UI state from session file
+            ui_state = await self._load_ui_state_from_session()
+            
+            if ui_state and ui_state.get("html_export"):
+                # We have valid UI codes from session file
+                self.logger.info(f"Loaded UI state from session with HTML length: {len(ui_state.get('html_export', ''))}")
+                return ui_state
+            
+            # Fallback: Get base template state (this may be empty for test sessions)
             ui_state = {
                 "template_id": selected_template.get("_id"),
                 "template_name": selected_template.get("name"),
                 "html_export": selected_template.get("html_export", ""),
                 "style_css": selected_template.get("style_css", ""),
-                "global_css": selected_template.get("global_css", "")
+                "globals_css": selected_template.get("globals_css", "")  # Fixed: was global_css
             }
             
             # Apply any pending modifications
@@ -888,11 +901,56 @@ Return ONLY the intent type (e.g., "modification_request").
             if modifications:
                 ui_state["pending_modifications"] = modifications
             
+            self.logger.warning(f"Using fallback UI state with HTML length: {len(ui_state.get('html_export', ''))}")
             return ui_state
             
         except Exception as e:
             self.logger.error(f"Error getting current UI state: {e}")
             return {}
+    
+    async def _load_ui_state_from_session(self) -> Optional[Dict[str, Any]]:
+        """Load UI state from the session file"""
+        try:
+            from pathlib import Path
+            import json
+            
+            temp_dir = Path("temp_ui_files")
+            
+            # Try multiple session file patterns, prioritizing test_session
+            session_patterns = [
+                f"ui_codes_{self.session_id}.json",
+                "ui_codes_test_session.json",  # Fallback for debugging
+                "ui_codes_demo_session.json"   # Another fallback
+            ]
+            
+            for pattern in session_patterns:
+                session_file = temp_dir / pattern
+                if session_file.exists():
+                    try:
+                        with open(session_file, 'r', encoding='utf-8') as f:
+                            session_data = json.load(f)
+                        
+                        # Extract current_codes which contains the actual HTML/CSS
+                        current_codes = session_data.get("current_codes", {})
+                        if current_codes.get("html_export"):
+                            self.logger.info(f"Loaded UI codes from {pattern} with HTML length: {len(current_codes.get('html_export', ''))}")
+                            return {
+                                "html_export": current_codes.get("html_export", ""),
+                                "style_css": current_codes.get("style_css", ""),
+                                "globals_css": current_codes.get("globals_css", ""),
+                                "template_info": session_data.get("template_info", {}),
+                                "session_file": str(session_file)
+                            }
+                    except Exception as e:
+                        self.logger.warning(f"Failed to load session file {pattern}: {e}")
+                        continue
+            
+            self.logger.warning("No valid session file found with UI codes")
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error loading UI state from session: {e}")
+            return None
     
     def _generate_editing_suggestions_advanced(self, selected_template: Dict[str, Any]) -> List[str]:
         """Generate advanced editing suggestions based on template analysis"""
@@ -2353,12 +2411,18 @@ EXAMPLES:
             
             # Ensure we're in editing phase and have a selected template
             if self.session_state.get("phase") != "editing" or not self.session_state.get("selected_template"):
+                # If no current_ui_codes provided, try to load from session file
+                if not current_ui_codes:
+                    current_ui_codes = await self._load_ui_state_from_session()
+                    self.logger.info(f"Auto-loaded UI codes from session: {bool(current_ui_codes)}")
+                
                 # Try to load the session state from existing UI codes
                 if current_ui_codes and current_ui_codes.get("template_info"):
                     # Set up the session state for editing
                     self.session_state["phase"] = "editing"
                     self.session_state["selected_template"] = current_ui_codes.get("template_info", {})
                     self.session_state["ui_codes"] = current_ui_codes
+                    self.logger.info(f"Set up editing session with template: {current_ui_codes.get('template_info', {}).get('name', 'Unknown')}")
                 else:
                     return {
                         "success": False,
