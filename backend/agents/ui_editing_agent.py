@@ -80,6 +80,13 @@ You focus on sophisticated mockup UI modifications and improvements."""
                     return json.loads(json_str)
                 except json.JSONDecodeError as e:
                     self.logger.warning(f"Failed to parse JSON in {context}: {e}")
+                    
+                    # Check if this is due to API overload or malformed response
+                    if "line 1 column 2 (char 1)" in str(e):
+                        print(f"DEBUG: Detected malformed JSON from API overload, response starts with: '{response[:50]}'")
+                        # This often happens when API returns error text instead of JSON
+                    
+                    return None
             
             return None
             
@@ -154,6 +161,69 @@ You focus on sophisticated mockup UI modifications and improvements."""
             
         return False
     
+    def _try_apply_partial_css_changes(self, partial_css: str, modified_template: dict) -> bool:
+        """
+        Try to extract specific changes from partial CSS and apply them to the full CSS.
+        Returns True if successful, False otherwise.
+        """
+        try:
+            import re
+            
+            # Get the original CSS
+            original_css = modified_template.get("style_css", "")
+            print(f"DEBUG PARTIAL: Original CSS length: {len(original_css)}")
+            if not original_css:
+                print(f"DEBUG PARTIAL: No original CSS found in modified_template")
+                return False
+            
+            # Extract individual CSS rules from the partial CSS (before placeholder comments)
+            # Look for complete CSS rules (selector + properties)
+            
+            # Remove placeholder comments from partial CSS
+            clean_partial = re.sub(r'/\*[^*]*\*+(?:[^/*][^*]*\*+)*/', '', partial_css)
+            clean_partial = clean_partial.strip()
+            
+            if not clean_partial:
+                return False
+            
+            # Extract CSS rules from partial CSS
+            # Match patterns like: .selector { properties }
+            partial_rules = re.findall(r'([^{]+)\s*\{([^}]+)\}', clean_partial, re.DOTALL)
+            
+            if not partial_rules:
+                return False
+            
+            # Apply each rule to the original CSS
+            updated_css = original_css
+            changes_applied = False
+            
+            for selector, properties in partial_rules:
+                selector = selector.strip()
+                properties = properties.strip()
+                
+                # Find the corresponding rule in the original CSS
+                pattern = re.escape(selector) + r'\s*\{[^}]*\}'
+                match = re.search(pattern, updated_css, re.DOTALL)
+                
+                if match:
+                    # Replace the entire rule
+                    new_rule = f"{selector} {{\n  {properties}\n}}"
+                    updated_css = re.sub(pattern, new_rule, updated_css, flags=re.DOTALL)
+                    changes_applied = True
+                    print(f"DEBUG: Applied change to {selector}")
+                else:
+                    print(f"DEBUG: Could not find selector {selector} in original CSS")
+            
+            if changes_applied:
+                modified_template["style_css"] = updated_css
+                return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"DEBUG: Error in _try_apply_partial_css_changes: {e}")
+            return False
+
     def _is_truncated_content(self, content: str) -> bool:
         """
         Detect if content appears to be truncated or incomplete.
@@ -338,10 +408,58 @@ You focus on sophisticated mockup UI modifications and improvements."""
             
             # Parse the final results
             print(f"DEBUG: UI Editing Agent - Starting to parse execution response...")
+            print(f"DEBUG: Execution response first 500 chars: {execution_response[:500]}...")
+            
+            # Check if the response indicates an API error
+            if "Error calling Claude API" in execution_response or "overloaded_error" in execution_response:
+                print(f"DEBUG: API error detected in response, returning error result")
+                return {
+                    "success": False,
+                    "error": "Claude API is currently overloaded. Please try again in a moment.",
+                    "original_template": current_template,
+                    "modification_request": message,
+                    "modification_plan": "Unable to process due to API limitations",
+                    "user_feedback": "API temporarily unavailable"
+                }
+            
             final_results = self._parse_final_output_from_response(execution_response, current_template)
             
             # Debug: Log parsing result
             print(f"DEBUG: UI Editing Agent Final Results: {final_results}")
+            
+            # Write debug info to file for inspection
+            try:
+                import json
+                debug_info = {
+                    "timestamp": str(__import__("datetime").datetime.now()),
+                    "execution_response_length": len(execution_response),
+                    "execution_response_first_500": execution_response[:500],
+                    "final_results": str(final_results),
+                    "final_results_type": type(final_results).__name__
+                }
+                with open("debug_ui_editing.json", "w") as f:
+                    json.dump(debug_info, f, indent=2)
+            except Exception as debug_e:
+                print(f"DEBUG: Failed to write debug file: {debug_e}")
+            
+            # Debug: Check if final_results contains modified_template
+            if final_results and "modified_template" in final_results:
+                modified_template = final_results["modified_template"]
+                if modified_template and "style_css" in modified_template:
+                    css_content = modified_template["style_css"]
+                    print(f"DEBUG: Modified CSS length: {len(css_content)}")
+                    if "background-color:" in css_content.lower():
+                        print(f"DEBUG: Found background-color in modified CSS")
+                        # Extract background-color values
+                        import re
+                        bg_colors = re.findall(r'background-color:\s*([^;]+)', css_content)
+                        print(f"DEBUG: Background colors found: {bg_colors[:5]}")  # Show first 5
+                    else:
+                        print(f"DEBUG: No background-color found in modified CSS")
+                else:
+                    print(f"DEBUG: No style_css in modified_template")
+            else:
+                print(f"DEBUG: No modified_template in final_results")
             
             if not final_results:
                 return {
@@ -576,6 +694,9 @@ Execute the plan precisely, validate your work thoroughly, and provide clear sum
                     # Create the modified template structure
                     modified_template = original_template.copy()
                     modified_code = parsed_response["modified_code"]
+                    print(f"DEBUG TEMPLATE: Original template keys: {list(original_template.keys())}")
+                    print(f"DEBUG TEMPLATE: Original style_css length: {len(original_template.get('style_css', ''))}")
+                    print(f"DEBUG TEMPLATE: Original html_export length: {len(original_template.get('html_export', ''))}")
                     
                     # Update with new code, preserving existing content if LLM doesn't provide it
                     # or if LLM returns placeholder comments
@@ -599,7 +720,13 @@ Execute the plan precisely, validate your work thoroughly, and provide clear sum
                         if not self._is_placeholder_content(modified_code["style_css"]):
                             modified_template["style_css"] = modified_code["style_css"]
                         else:
-                            self.logger.warning("style_css contains placeholder content, preserving original")
+                            self.logger.warning("style_css contains placeholder content, attempting to extract changes")
+                            # Try to extract the actual changes from the partial CSS
+                            partial_css = modified_code["style_css"]
+                            if self._try_apply_partial_css_changes(partial_css, modified_template):
+                                self.logger.info("Successfully applied partial CSS changes")
+                            else:
+                                self.logger.warning("Failed to apply partial CSS changes, preserving original")
                     elif not modified_template.get("style_css"):
                         self.logger.warning("style_css missing from LLM response, preserving original")
                     

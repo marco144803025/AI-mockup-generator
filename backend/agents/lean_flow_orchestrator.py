@@ -687,11 +687,21 @@ Return ONLY the intent type (e.g., "modification_request").
     async def _handle_editing_modification_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle specific modification requests with enhanced coordination"""
         try:
+            print(f"DEBUG ORCHESTRATOR: _handle_editing_modification_request called with message: {message}")
+            
             # Step 1: Get current UI state
             current_ui_state = await self._get_current_ui_state(selected_template)
+            print(f"DEBUG ORCHESTRATOR: Current UI state loaded, HTML length: {len(current_ui_state.get('html_export', ''))}")
+            print(f"DEBUG ORCHESTRATOR: Current UI state CSS length: {len(current_ui_state.get('style_css', ''))}")
+            print(f"DEBUG ORCHESTRATOR: Current UI state keys: {list(current_ui_state.keys())}")
             
             # Step 2: Use UI editing agent to analyze and apply modifications
+            print(f"DEBUG ORCHESTRATOR: Calling UI editing agent...")
             modification_result = self.editing_agent.process_modification_request(message, current_ui_state)
+            print(f"DEBUG ORCHESTRATOR: UI editing agent returned: {bool(modification_result)}")
+            if modification_result:
+                print(f"DEBUG ORCHESTRATOR: Modification success: {modification_result.get('success', False)}")
+                print(f"DEBUG ORCHESTRATOR: Has modified_template: {bool(modification_result.get('modified_template'))}")
             
             if not modification_result.get("success", False):
                 # Handle modification failure
@@ -879,35 +889,107 @@ Return ONLY the intent type (e.g., "modification_request").
     async def _get_current_ui_state(self, selected_template: Dict[str, Any]) -> Dict[str, Any]:
         """Get current UI state including any modifications"""
         try:
-            # First try to load UI state from session file
-            ui_state = await self._load_ui_state_from_session()
+            # Load complete template content from file system
+            complete_template = await self._load_complete_template_from_files(selected_template)
             
-            if ui_state and ui_state.get("html_export"):
-                # We have valid UI codes from session file
-                self.logger.info(f"Loaded UI state from session with HTML length: {len(ui_state.get('html_export', ''))}")
-                return ui_state
-            
-            # Fallback: Get base template state (this may be empty for test sessions)
+            # ALWAYS start with the complete original template to avoid broken session files
             ui_state = {
                 "template_id": selected_template.get("_id"),
                 "template_name": selected_template.get("name"),
-                "html_export": selected_template.get("html_export", ""),
-                "style_css": selected_template.get("style_css", ""),
-                "globals_css": selected_template.get("globals_css", "")  # Fixed: was global_css
+                "html_export": complete_template.get("html_export", selected_template.get("html_export", "")),
+                "style_css": complete_template.get("style_css", selected_template.get("style_css", "")),
+                "globals_css": complete_template.get("globals_css", selected_template.get("globals_css", ""))
             }
             
-            # Apply any pending modifications
+            # Check if template has valid content
+            if not ui_state.get("html_export") or not ui_state.get("style_css"):
+                # Try to load from session file as fallback only if template is empty
+                session_ui_state = await self._load_ui_state_from_session()
+                
+                if session_ui_state and session_ui_state.get("html_export"):
+                    # Only use session file if it has complete content and original template is empty
+                    session_css_length = len(session_ui_state.get("style_css", ""))
+                    if session_css_length > 1000:  # Ensure it's complete CSS, not just button styles
+                        self.logger.info(f"Using session UI state with complete CSS (length: {session_css_length})")
+                        return session_ui_state
+                    else:
+                        self.logger.warning(f"Session file has incomplete CSS (length: {session_css_length}), using original template")
+            
+            # Apply any pending modifications to the complete template
             modifications = self.session_state.get("modifications", {})
             if modifications:
                 ui_state["pending_modifications"] = modifications
             
-            self.logger.warning(f"Using fallback UI state with HTML length: {len(ui_state.get('html_export', ''))}")
+            self.logger.info(f"Using complete original template - HTML: {len(ui_state.get('html_export', ''))}, CSS: {len(ui_state.get('style_css', ''))}")
             return ui_state
             
         except Exception as e:
             self.logger.error(f"Error getting current UI state: {e}")
             return {}
     
+    async def _load_complete_template_from_files(self, selected_template: Dict[str, Any]) -> Dict[str, Any]:
+        """Load complete template content from UIpages file system"""
+        try:
+            import os
+            from pathlib import Path
+            
+            # Get template name and map it to file system location
+            template_name = selected_template.get("name", "")
+            template_category = selected_template.get("category", "")
+            print(f"DEBUG LOAD: Loading template '{template_name}' category '{template_category}'")
+            
+            # Template name mapping - map database names to file system directories
+            template_mappings = {
+                "About 1": "landing_UI_template_2",  # The About 1 template uses landing template files
+                "Landing 1": "landing_UI_template_2",
+                "Sign-up 1": "signup_UI_template_2"
+            }
+            
+            template_dir = template_mappings.get(template_name)
+            print(f"DEBUG LOAD: Mapped to directory '{template_dir}' for template '{template_name}'")
+            if not template_dir:
+                # Fallback: try to guess from name/category
+                if "about" in template_name.lower() or "about" in template_category.lower():
+                    template_dir = "landing_UI_template_2"
+                elif "landing" in template_name.lower():
+                    template_dir = "landing_UI_template_2"  
+                elif "signup" in template_name.lower() or "sign-up" in template_name.lower():
+                    template_dir = "signup_UI_template_2"
+                else:
+                    template_dir = "landing_UI_template_2"  # Default fallback
+            
+            # Construct file paths
+            ui_pages_dir = Path("..") / "UIpages" / template_dir
+            html_file = ui_pages_dir / "index.html"
+            css_file = ui_pages_dir / "style.css"
+            globals_file = ui_pages_dir / "globals.css"
+            
+            complete_template = {}
+            
+            # Load HTML
+            if html_file.exists():
+                with open(html_file, 'r', encoding='utf-8') as f:
+                    complete_template["html_export"] = f.read()
+                    print(f"DEBUG: Loaded HTML from {html_file}, length: {len(complete_template['html_export'])}")
+            
+            # Load main CSS
+            if css_file.exists():
+                with open(css_file, 'r', encoding='utf-8') as f:
+                    complete_template["style_css"] = f.read()
+                    print(f"DEBUG: Loaded CSS from {css_file}, length: {len(complete_template['style_css'])}")
+            
+            # Load globals CSS
+            if globals_file.exists():
+                with open(globals_file, 'r', encoding='utf-8') as f:
+                    complete_template["globals_css"] = f.read()
+                    print(f"DEBUG: Loaded globals CSS from {globals_file}, length: {len(complete_template['globals_css'])}")
+            
+            return complete_template
+            
+        except Exception as e:
+            self.logger.error(f"Error loading complete template from files: {e}")
+            return {}
+
     async def _load_ui_state_from_session(self) -> Optional[Dict[str, Any]]:
         """Load UI state from the session file"""
         try:
@@ -2362,6 +2444,11 @@ EXAMPLES:
                     ui_codes_data = json.load(f)
                 
                 # Update the current_codes with the modified template
+                print(f"DEBUG SAVE: Modified template keys: {list(modified_template.keys())}")
+                print(f"DEBUG SAVE: HTML length: {len(modified_template.get('html_export', ''))}")
+                print(f"DEBUG SAVE: CSS length: {len(modified_template.get('style_css', ''))}")
+                print(f"DEBUG SAVE: Globals length: {len(modified_template.get('globals_css', ''))}")
+                
                 ui_codes_data["current_codes"]["html_export"] = modified_template.get("html_export", "")
                 ui_codes_data["current_codes"]["globals_css"] = modified_template.get("globals_css", "")
                 ui_codes_data["current_codes"]["style_css"] = modified_template.get("style_css", "")
@@ -2408,6 +2495,9 @@ EXAMPLES:
         """
         try:
             self.logger.info(f"Processing UI edit request for session {session_id}: {message}")
+            print(f"DEBUG ORCHESTRATOR: Processing UI edit request for session {session_id}: {message}")
+            print(f"DEBUG ORCHESTRATOR: Current phase: {self.session_state.get('phase', 'unknown')}")
+            print(f"DEBUG ORCHESTRATOR: Has selected template: {bool(self.session_state.get('selected_template'))}")
             
             # Ensure we're in editing phase and have a selected template
             if self.session_state.get("phase") != "editing" or not self.session_state.get("selected_template"):
