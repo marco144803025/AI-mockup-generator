@@ -122,6 +122,11 @@ IMPORTANT:
                 tool_choice={"type": "auto"} if tools else None
             )
             
+            # Debug: Log LLM response
+            print(f"DEBUG: Question Generation Agent LLM Response: {response.content[0].text[:500]}...")
+            if len(response.content[0].text) > 500:
+                print(f"DEBUG: Full Question Generation Response: {response.content[0].text}")
+            
             return response.content[0].text
             
         except Exception as e:

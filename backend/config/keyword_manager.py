@@ -156,13 +156,31 @@ class KeywordManager:
         return "general"
     
     def detect_page_type(self, user_prompt: str) -> str:
-        """Detect page type using loaded keywords"""
+        """Detect page type using loaded keywords with improved conflict resolution"""
         prompt_lower = user_prompt.lower()
         
         page_type_keywords = self.get_page_type_keywords()
+        
+        # Collect all matches with their keyword specificity scores
+        matches = []
         for page_type, keywords in page_type_keywords.items():
-            if any(keyword in prompt_lower for keyword in keywords):
-                return page_type
+            for keyword in keywords:
+                if keyword in prompt_lower:
+                    # Calculate specificity: longer keywords and exact matches get higher scores
+                    specificity = len(keyword)
+                    # Boost score for exact category name matches
+                    if keyword == page_type:
+                        specificity += 10
+                    # Boost score for hyphenated specific terms
+                    if '-' in keyword:
+                        specificity += 2
+                    
+                    matches.append((page_type, keyword, specificity))
+        
+        if matches:
+            # Return the page type with the highest specificity
+            best_match = max(matches, key=lambda x: x[2])
+            return best_match[0]
         
         # Default fallback
         default_values = self.get_default_values()

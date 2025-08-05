@@ -408,7 +408,6 @@ IMPORTANT:
             
             # Get available tools
             tools = self.tool_utility.get_tools()
-            print(f"DEBUG: Tools being passed to Claude: {json.dumps(tools, indent=2)}")
             
             # Call Claude
             response = client.messages.create(
@@ -418,6 +417,11 @@ IMPORTANT:
                 tools=tools if tools else None,
                 tool_choice={"type": "auto"} if tools else None
             )
+            
+            # Debug: Log LLM response
+            print(f"DEBUG: Requirements Analysis Agent LLM Response: {response.content[0].text[:500]}...")
+            if len(response.content[0].text) > 500:
+                print(f"DEBUG: Full Requirements Analysis Response: {response.content[0].text}")
             
             # Handle tool calls if any
             if response.content and hasattr(response.content[0], 'tool_calls') and response.content[0].tool_calls:
@@ -463,6 +467,11 @@ IMPORTANT:
                         max_tokens=4000,
                         messages=[{"role": "user", "content": tool_response_prompt}]
                     )
+                    
+                    # Debug: Log final LLM response after tool calls
+                    print(f"DEBUG: Requirements Analysis Agent Final Response: {final_response.content[0].text[:500]}...")
+                    if len(final_response.content[0].text) > 500:
+                        print(f"DEBUG: Full Requirements Analysis Final Response: {final_response.content[0].text}")
                     
                     return final_response.content[0].text
             
