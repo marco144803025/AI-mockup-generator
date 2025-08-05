@@ -289,3 +289,21 @@ class KeywordManager:
                 stats["total_keywords"] += len(section_data)
         
         return stats 
+    def get_keyword_stats(self) -> Dict[str, Any]:
+        """Get statistics about the loaded keywords"""
+        stats = {
+            "total_sections": len(self._config_data),
+            "section_counts": {},
+            "total_keywords": 0
+        }
+        
+        for section_name, section_data in self._config_data.items():
+            if isinstance(section_data, dict):
+                section_count = sum(len(keywords) for keywords in section_data.values() if isinstance(keywords, list))
+                stats["section_counts"][section_name] = section_count
+                stats["total_keywords"] += section_count
+            elif isinstance(section_data, list):
+                stats["section_counts"][section_name] = len(section_data)
+                stats["total_keywords"] += len(section_data)
+        
+        return stats 

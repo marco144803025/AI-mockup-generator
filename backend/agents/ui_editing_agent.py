@@ -106,10 +106,32 @@ You focus on sophisticated mockup UI modifications and improvements."""
             execution_prompt = self._build_apply_validate_summary_prompt(modification_plan, current_template)
             
             self.logger.debug("Sending execution, validation, and summary request to Claude...")
-            execution_response = self.call_claude_with_cot(execution_prompt, enable_cot=False)
+            print(f"DEBUG: UI Editing Agent - Starting execution step...")
+            
+            try:
+                execution_response = self.call_claude_with_cot(execution_prompt, enable_cot=False)
+                print(f"DEBUG: UI Editing Agent - Received execution response (length: {len(execution_response)})")
+                
+                # Debug: Log execution response
+                print(f"DEBUG: UI Editing Agent Execution Response: {execution_response[:500]}...")
+                if len(execution_response) > 500:
+                    print(f"DEBUG: Full UI Editing Agent Execution Response: {execution_response}")
+            except Exception as e:
+                print(f"ERROR: UI Editing Agent - Execution step failed: {e}")
+                return {
+                    "success": False,
+                    "error": f"Execution step failed: {str(e)}",
+                    "original_template": current_template,
+                    "modification_plan": modification_plan,
+                    "user_feedback": user_feedback
+                }
             
             # Parse the final results
+            print(f"DEBUG: UI Editing Agent - Starting to parse execution response...")
             final_results = self._parse_final_output_from_response(execution_response, current_template)
+            
+            # Debug: Log parsing result
+            print(f"DEBUG: UI Editing Agent Final Results: {final_results}")
             
             if not final_results:
                 return {
@@ -306,24 +328,37 @@ Execute the plan precisely, validate your work thoroughly, and provide clear sum
         Parses the final JSON response containing the modified code, validation, and summary.
         """
         try:
+            print(f"DEBUG: Parsing final output response (length: {len(response)})")
             parsed_response = self._extract_json_from_response(response, "final_output")
             
             if parsed_response:
+                print(f"DEBUG: Successfully extracted JSON with keys: {list(parsed_response.keys())}")
+                
                 # Validate that all required sections are present
                 required_keys = ["modified_code", "validation_report", "changes_summary"]
-                if all(key in parsed_response for key in required_keys):
+                missing_keys = [key for key in required_keys if key not in parsed_response]
+                
+                if not missing_keys:
                     
                     # Create the modified template structure
                     modified_template = original_template.copy()
                     modified_code = parsed_response["modified_code"]
                     
-                    # Update with new code
-                    if "html_export" in modified_code:
+                    # Update with new code, preserving existing content if LLM doesn't provide it
+                    if "html_export" in modified_code and modified_code["html_export"]:
                         modified_template["html_export"] = modified_code["html_export"]
-                    if "globals_css" in modified_code:
+                    elif not modified_template.get("html_export"):
+                        self.logger.warning("html_export missing from LLM response, preserving original")
+                    
+                    if "globals_css" in modified_code and modified_code["globals_css"]:
                         modified_template["globals_css"] = modified_code["globals_css"]
-                    if "style_css" in modified_code:
+                    elif not modified_template.get("globals_css"):
+                        self.logger.warning("globals_css missing from LLM response, preserving original")
+                    
+                    if "style_css" in modified_code and modified_code["style_css"]:
                         modified_template["style_css"] = modified_code["style_css"]
+                    elif not modified_template.get("style_css"):
+                        self.logger.warning("style_css missing from LLM response, preserving original")
                     
                     # Add modification metadata
                     modified_template["modification_metadata"] = {
@@ -338,7 +373,11 @@ Execute the plan precisely, validate your work thoroughly, and provide clear sum
                         "changes_summary": parsed_response["changes_summary"]
                     }
                 else:
-                    self.logger.warning("Missing required sections in final output")
+                    print(f"ERROR: Missing required sections in final output: {missing_keys}")
+                    self.logger.warning(f"Missing required sections in final output: {missing_keys}")
+            else:
+                print(f"ERROR: Failed to extract JSON from final output response")
+                self.logger.warning("Failed to extract JSON from final output response")
             
             return None
             

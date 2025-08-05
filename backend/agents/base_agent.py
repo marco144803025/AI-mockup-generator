@@ -62,6 +62,12 @@ class BaseAgent:
                 max_tokens=4000
             )
             
+            # Debug: Log LLM response for all agents inheriting from BaseAgent
+            agent_name = self.__class__.__name__
+            print(f"DEBUG: {agent_name} LLM Response: {response.content[0].text[:500]}...")
+            if len(response.content[0].text) > 500:
+                print(f"DEBUG: Full {agent_name} Response: {response.content[0].text}")
+            
             return response.content[0].text
             
         except Exception as e:
@@ -205,6 +211,12 @@ Format your response as:
                 data={"primary_result": output},
                 metadata={"context_used": context or {}}
             )
+        
+        # Add context information
+        if context:
+            output["metadata"]["context_used"] = context
+        
+        return output
         
         # Add context information
         if context:

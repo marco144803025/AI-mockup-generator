@@ -87,9 +87,12 @@ class LeanFlowOrchestrator:
             
             # Step 2: Detect initial intent (new phase)
             initial_intent = await self._detect_initial_intent(message, context)
+            print(f"DEBUG: Detected initial intent: {initial_intent}")
             
             # Step 3: Determine current phase and execute appropriate workflow
             current_phase = self.session_state["current_phase"]
+            print(f"DEBUG: Current phase: {current_phase}")
+            print(f"DEBUG: Session state keys: {list(self.session_state.keys())}")
             
             if current_phase == "initial":
                 return await self._handle_initial_intent_phase(message, initial_intent, context)
@@ -161,6 +164,8 @@ class LeanFlowOrchestrator:
     async def _handle_initial_intent_phase(self, message: str, initial_intent: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle the initial intent detection phase"""
         
+        print(f"DEBUG: Entering _handle_initial_intent_phase with intent: {initial_intent}")
+        
         # Update session state with detected intent
         self.session_state["initial_intent"] = initial_intent
         
@@ -178,6 +183,7 @@ class LeanFlowOrchestrator:
             self.session_state["current_phase"] = "requirements"
             
             # Call requirements analysis directly
+            print(f"DEBUG: Transitioning to requirements phase with enhanced_context: {enhanced_context}")
             return await self._handle_requirements_phase(message, enhanced_context)
             
         elif initial_intent == "requirements_analysis":
@@ -229,17 +235,22 @@ class LeanFlowOrchestrator:
         
         # Step 1: Analyze what agents are needed
         phase_decision = await self._analyze_phase_requirements(message, context)
+        print(f"DEBUG: Phase decision for requirements phase: {phase_decision}")
         
         # Step 2: Update session state with context updates
         if phase_decision.get("context_updates"):
             self.session_state.update(phase_decision["context_updates"])
         
         # Step 3: Execute required agents in order
+        print(f"DEBUG: Required agents for pipeline: {phase_decision['required_agents']}")
         pipeline_result = self._execute_agent_pipeline(
             phase_decision["required_agents"], 
             message, 
             context or {}
         )
+        print(f"DEBUG: Pipeline result success: {pipeline_result['success']}")
+        print(f"DEBUG: Pipeline result keys: {pipeline_result.keys()}")
+        print(f"DEBUG: Pipeline final_output: {pipeline_result.get('final_output', 'None')}")
         
         if not pipeline_result["success"]:
             # Handle error - ask for clarification
@@ -292,7 +303,24 @@ class LeanFlowOrchestrator:
                 self.session_state["questions"] = questions_result
         
         # Step 5: Get final response from user proxy
-        response = pipeline_result["final_output"]
+        final_output = pipeline_result["final_output"]
+        
+        # Ensure response is always a string for the frontend
+        if isinstance(final_output, dict):
+            # If we got requirements data, format it properly
+            if "questions_for_clarification" in final_output:
+                questions = final_output.get("questions_for_clarification", [])
+                if questions:
+                    response = "Great! I've analyzed your requirements for the About UI. To help you choose the perfect template, I have a few questions:\n\n"
+                    for i, question in enumerate(questions[:3], 1):
+                        response += f"{i}. {question}\n"
+                    response += "\nPlease answer any of these questions to help me find the best template for you."
+                else:
+                    response = "I've analyzed your requirements for the About UI. Let me show you the available templates."
+            else:
+                response = "I've processed your requirements. Let me show you the available options."
+        else:
+            response = str(final_output) if final_output else "I've processed your request. Let me know how you'd like to proceed."
         
         # Step 6: Update phase based on decision
         next_phase = phase_decision.get("next_phase", "template_recommendation")
@@ -1052,12 +1080,27 @@ User message: "{message}"
 {context_info}
 {question_context}
 
-IMPORTANT: If the user is answering questions we recently asked (like preferences for features, styles, etc.), classify this as "question_answer" to filter templates based on their preferences.
+CRITICAL DISTINCTION: 
+- If the user is providing information about their preferences, company, style, features, or answering any design-related questions → "question_answer"
+- If the user is explicitly choosing a specific numbered template (with clear template references) → "template_selection"
+
+QUESTION ANSWER EXAMPLES:
+- "My company is tech-focused" → question_answer (describing company context)
+- "I prefer modern design" → question_answer (style preference)
+- "We need professional look" → question_answer (design preference)
+- "Dark theme would be better" → question_answer (color preference)
+- "Yes, that sounds good" → question_answer (preference confirmation)
+- "More cutting-edge feeling" → question_answer (design direction)
+
+TEMPLATE SELECTION EXAMPLES:
+- "I choose template 1" → template_selection (explicit template choice)
+- "Let's go with option 2" → template_selection (explicit option choice)
+- "Template number 3 looks good" → template_selection (explicit template reference)
 
 Determine the user's intent from this message. Choose from:
 
-1. "question_answer" - User is answering questions about preferences (e.g., "I need form-based", "no banner", "modern style", "yes to that feature")
-2. "template_selection" - User is selecting a specific template (e.g., "I choose template 1", "landing 1", "option 2", "that one")
+1. "question_answer" - User is providing preferences, requirements, or answering design questions (e.g., "I need modern style", "my company is tech-focused", "professional look", "dark design")
+2. "template_selection" - User is explicitly selecting a numbered template or option (e.g., "I choose template 1", "option 2", "template number 3")
 3. "clarification" - User wants more information or different options (e.g., "show me other options", "I want something different", "more templates")
 4. "modification" - User wants to modify requirements (e.g., "make it more modern", "change the color", "different style")
 5. "confirmation" - User is confirming a choice (e.g., "yes", "perfect", "that's good")
@@ -1481,6 +1524,27 @@ EXAMPLES:
                             templates = current_output["data"].get("primary_result", [])
                         else:
                             templates = self.session_state.get("recommendations", [])
+                        
+                        # If no templates available, fetch them directly
+                        if not templates:
+                            print("DEBUG: No templates available for question generation, fetching templates...")
+                            requirements = self.session_state.get("requirements", {})
+                            
+                            # Ensure page_type is included - get from session state
+                            page_type = self.session_state.get("context", {}).get("page_type")
+                            if page_type and isinstance(requirements, dict):
+                                requirements["page_type"] = page_type
+                                print(f"DEBUG: Using page_type '{page_type}' for template fetching")
+                            
+                            # Get templates and standardize the output like in normal flow
+                            template_list = self.recommendation_agent.recommend_templates(requirements)
+                            template_result = self.recommendation_agent.enhance_agent_output(template_list, {"page_type": page_type})
+                            
+                            if template_result.get("success") and "data" in template_result:
+                                templates = template_result["data"].get("primary_result", [])
+                                # Store in session for future use
+                                self.session_state["recommendations"] = templates
+                                print(f"DEBUG: Fetched {len(templates)} templates for question generation")
                         
                         requirements = self.session_state.get("requirements", {})
                         result = self.question_agent.generate_questions(templates, requirements)

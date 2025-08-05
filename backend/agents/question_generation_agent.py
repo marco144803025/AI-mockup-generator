@@ -202,3 +202,8 @@ IMPORTANT:
             "focus_areas": focus_areas,
             "template_count": len(templates)
         } 
+        return {
+            "questions": questions,
+            "focus_areas": focus_areas,
+            "template_count": len(templates)
+        } 

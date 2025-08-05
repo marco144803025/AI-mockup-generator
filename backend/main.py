@@ -431,6 +431,25 @@ async def get_session_ui_codes(session_id: str):
     except Exception as e:
         logger.error(f"Error fetching session UI codes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/session/reset")
+async def reset_session(session_id: str = None):
+    """Reset session state and conversation history"""
+    try:
+        # Create orchestrator to handle session reset
+        orchestrator = LeanFlowOrchestrator(session_id=session_id)
+        result = orchestrator.reset_session()
+        
+        return {
+            "success": True,
+            "message": "Session reset successfully",
+            "session_id": result.get("session_id", session_id)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error resetting session: {e}")
+        raise HTTPException(status_code=500, detail=f"Error resetting session: {str(e)}")
+
 @app.post("/api/ui-preview/generate-screenshot")
 async def generate_ui_preview_screenshot(request: ScreenshotRequest):
     """Generate a screenshot preview of the UI template"""

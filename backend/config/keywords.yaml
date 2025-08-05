@@ -1,462 +1,125 @@
-# Keyword Configuration - Based on actual database analysis
-# This file contains all keyword data separated from application logic
+# UI Mockup Generation Keyword Configuration
 
-# Page Type Detection Keywords
+# Page type detection keywords
 page_type_keywords:
-  login:
-    - "login"
-    - "signin"
-    - "sign-in"
-    - "authentication"
-    - "login ui"
-    - "login page"
-    - "sign in"
-    - "log in"
-    - "user authentication"
-    - "secure access"
-  signup:
-    - "signup"
-    - "sign up"
-    - "sign-up"
-    - "register"
-    - "registration"
-    - "signup ui"
-    - "signup page"
-    - "register page"
-    - "account creation"
-    - "sign-up form"
   landing:
     - "landing"
     - "homepage"
-    - "home page"
+    - "home"
     - "main page"
-    - "hero"
-    - "landing page"
+  login:
+    - "login"
+    - "signin"
+    - "sign in"
+    - "authentication"
+    - "auth"
+  signup:
+    - "signup"
+    - "sign up"
+    - "register"
+    - "registration"
+    - "create account"
   profile:
     - "profile"
     - "user profile"
     - "account"
     - "user account"
-    - "profile page"
-    - "profile management"
-    - "account activity"
+    - "my account"
   about:
     - "about"
     - "about us"
-    - "company"
-    - "team"
-    - "about me"
-    - "about section"
-    - "personal branding"
+    - "about page"
+    - "company info"
 
-# Related Categories Mapping
-related_categories:
-  login:
-    - "signup"
-    - "authentication"
-    - "forms"
-  signup:
-    - "login"
-    - "authentication"
-    - "forms"
-  landing:
-    - "homepage"
-    - "main"
-  profile:
-    - "user"
-    - "account"
-  about:
-    - "landing"
-    - "company"
-
-# Visual Style Keywords (Based on actual database tags)
-design_style_keywords:
-  visual_style:
-    - "visual"
-    - "style"
-    - "design"
-    - "color"
-    - "layout"
-  modern_styles:
-    - "modern"
-    - "minimal"
-    - "clean"
-    - "bold"
-    - "colorful"
-    - "dark"
-    - "light"
-    - "minimalist"
-    - "minimalist aesthetic"
-  professional_styles:
-    - "sleek"
-    - "elegant"
-    - "professional"
-    - "playful"
-    - "soft"
-    - "natural"
-    - "futuristic"
-    - "sleek design"
-    - "sleek form"
-    - "soft aesthetic"
-    - "natural aesthetic"
-    - "futuristic aesthetic"
-  theme_keywords:
-    - "dark theme"
-    - "light theme"
-    - "theme"
-    - "aesthetic"
-    - "minimalist dark"
-    - "modern dark"
-
-# Component Keywords (Based on actual database tags)
-component_keywords:
-  ui_components:
-    - "hero"
-    - "navigation"
-    - "footer"
-    - "sidebar"
-    - "form"
-    - "button"
-    - "image"
-    - "hero section"
-    - "sidebar navigation"
-    - "top navigation"
-    - "simple navigation"
-    - "call-to-action"
-    - "clean forms"
-    - "elegant form"
-    - "minimalist form"
-  functional_components:
-    - "form"
-    - "authentication"
-    - "dashboard"
-    - "gallery"
-    - "portfolio"
-    - "analytics"
-    - "social"
-    - "login"
-    - "signup"
-    - "profile"
-    - "navigation"
-    - "hero"
-    - "call-to-action"
-    - "Admin Dashboard"
-    - "setting dashboard"
-    - "performance monitoring"
-    - "data visualization"
-    - "charts & graphs"
-  html_sections:
-    - "header"
-    - "nav"
-    - "main"
-    - "section"
-    - "footer"
-    - "hero"
-    - "banner image header"
-
-# Feature Keywords (Based on actual database tags)
-feature_keywords:
-  responsive_features:
-    - "responsive"
-    - "mobile"
-    - "desktop"
-    - "tablet"
-  interaction_features:
-    - "function"
-    - "feature"
-    - "component"
-    - "interaction"
-    - "interactive"
-  user_experience:
-    - "user"
-    - "experience"
-    - "usability"
-    - "accessibility"
-    - "onboarding"
-    - "onboarding flow"
-
-# Content Keywords (Based on actual database tags)
-content_keywords:
-  content_types:
-    - "text"
-    - "image"
-    - "video"
-    - "animation"
-    - "interactive"
-    - "image-heavy"
-    - "illustration-heavy"
-    - "informational"
-    - "informative"
-    - "spotlight image"
-  media_content:
-    - "text"
-    - "image"
-    - "video"
-    - "animation"
-
-# Business Context Keywords (Based on actual database tags)
-business_context_keywords:
-  business_terms:
-    - "business"
-    - "brand"
-    - "audience"
-    - "conversion"
-    - "SaaS"
-    - "tech"
-    - "Business Intelligence"
-  business_styles:
-    - "business"
-    - "professional"
-    - "casual"
-    - "creative"
-    - "tech"
-    - "personal"
-    - "portfolio"
-    - "community"
-    - "social media"
-    - "community platform"
-    - "networking"
-    - "connections"
-
-# Technical Keywords (Based on actual database tags)
-technical_keywords:
-  technical_terms:
-    - "technical"
-    - "performance"
-    - "compatibility"
-    - "performance monitoring"
-    - "database"
-    - "digital interface"
-
-# Layout Keywords (Based on actual database tags)
-layout_keywords:
-  layout_types:
-    - "sidebar"
-    - "card-based"
-    - "modular cards"
-    - "asymmetrical"
-    - "half-width"
-    - "unique layout"
-    - "structured"
-    - "organized"
-    - "flat design"
-    - "form-centric"
-    - "form-based"
-
-# Color Keywords (Based on actual database tags)
-color_keywords:
-  color_schemes:
-    - "green accents"
-    - "purple accent"
-    - "purple accents"
-    - "pastel palette"
-    - "abstract gradients"
-    - "colorful"
-
-# Focus Area Categories (Derived from above)
-focus_area_categories:
-  visual_style:
-    - "visual"
-    - "style"
-    - "design"
-    - "color"
-    - "layout"
-  functionality:
-    - "function"
-    - "feature"
-    - "component"
-    - "interaction"
-  user_experience:
-    - "user"
-    - "experience"
-    - "usability"
-    - "accessibility"
-  technical:
-    - "technical"
-    - "performance"
-    - "compatibility"
-  business_context:
-    - "business"
-    - "brand"
-    - "audience"
-    - "conversion"
-
-# Tag Categories (Derived from above)
-tag_categories:
-  style:
-    - "modern"
-    - "minimal"
-    - "clean"
-    - "bold"
-    - "colorful"
-    - "dark"
-    - "light"
-    - "minimalist"
-    - "professional"
-    - "sleek"
-    - "elegant"
-    - "playful"
-    - "soft"
-    - "natural"
-    - "futuristic"
-  component:
-    - "hero"
-    - "navigation"
-    - "footer"
-    - "sidebar"
-    - "form"
-    - "button"
-    - "image"
-    - "call-to-action"
-  feature:
-    - "responsive"
-    - "mobile"
-    - "desktop"
-    - "tablet"
-    - "interactive"
-  content:
-    - "text"
-    - "image"
-    - "video"
-    - "animation"
-    - "image-heavy"
-    - "illustration-heavy"
-  context:
-    - "business"
-    - "professional"
-    - "casual"
-    - "creative"
-    - "tech"
-    - "personal"
-    - "portfolio"
-    - "community"
-
-# Intent Detection Keywords
+# Intent detection keywords
 intent_keywords:
   create_ui_mockup:
     - "create"
-    - "make"
     - "build"
+    - "make"
+    - "generate"
     - "design"
-    - "mockup"
-    - "ui"
-    - "interface"
   requirements_analysis:
     - "requirements"
     - "analyze"
-    - "understand"
-    - "needs"
+    - "specification"
   template_recommendation:
     - "recommend"
     - "suggest"
-    - "template"
-    - "choose"
+    - "show templates"
   template_selection:
     - "select"
-    - "pick"
     - "choose"
-    - "decide"
+    - "pick"
   editing:
     - "edit"
     - "modify"
     - "change"
-    - "update"
-    - "adjust"
   report:
     - "report"
-    - "generate"
-    - "create report"
     - "summary"
-  clarification:
-    - "clarify"
-    - "explain"
-    - "understand"
-    - "question"
-  confirmation:
-    - "confirm"
-    - "yes"
-    - "no"
-    - "agree"
-    - "disagree"
-  modification:
-    - "modify"
-    - "change"
-    - "edit"
-    - "update"
-  not_understand:
-    - "don't understand"
-    - "confused"
-    - "unclear"
-    - "not sure"
+    - "export"
+  general:
+    - "help"
+    - "hello"
+    - "hi"
 
-# Template Selection Keywords
-template_selection_keywords:
-  unclear_responses:
-    - "unclear"
-    - "null"
-    - "none"
-    - "unknown"
-    - "not sure"
-  confirmation_responses:
-    - "yes"
-    - "confirm"
-    - "agree"
-    - "okay"
-    - "sure"
-  rejection_responses:
-    - "no"
-    - "reject"
-    - "disagree"
-    - "not this"
-    - "different"
+# Related categories for fallback
+related_categories:
+  about:
+    - "landing"
+    - "profile"
+  login:
+    - "signup"
+    - "profile"
+  signup:
+    - "login"
+    - "profile"
+  profile:
+    - "about"
+    - "login"
+  landing:
+    - "about"
+    - "profile"
 
-# Default Values
+# Design style keywords
+design_style_keywords:
+  modern_styles:
+    - "modern"
+    - "contemporary"
+    - "sleek"
+    - "clean"
+  professional_styles:
+    - "professional"
+    - "business"
+    - "corporate"
+    - "formal"
+  creative_styles:
+    - "creative"
+    - "artistic"
+    - "unique"
+    - "innovative"
+
+# Component keywords
+component_keywords:
+  form_components:
+    - "form"
+    - "input"
+    - "button"
+    - "field"
+  navigation_components:
+    - "navigation"
+    - "menu"
+    - "navbar"
+    - "header"
+  content_components:
+    - "content"
+    - "text"
+    - "image"
+    - "section"
+
+# Default values
 default_values:
   max_templates: 5
-  max_questions: 3
-  default_score: 0.5
-  default_suitability: "medium"
   fallback_category: "landing"
-
-# Required Fields for Different Operations
-required_fields:
-  modification_request:
-    - "modification_type"
-    - "priority"
-    - "affected_elements"
-    - "specific_changes"
-    - "overall_intent"
-  analysis_result:
-    - "project_success_metrics"
-    - "technical_analysis"
-    - "design_analysis"
-    - "future_recommendations"
-  report_content:
-    - "executive_summary"
-    - "project_overview"
-    - "requirements_analysis"
-    - "recommendations"
-
-# Design Principles
-design_principles:
-  - "user-centered design"
-  - "accessibility"
-  - "maintainability"
-  - "responsiveness"
-  - "performance"
-  - "scalability"
-
-# Quality Checks
-quality_checks:
-  - "accessibility_checks"
-  - "performance_checks"
-  - "compatibility_checks"
-  - "usability_checks"
-  - "code_quality_checks"
-
-# Validation Criteria
-validation_criteria:
-  - "functional_requirements"
-  - "design_requirements"
-  - "technical_requirements"
-  - "user_experience_requirements" 
+  max_questions: 3
