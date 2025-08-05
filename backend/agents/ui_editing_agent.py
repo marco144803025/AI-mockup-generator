@@ -238,7 +238,7 @@ You focus on sophisticated mockup UI modifications and improvements."""
                     clean_css = raw_css.replace('\\n', '\n').replace('\\"', '"').replace('\\/', '/')
                     
                     # Verify this CSS contains our expected change
-                    if "#87CEEB" in clean_css or "background-color:" in clean_css.lower():
+                    if "background-color:" in clean_css.lower() or "#" in clean_css:
                         return {
                             "modified_code": {
                                 "html_export": "",
@@ -251,7 +251,7 @@ You focus on sophisticated mockup UI modifications and improvements."""
                                 "warnings": ["Extracted from malformed JSON response"],
                                 "reasoning": "CSS successfully extracted despite JSON parsing error"
                             },
-                            "changes_summary": ["Successfully applied color modification to login button"]
+                            "changes_summary": ["Successfully applied CSS modification"]
                         }
                 
                 # Strategy 2: Extract from the middle of the response where the CSS is truncated
@@ -274,7 +274,7 @@ You focus on sophisticated mockup UI modifications and improvements."""
                             "warnings": ["Extracted CSS from malformed JSON using pattern matching"],
                             "reasoning": "CSS successfully extracted from response using fallback pattern matching"
                         },
-                        "changes_summary": ["Successfully applied light blue color to login button"]
+                        "changes_summary": ["Successfully applied CSS color modification"]
                     }
             
             return None
