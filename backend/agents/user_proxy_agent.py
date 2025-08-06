@@ -22,6 +22,10 @@ Do NOT use any emojis or special characters - use plain text only."""
         self.tool_utility = ToolUtility("user_proxy_agent")
         self.keyword_manager = KeywordManager()
         
+        # Initialize logger
+        import logging
+        self.logger = logging.getLogger(__name__)
+        
         # Now that self.db is available, get database constraints
         try:
             categories = self.db.templates.distinct('category')
@@ -265,6 +269,14 @@ IMPORTANT RULES:
                 
                 response = f"Perfect! I've successfully prepared your selected template for editing.\n\nTemplate Selected: {selected_template.get('name', 'Unknown')}\nCategory: {selected_template.get('category', 'Unknown')}\n\nI've automatically:\n- Saved our conversation history\n- Fetched the template code from the database\n- Created a JSON file with all the UI components\n- Prepared everything for the editing phase\n\nYou're now ready to move to the UI Editor where you can:\n- View your template in real-time\n- Make modifications through our chat interface\n- See the code changes instantly\n- Export your final design\n\nThe system will now transition you to the editing interface. You'll see your template loaded and ready for customization!"
                 return response
+            elif response_type == "editing_clarification_needed":
+                return self._create_clarification_needed_response(instructions)
+            elif response_type == "editing_clarification_invalid_choice":
+                return self._create_clarification_invalid_choice_response(instructions)
+            elif response_type == "clarification_needed":
+                return self._create_requirements_clarification_response(instructions)
+            elif response_type == "requirements_analysis_complete":
+                return self._create_requirements_complete_response(instructions)
             else:
                 return self._create_default_response(instructions)
                 
@@ -287,16 +299,118 @@ IMPORTANT RULES:
             self.logger.error(f"Error creating modification success response: {e}")
             return "Perfect! I've applied your modifications successfully. What would you like to change next?"
 
+    def _create_clarification_needed_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response when clarification is needed for UI editing"""
+        try:
+            error_message = instructions.get("error_message", "Multiple possible targets found")
+            clarification_options = instructions.get("clarification_options", [])
+            original_request = instructions.get("original_request", "")
+            
+            response = f"I found multiple elements that could match your request '{original_request}'. Please specify which one you'd like me to modify:\n\n"
+            
+            for i, option in enumerate(clarification_options, 1):
+                text_content = option.get("text_content", f"Option {i}")
+                css_selector = option.get("css_selector", "")
+                description = option.get("description", "")
+                
+                response += f"{i}. {text_content}"
+                if css_selector:
+                    response += f" (CSS: {css_selector})"
+                if description:
+                    response += f" - {description}"
+                response += "\n"
+            
+            response += "\nPlease choose by number (1, 2, 3, etc.) or describe which element you want to modify."
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error creating clarification needed response: {e}")
+            return "I found multiple possible targets for your request. Please specify which element you'd like me to modify."
+
+    def _create_clarification_invalid_choice_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response when user's clarification choice is invalid"""
+        try:
+            clarification_options = instructions.get("clarification_options", [])
+            user_message = instructions.get("user_message", "")
+            original_request = instructions.get("original_request", "")
+            
+            response = f"I didn't understand your choice '{user_message}'. Please select one of the following options:\n\n"
+            
+            for i, option in enumerate(clarification_options, 1):
+                text_content = option.get("text_content", f"Option {i}")
+                css_selector = option.get("css_selector", "")
+                description = option.get("description", "")
+                
+                response += f"{i}. {text_content}"
+                if css_selector:
+                    response += f" (CSS: {css_selector})"
+                if description:
+                    response += f" - {description}"
+                response += "\n"
+            
+            response += "\nYou can choose by:\n- Number (1, 2, 3, etc.)\n- Text content\n- CSS selector\n- Description"
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error creating clarification invalid choice response: {e}")
+            return "I didn't understand your choice. Please select one of the numbered options above."
+
+    def _create_requirements_clarification_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response when clarification questions are needed for requirements"""
+        try:
+            clarification_questions = instructions.get("clarification_questions", [])
+            requirements_data = instructions.get("requirements_data", {})
+            page_type = requirements_data.get("page_type", "UI")
+            
+            response = f"Great! I've analyzed your requirements for the {page_type} UI. To help you choose the perfect template, I have a few questions:\n\n"
+            
+            for i, question in enumerate(clarification_questions[:3], 1):
+                response += f"{i}. {question}\n"
+            
+            response += "\nPlease answer any of these questions to help me find the best template for you."
+            
+            return response
+             
+        except Exception as e:
+            self.logger.error(f"Error creating requirements clarification response: {e}")
+            return "I need some clarification to better understand your requirements. Could you please provide more specific details?"
+
+    def _create_requirements_complete_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response when requirements analysis is complete"""
+        try:
+            requirements_data = instructions.get("requirements_data", {})
+            page_type = requirements_data.get("page_type", "UI")
+            
+            response = f"Perfect! I've analyzed your requirements for the {page_type} UI. "
+            
+            # Add some context about what was analyzed
+            if "target_audience" in requirements_data:
+                response += f"Based on your target audience ({requirements_data['target_audience']}) and "
+            
+            if "style_preferences" in requirements_data:
+                styles = ", ".join(requirements_data["style_preferences"])
+                response += f"style preferences ({styles}), "
+            
+            response += "I'm ready to show you the best templates that match your needs. Let me fetch the available options for you."
+            
+            return response
+             
+        except Exception as e:
+            self.logger.error(f"Error creating requirements complete response: {e}")
+            return "I've processed your requirements. Let me show you the available templates."
+
     def _create_default_response(self, instructions: Dict[str, Any]) -> str:
         """Create default response when type is not recognized"""
         try:
             user_message = instructions.get("user_message", "")
-            
+             
             if user_message:
                 return f"I understand you want to '{user_message}'. Let me help you with that!"
             else:
                 return "I'm here to help you edit your UI. What would you like to change?"
-                
+                 
         except Exception as e:
             self.logger.error(f"Error creating default response: {e}")
             return "I'm here to help you edit your UI. What would you like to change?"

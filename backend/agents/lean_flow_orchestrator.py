@@ -310,21 +310,29 @@ class LeanFlowOrchestrator:
         # Step 5: Get final response from user proxy
         final_output = pipeline_result["final_output"]
         
-        # Ensure response is always a string for the frontend
+        # Use UserProxyAgent to create a proper response
         if isinstance(final_output, dict):
-            # If we got requirements data, format it properly
-            if "questions_for_clarification" in final_output:
-                questions = final_output.get("questions_for_clarification", [])
-                if questions:
-                    response = "Great! I've analyzed your requirements for the About UI. To help you choose the perfect template, I have a few questions:\n\n"
-                    for i, question in enumerate(questions[:3], 1):
-                        response += f"{i}. {question}\n"
-                    response += "\nPlease answer any of these questions to help me find the best template for you."
-                else:
-                    response = "I've analyzed your requirements for the About UI. Let me show you the available templates."
+            # Check if we need clarification questions
+            if "questions_for_clarification" in final_output and final_output.get("questions_for_clarification"):
+                response = self.user_proxy_agent.create_response_from_instructions(
+                    "clarification_needed",
+                    {
+                        "clarification_questions": final_output.get("questions_for_clarification", []),
+                        "requirements_data": final_output,
+                        "session_state": self.session_state
+                    }
+                )
             else:
-                response = "I've processed your requirements. Let me show you the available options."
+                # Use requirements analysis result to create a proper response
+                response = self.user_proxy_agent.create_response_from_instructions(
+                    "requirements_analysis_complete",
+                    {
+                        "requirements_data": final_output,
+                        "session_state": self.session_state
+                    }
+                )
         else:
+            # Fallback for non-dict output
             response = str(final_output) if final_output else "I've processed your request. Let me know how you'd like to proceed."
         
         # Step 6: Update phase based on decision
@@ -620,10 +628,16 @@ class LeanFlowOrchestrator:
                 "phase": "editing"
             }
         
-        # Step 1: Enhanced intent detection for editing phase
+        # Step 1: Check for pending clarification response
+        pending_clarification = self.session_state.get("pending_clarification")
+        if pending_clarification:
+            print(f"DEBUG ORCHESTRATOR: Found pending clarification, handling user response")
+            return await self._handle_editing_clarification_user_response(message, selected_template, context)
+        
+        # Step 2: Enhanced intent detection for editing phase
         editing_intent = await self._detect_editing_intent_advanced(message, selected_template)
         
-        # Step 2: Route based on intent
+        # Step 3: Route based on intent
         if editing_intent == "modification_request":
             return await self._handle_editing_modification_request(message, selected_template, context)
         elif editing_intent == "clarification_request":
@@ -702,6 +716,12 @@ Return ONLY the intent type (e.g., "modification_request").
             if modification_result:
                 print(f"DEBUG ORCHESTRATOR: Modification success: {modification_result.get('success', False)}")
                 print(f"DEBUG ORCHESTRATOR: Has modified_template: {bool(modification_result.get('modified_template'))}")
+                print(f"DEBUG ORCHESTRATOR: Clarification needed: {modification_result.get('clarification_needed', False)}")
+            
+            # Step 3: Check for clarification needed state
+            if modification_result.get("clarification_needed", False):
+                print(f"DEBUG ORCHESTRATOR: Clarification needed detected, handling clarification request")
+                return await self._handle_editing_clarification_response(modification_result, selected_template, context)
             
             if not modification_result.get("success", False):
                 # Handle modification failure
@@ -714,15 +734,14 @@ Return ONLY the intent type (e.g., "modification_request").
                     }
                 )
             else:
-                # Step 3: Update session state with modifications
-                self.session_state["modifications"] = modification_result.get("modification_plan", {})
+                # Step 4: Update session state with modifications
                 modified_template = modification_result.get("modified_template", selected_template)
                 self.session_state["modified_template"] = modified_template
                 
-                # Step 3.5: Save the modified template back to the temp_ui_files JSON file
+                # Step 4.5: Save the modified template back to the temp_ui_files JSON file
                 await self._save_modified_template_to_file(modified_template)
                 
-                # Step 4: Generate user response
+                # Step 5: Generate user response
                 response = self.user_proxy_agent.create_response_from_instructions(
                     "modification_success",
                     {
@@ -751,6 +770,189 @@ Return ONLY the intent type (e.g., "modification_request").
                 "session_id": self.session_id,
                 "phase": "editing"
             }
+    
+    async def _handle_editing_clarification_response(self, modification_result: Dict[str, Any], selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Handle clarification responses from the UI editing agent"""
+        try:
+            print(f"DEBUG ORCHESTRATOR: Handling clarification response")
+            
+            # Extract clarification information
+            clarification_options = modification_result.get("clarification_options", [])
+            error_message = modification_result.get("error", "Multiple possible targets found")
+            
+            # Store clarification context in session for later processing
+            self.session_state["pending_clarification"] = {
+                "original_request": modification_result.get("user_feedback", ""),
+                "clarification_options": clarification_options,
+                "original_template": modification_result.get("original_template", {}),
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Generate clarification response
+            response = self.user_proxy_agent.create_response_from_instructions({
+                "type": "editing_clarification_needed",
+                "error_message": error_message,
+                "clarification_options": clarification_options,
+                "template": selected_template,
+                "original_request": modification_result.get("user_feedback", "")
+            })
+            
+            self._add_to_conversation_history(response, "assistant")
+            
+            return {
+                "success": True,
+                "response": response,
+                "session_id": self.session_id,
+                "phase": "editing",
+                "intent": "clarification_needed",
+                "clarification_options": clarification_options,
+                "pending_clarification": True
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error handling editing clarification response: {e}")
+            return {
+                "success": False,
+                "response": f"Sorry, I encountered an error while processing the clarification: {str(e)}",
+                "session_id": self.session_id,
+                "phase": "editing"
+            }
+    
+    async def _handle_editing_clarification_user_response(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Handle user response to clarification request"""
+        try:
+            print(f"DEBUG ORCHESTRATOR: Handling user clarification response: {message}")
+            
+            # Get pending clarification context
+            pending_clarification = self.session_state.get("pending_clarification", {})
+            clarification_options = pending_clarification.get("clarification_options", [])
+            original_request = pending_clarification.get("original_request", "")
+            original_template = pending_clarification.get("original_template", {})
+            
+            # Parse user's choice from the clarification options
+            user_choice = self._parse_user_clarification_choice(message, clarification_options)
+            
+            if user_choice is None:
+                # User didn't provide a clear choice, ask again
+                response = self.user_proxy_agent.create_response_from_instructions({
+                    "type": "editing_clarification_invalid_choice",
+                    "clarification_options": clarification_options,
+                    "user_message": message,
+                    "template": selected_template,
+                    "original_request": original_request
+                })
+                
+                self._add_to_conversation_history(response, "assistant")
+                
+                return {
+                    "success": True,
+                    "response": response,
+                    "session_id": self.session_id,
+                    "phase": "editing",
+                    "intent": "clarification_invalid_choice",
+                    "pending_clarification": True
+                }
+            
+            # Clear pending clarification
+            self.session_state.pop("pending_clarification", None)
+            
+            # Create a refined request with the user's choice
+            refined_request = f"{original_request} (targeting: {user_choice})"
+            
+            # Process the refined modification request
+            print(f"DEBUG ORCHESTRATOR: Processing refined request: {refined_request}")
+            
+            # Get current UI state
+            current_ui_state = await self._get_current_ui_state(selected_template)
+            
+            # Use UI editing agent with the refined request
+            modification_result = self.editing_agent.process_modification_request(refined_request, current_ui_state)
+            
+            if modification_result.get("clarification_needed", False):
+                # Still needs clarification, handle again
+                return await self._handle_editing_clarification_response(modification_result, selected_template, context)
+            
+            if not modification_result.get("success", False):
+                # Handle modification failure
+                response = self.user_proxy_agent.create_response_from_instructions(
+                    "modification_error",
+                    {
+                        "error": modification_result.get("error", "Unknown error"),
+                        "user_message": refined_request,
+                        "template": selected_template
+                    }
+                )
+            else:
+                # Update session state with modifications
+                modified_template = modification_result.get("modified_template", selected_template)
+                self.session_state["modified_template"] = modified_template
+                
+                # Save the modified template back to the temp_ui_files JSON file
+                await self._save_modified_template_to_file(modified_template)
+                
+                # Generate success response
+                response = self.user_proxy_agent.create_response_from_instructions(
+                    "modification_success",
+                    {
+                        "modification_result": modification_result,
+                        "selected_template": selected_template,
+                        "changes_summary": modification_result.get("changes_summary", [])
+                    }
+                )
+            
+            self._add_to_conversation_history(response, "assistant")
+            
+            return {
+                "success": True,
+                "response": response,
+                "session_id": self.session_id,
+                "phase": "editing",
+                "modification_result": modification_result,
+                "intent": "modification_request"
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error handling editing clarification user response: {e}")
+            return {
+                "success": False,
+                "response": f"Sorry, I encountered an error while processing your clarification: {str(e)}",
+                "session_id": self.session_id,
+                "phase": "editing"
+            }
+    
+    def _parse_user_clarification_choice(self, message: str, clarification_options: List[Dict[str, Any]]) -> Optional[str]:
+        """Parse user's choice from clarification options"""
+        try:
+            message_lower = message.lower().strip()
+            
+            # Try to match by option number (1, 2, 3, etc.)
+            for i, option in enumerate(clarification_options, 1):
+                if str(i) in message_lower or f"option {i}" in message_lower:
+                    return option.get("text_content", f"Option {i}")
+            
+            # Try to match by text content
+            for option in clarification_options:
+                text_content = option.get("text_content", "").lower()
+                if text_content and text_content in message_lower:
+                    return option.get("text_content", "")
+            
+            # Try to match by CSS selector
+            for option in clarification_options:
+                css_selector = option.get("css_selector", "").lower()
+                if css_selector and css_selector in message_lower:
+                    return option.get("text_content", "")
+            
+            # Try to match by description
+            for option in clarification_options:
+                description = option.get("description", "").lower()
+                if description and description in message_lower:
+                    return option.get("text_content", "")
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error parsing user clarification choice: {e}")
+            return None
     
     async def _handle_editing_clarification_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle clarification requests about what can be modified"""

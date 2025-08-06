@@ -1,30 +1,284 @@
 from .base_agent import BaseAgent
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import json
 import logging
+import re
 from tools.tool_utility import ToolUtility
 from config.keyword_config import KeywordManager
+from bs4 import BeautifulSoup
+import html
 
 class UIEditingAgent(BaseAgent):
-    """Advanced UI Editing Agent with sophisticated modification capabilities"""
+    """Advanced UI Editing Agent with sophisticated multi-step architecture"""
     
     def __init__(self):
+        # Initialize the main agent (will be used for coordination)
         system_message = """You are an Advanced UI mockup Editing Agent specialized in:
-1. Analyzing user modification requests with deep understanding of mockup
-2. Creating detailed modification plans with step-by-step instructions
-3. Validating modifications of mockup for quality and consistency
+1. Coordinating between planning and execution phases
+2. Managing user interactions and clarifications
+3. Ensuring high-quality UI modifications
 
 You focus on sophisticated mockup UI modifications and improvements."""
         
-        # Use Haiku model for UI editing
         super().__init__("UIEditing", system_message, model="claude-3-5-haiku-20241022")
         self.tool_utility = ToolUtility("ui_editing_agent")
         self.keyword_manager = KeywordManager()
         self.logger = logging.getLogger(__name__)
+        
+        # Initialize specialized agents
+        self.planner_agent = PlannerAgent()
+        self.executor_agent = ExecutorAgent()
+    
+    def _analyze_html_structure_with_beautifulsoup(self, html_content: str) -> Dict[str, Any]:
+        """Enhanced HTML structure analysis using BeautifulSoup for robust DOM parsing"""
+        analysis = {
+            "elements_by_text": {},
+            "elements_by_class": {},
+            "elements_by_id": {},
+            "header_elements": [],
+            "navigation_elements": [],
+            "content_elements": [],
+            "debug_info": {
+                "total_elements_found": 0,
+                "text_elements_found": 0,
+                "sample_texts": [],
+                "dom_structure": {}
+            }
+        }
+        
+        try:
+            # Parse HTML with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Extract all text elements with their context
+            # Focus on elements that are likely to contain meaningful text
+            text_elements = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'div', 'a', 'button', 'label'])
+            
+            for element in text_elements:
+                # Get the direct text content of this element (not from children)
+                direct_text = ''.join([text for text in element.contents if isinstance(text, str)]).strip()
+                
+                # If no direct text, get the full text content
+                if not direct_text:
+                    direct_text = element.get_text(strip=True)
+                
+                if direct_text and len(direct_text) > 0:
+                    # Get element information
+                    tag_name = element.name
+                    classes = element.get('class', [])
+                    element_id = element.get('id')
+                    
+                    # Handle cases where class is a string instead of list
+                    if isinstance(classes, str):
+                        classes = [classes]
+                    
+                    # Get full attributes for context
+                    attrs = dict(element.attrs)
+                    
+                    # Store by text content (use text as key)
+                    analysis["elements_by_text"][direct_text] = {
+                        "tag": tag_name,
+                        "classes": classes,
+                        "id": element_id,
+                        "full_attrs": attrs,
+                        "parent_context": self._get_parent_context(element),
+                        "siblings": self._get_sibling_context(element)
+                    }
+                    
+                    # Store by class
+                    for cls in classes:
+                        if cls not in analysis["elements_by_class"]:
+                            analysis["elements_by_class"][cls] = []
+                        analysis["elements_by_class"][cls].append({
+                            "text": direct_text,
+                            "tag": tag_name,
+                            "id": element_id,
+                            "parent_context": self._get_parent_context(element)
+                        })
+                    
+                    # Store by ID if present
+                    if element_id:
+                        analysis["elements_by_id"][element_id] = {
+                            "text": direct_text,
+                            "tag": tag_name,
+                            "classes": classes,
+                            "full_attrs": attrs,
+                            "parent_context": self._get_parent_context(element)
+                        }
+                    
+                    # Add to debug info
+                    analysis["debug_info"]["total_elements_found"] += 1
+                    if len(analysis["debug_info"]["sample_texts"]) < 20:
+                        analysis["debug_info"]["sample_texts"].append(direct_text)
+            
+            analysis["debug_info"]["text_elements_found"] = len(analysis["elements_by_text"])
+            
+            # Build DOM structure for better context
+            analysis["debug_info"]["dom_structure"] = self._build_dom_structure(soup)
+            
+            # Identify header-related elements
+            header_keywords = ["header", "nav", "logo", "menu", "navigation", "hero", "banner"]
+            for text, info in analysis["elements_by_text"].items():
+                try:
+                    for keyword in header_keywords:
+                        if (keyword.lower() in text.lower() or 
+                            any(keyword.lower() in cls.lower() for cls in info.get("classes", [])) or
+                            keyword.lower() in str(info.get("parent_context", "")).lower()):
+                            analysis["header_elements"].append({
+                                "text": text,
+                                "tag": info.get("tag", "unknown"),
+                                "classes": info.get("classes", []),
+                                "id": info.get("id"),
+                                "parent_context": info.get("parent_context")
+                            })
+                            break
+                except Exception as e:
+                    self.logger.warning(f"Error processing header element {text}: {e}")
+                    continue
+            
+            # Identify navigation elements
+            nav_keywords = ["nav", "menu", "ul", "li", "a"]
+            for text, info in analysis["elements_by_text"].items():
+                try:
+                    if info.get("tag", "").lower() in nav_keywords:
+                        analysis["navigation_elements"].append({
+                            "text": text,
+                            "tag": info.get("tag", "unknown"),
+                            "classes": info.get("classes", []),
+                            "id": info.get("id"),
+                            "parent_context": info.get("parent_context")
+                        })
+                except Exception as e:
+                    self.logger.warning(f"Error processing navigation element {text}: {e}")
+                    continue
+            
+        except Exception as e:
+            self.logger.error(f"Error analyzing HTML structure with BeautifulSoup: {e}")
+        
+        return analysis
+    
+    def _get_parent_context(self, element) -> str:
+        """Get context from parent elements"""
+        context_parts = []
+        parent = element.parent
+        
+        # Go up to 3 levels to get context
+        for i in range(3):
+            if parent and parent.name:
+                context_parts.append(f"{parent.name}")
+                if parent.get('class'):
+                    classes = parent.get('class')
+                    if isinstance(classes, list):
+                        context_parts.append(f".{'.'.join(classes)}")
+                    else:
+                        context_parts.append(f".{classes}")
+                if parent.get('id'):
+                    context_parts.append(f"#{parent.get('id')}")
+                parent = parent.parent
+            else:
+                break
+        
+        return " > ".join(reversed(context_parts))
+    
+    def _get_sibling_context(self, element) -> List[str]:
+        """Get context from sibling elements"""
+        siblings = []
+        if element.parent:
+            for sibling in element.parent.find_all(recursive=False):
+                if sibling != element and sibling.name:
+                    sibling_text = sibling.get_text(strip=True)
+                    if sibling_text:
+                        siblings.append(f"{sibling.name}: {sibling_text[:50]}")
+        return siblings[:3]  # Limit to 3 siblings
+    
+    def _build_dom_structure(self, soup) -> Dict[str, Any]:
+        """Build a simplified DOM structure for context"""
+        structure = {}
+        
+        # Get main sections
+        main_sections = soup.find_all(['header', 'nav', 'main', 'section', 'div'], class_=True)
+        
+        for section in main_sections[:10]:  # Limit to 10 main sections
+            section_classes = section.get('class', [])
+            if isinstance(section_classes, str):
+                section_classes = [section_classes]
+            
+            section_key = f"{section.name}.{'.'.join(section_classes)}"
+            structure[section_key] = {
+                "tag": section.name,
+                "classes": section_classes,
+                "text_elements": [elem.strip() for elem in section.get_text().split('\n') if elem.strip()][:5]
+            }
+        
+        return structure
+    
+    def _find_element_by_text_content(self, target_text: str, html_analysis: Dict[str, Any]) -> List[str]:
+        """Find CSS selectors for elements containing specific text"""
+        selectors = []
+        
+        # Direct text match
+        if target_text in html_analysis["elements_by_text"]:
+            element_info = html_analysis["elements_by_text"][target_text]
+            if element_info.get("classes"):
+                for cls in element_info["classes"]:
+                    selectors.append(f".{cls}")
+            else:
+                selectors.append(element_info.get("tag", "div"))
+        
+        # Partial text match
+        for text, element_info in html_analysis["elements_by_text"].items():
+            if target_text.lower() in text.lower():
+                if element_info.get("classes"):
+                    for cls in element_info["classes"]:
+                        selectors.append(f".{cls}")
+                else:
+                    selectors.append(element_info.get("tag", "div"))
+        
+        # Look for elements in header/navigation that might contain the text
+        for element in html_analysis["header_elements"]:
+            if target_text.lower() in element["text"].lower():
+                if element.get("classes"):
+                    for cls in element["classes"]:
+                        selectors.append(f".{cls}")
+        
+        return list(set(selectors))  # Remove duplicates
+    
+    def _generate_css_selector_strategy(self, target_text: str, html_analysis: Dict[str, Any]) -> List[str]:
+        """Generate multiple CSS selector strategies for finding an element"""
+        strategies = []
+        
+        # Strategy 1: Direct text content match
+        direct_selectors = self._find_element_by_text_content(target_text, html_analysis)
+        strategies.extend(direct_selectors)
+        
+        # Strategy 2: Look for common patterns
+        if "logo" in target_text.lower():
+            logo_selectors = []
+            for cls in html_analysis["elements_by_class"].keys():
+                if "logo" in cls.lower():
+                    logo_selectors.append(f".{cls}")
+            strategies.extend(logo_selectors)
+        
+        # Strategy 3: Header-specific selectors
+        if any(keyword in target_text.lower() for keyword in ["header", "nav", "menu"]):
+            header_selectors = []
+            for cls in html_analysis["elements_by_class"].keys():
+                if any(keyword in cls.lower() for keyword in ["header", "nav", "menu", "logo"]):
+                    header_selectors.append(f".{cls}")
+            strategies.extend(header_selectors)
+        
+        # Strategy 4: Text-based selectors
+        text_selectors = []
+        for text, info in html_analysis["elements_by_text"].items():
+            if target_text.lower() in text.lower():
+                if info["classes"]:
+                    text_selectors.extend([f".{cls}" for cls in info["classes"]])
+        strategies.extend(text_selectors)
+        
+        return list(set(strategies))  # Remove duplicates
     
     def _clean_json_string(self, json_str: str) -> str:
         """Clean JSON string to remove control characters and fix common issues"""
-        import re
         # Remove control characters but preserve newlines and tabs in string values
         json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', json_str)
         # Escape unescaped newlines and tabs within strings
@@ -88,397 +342,80 @@ You focus on sophisticated mockup UI modifications and improvements."""
             self.logger.error(f"Error extracting JSON from {context}: {e}")
             return None
     
-
-    
-    def _is_placeholder_content(self, content: str) -> bool:
-        """
-        Detect if content is a placeholder comment instead of actual code.
-        Returns True if content appears to be a placeholder that should be ignored.
-        """
-        if not content or not isinstance(content, str):
-            return True
-            
-        # Clean content for analysis
-        content_cleaned = content.strip()
-        
-        # Check for common placeholder patterns
-        placeholder_patterns = [
-            "/* Original CSS remains the same */",
-            "/* CSS unchanged */", 
-            "/* No changes needed */",
-            "/* Keep original CSS */",
-            "/* Same as original */",
-            "/* Unchanged */",
-            "<!-- Original HTML remains the same -->",
-            "<!-- HTML unchanged -->",
-            "<!-- No changes needed -->",
-            "// Original code remains the same",
-            "// No changes needed"
-        ]
-        
-        # Check for partial content patterns (content that ends with placeholder comments)
-        partial_placeholder_patterns = [
-            "/* Rest of the CSS remains unchanged */",
-            "/* Rest of the CSS remains the same */",
-            "/* Remaining CSS unchanged */",
-            "/* Other styles remain the same */",
-            "/* ... rest of CSS ... */",
-            "/* [rest of CSS unchanged] */",
-            "<!-- Rest of HTML unchanged -->",
-            "<!-- Remaining HTML the same -->",
-            "// Rest of the code unchanged"
-        ]
-        
-        # Check if content is only a placeholder comment
-        for pattern in placeholder_patterns:
-            if content_cleaned == pattern:
-                return True
-                
-        # Check if content ends with partial placeholder patterns
-        for pattern in partial_placeholder_patterns:
-            if content_cleaned.endswith(pattern.strip()):
-                return True
-        
-        # Check if content is only whitespace and comments
-        lines = content_cleaned.split('\n')
-        non_comment_lines = []
-        for line in lines:
-            line = line.strip()
-            if line and not (line.startswith('/*') or line.startswith('//') or line.startswith('<!--') or line == '*/'):
-                non_comment_lines.append(line)
-        
-        # If no substantial content beyond comments, consider it a placeholder
-        if len(non_comment_lines) == 0:
-            return True
-            
-        # Check for signs of truncation in CSS/HTML content
-        if self._is_truncated_content(content_cleaned):
-            return True
-            
-        return False
-    
-    def _try_apply_partial_css_changes(self, partial_css: str, modified_template: dict) -> bool:
-        """
-        Try to extract specific changes from partial CSS and apply them to the full CSS.
-        Returns True if successful, False otherwise.
-        """
-        try:
-            import re
-            
-            # Get the original CSS
-            original_css = modified_template.get("style_css", "")
-            print(f"DEBUG PARTIAL: Original CSS length: {len(original_css)}")
-            if not original_css:
-                print(f"DEBUG PARTIAL: No original CSS found in modified_template")
-                return False
-            
-            # Extract individual CSS rules from the partial CSS (before placeholder comments)
-            # Look for complete CSS rules (selector + properties)
-            
-            # Remove placeholder comments from partial CSS
-            clean_partial = re.sub(r'/\*[^*]*\*+(?:[^/*][^*]*\*+)*/', '', partial_css)
-            clean_partial = clean_partial.strip()
-            
-            if not clean_partial:
-                return False
-            
-            # Extract CSS rules from partial CSS
-            # Match patterns like: .selector { properties }
-            partial_rules = re.findall(r'([^{]+)\s*\{([^}]+)\}', clean_partial, re.DOTALL)
-            
-            if not partial_rules:
-                return False
-            
-            # Apply each rule to the original CSS
-            updated_css = original_css
-            changes_applied = False
-            
-            for selector, properties in partial_rules:
-                selector = selector.strip()
-                properties = properties.strip()
-                
-                # Find the corresponding rule in the original CSS
-                pattern = re.escape(selector) + r'\s*\{[^}]*\}'
-                match = re.search(pattern, updated_css, re.DOTALL)
-                
-                if match:
-                    # Replace the entire rule
-                    new_rule = f"{selector} {{\n  {properties}\n}}"
-                    updated_css = re.sub(pattern, new_rule, updated_css, flags=re.DOTALL)
-                    changes_applied = True
-                    print(f"DEBUG: Applied change to {selector}")
-                else:
-                    print(f"DEBUG: Could not find selector {selector} in original CSS")
-            
-            if changes_applied:
-                modified_template["style_css"] = updated_css
-                return True
-            
-            return False
-            
-        except Exception as e:
-            print(f"DEBUG: Error in _try_apply_partial_css_changes: {e}")
-            return False
-
-    def _is_truncated_content(self, content: str) -> bool:
-        """
-        Detect if content appears to be truncated or incomplete.
-        Returns True if content seems to be cut off.
-        """
-        if not content:
-            return False
-            
-        content_lower = content.lower().strip()
-        
-        # Signs of truncation in CSS
-        truncation_indicators = [
-            "/* rest",
-            "/* remaining",
-            "/* other styles",
-            "/* ... rest",
-            "/* [rest",
-            "/* everything else",
-            "/* all other",
-            "/* additional styles",
-            "/* more css",
-            "/* continue",
-            "/* etc",
-            "/* and so on",
-            # HTML truncation indicators
-            "<!-- rest",
-            "<!-- remaining",
-            "<!-- other html",
-            "<!-- ... rest",
-            "<!-- continue",
-            # General truncation
-            "... rest",
-            "...rest",
-            "[rest of",
-            "(rest of",
-            "etc.",
-            "and so on"
-        ]
-        
-        for indicator in truncation_indicators:
-            if indicator in content_lower:
-                return True
-                
-        # Check if CSS looks incomplete (no closing braces at end)
-        if content.strip().endswith('{') or content.count('{') > content.count('}'):
-            return True
-            
-        return False
-    
-    def _extract_css_from_failed_response(self, response: str) -> Optional[Dict[str, Any]]:
-        """
-        Fallback method to extract CSS from response when JSON parsing fails.
-        This handles cases where the LLM provides valid CSS but malformed JSON.
-        """
-        try:
-            import re
-            
-            # Look for style_css content patterns
-            css_patterns = [
-                r'"style_css":\s*"([^"]+(?:\\.[^"]*)*)"',  # JSON string format
-                r'style_css["\']?\s*:\s*["\']([^"\']+)["\']',  # Various quote formats
-                r'\.log-in\s*\{[^}]*background-color:\s*#[0-9A-Fa-f]{6}[^}]*\}.*?\.log-in\s+\.chris-lee\s*\{[^}]*\}',  # CSS pattern
-            ]
-            
-            extracted_css = None
-            
-            # Try to find CSS content
-            for pattern in css_patterns:
-                match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
-                if match:
-                    extracted_css = match.group(1) if match.lastindex >= 1 else match.group(0)
-                    break
-            
-            # Look for CSS modifications in the response (handle both JSON and debug output)
-            if "#87CEEB" in response or "background-color:" in response.lower():
-                # Strategy 1: Try to extract from JSON-like structure
-                style_css_match = re.search(r'"style_css":\s*"([^"]*(?:\\.[^"]*)*)"', response, re.DOTALL)
-                
-                if style_css_match:
-                    raw_css = style_css_match.group(1)
-                    # Unescape the CSS
-                    clean_css = raw_css.replace('\\n', '\n').replace('\\"', '"').replace('\\/', '/')
-                    
-                    # Verify this CSS contains our expected change
-                    if "background-color:" in clean_css.lower() or "#" in clean_css:
-                        return {
-                            "modified_code": {
-                                "html_export": "",
-                                "globals_css": "",
-                                "style_css": clean_css
-                            },
-                            "validation_report": {
-                                "is_valid": True,
-                                "quality_score": 0.9,
-                                "warnings": ["Extracted from malformed JSON response"],
-                                "reasoning": "CSS successfully extracted despite JSON parsing error"
-                            },
-                            "changes_summary": ["Successfully applied CSS modification"]
-                        }
-                
-                # Strategy 2: Extract from the middle of the response where the CSS is truncated
-                # Look for patterns like: .log-in .frame-7 {\n  display: flex;\n  width: 404px;...
-                frame7_match = re.search(r'(\.log-in \{.*?background-color:\s*#87CEEB.*?\.log-in \.chris-lee \{[^}]*\})', response, re.DOTALL)
-                if frame7_match:
-                    partial_css = frame7_match.group(1)
-                    # This is likely a complete CSS, try to clean it up
-                    clean_css = partial_css.replace('\\n', '\n').replace('\\"', '"')
-                    
-                    return {
-                        "modified_code": {
-                            "html_export": "",
-                            "globals_css": "",
-                            "style_css": clean_css
-                        },
-                        "validation_report": {
-                            "is_valid": True,
-                            "quality_score": 0.9,
-                            "warnings": ["Extracted CSS from malformed JSON using pattern matching"],
-                            "reasoning": "CSS successfully extracted from response using fallback pattern matching"
-                        },
-                        "changes_summary": ["Successfully applied CSS color modification"]
-                    }
-            
-            return None
-            
-        except Exception as e:
-            self.logger.error(f"Error in CSS extraction fallback: {e}")
-            return None
-    
     def process_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Orchestrates the new, efficient two-step modification workflow.
+        Multi-step modification workflow using Planner-Executor architecture.
         
-        Step 1: Analysis & Planning (1 API call)
-        Step 2: Apply, Validate & Summarize (1 API call)
-        
-        This approach uses dynamic prompt engineering to handle any request type.
+        This replaces the single-prompt approach with:
+        1. BeautifulSoup HTML analysis
+        2. Planner Agent creates detailed plan
+        3. Executor Agent executes plan step by step
+        4. Maintains same input/output interface
         """
         try:
-            self.logger.info(f"Starting two-step modification process for: {user_feedback}")
+            self.logger.info(f"Starting multi-step modification process for: {user_feedback}")
             
-            # STEP 1: Analysis and Planning
-            analysis_prompt = self._build_analysis_and_planning_prompt(user_feedback, current_template)
+            # Step 1: Enhanced HTML analysis with BeautifulSoup
+            html_content = current_template.get('html_export', '')
+            html_analysis = self._analyze_html_structure_with_beautifulsoup(html_content)
             
-            self.logger.debug("Sending analysis and planning request to Claude...")
-            analysis_response = self.call_claude_with_cot(analysis_prompt, enable_cot=False)
+            print(f"DEBUG: BeautifulSoup analysis found {html_analysis['debug_info']['text_elements_found']} text elements")
             
-            # Parse the analysis and plan
-            modification_plan = self._parse_plan_from_response(analysis_response)
+            # Step 2: Planner Agent creates detailed plan
+            print(f"DEBUG: Creating modification plan with Planner Agent...")
+            plan_result = self.planner_agent.create_modification_plan(
+                user_feedback, current_template, html_analysis
+            )
             
-            if not modification_plan:
+            if not plan_result.get('success', False):
                 return {
                     "success": False,
-                    "error": "Failed to generate modification plan",
+                    "error": plan_result.get('error', 'Failed to create modification plan'),
                     "original_template": current_template,
                     "user_feedback": user_feedback
                 }
             
-            # STEP 2: Apply, Validate and Summarize
-            execution_prompt = self._build_apply_validate_summary_prompt(modification_plan, current_template)
+            modification_plan = plan_result.get('plan', {})
+            print(f"DEBUG: Plan created with {len(modification_plan.get('steps', []))} steps")
             
-            self.logger.debug("Sending execution, validation, and summary request to Claude...")
-            print(f"DEBUG: UI Editing Agent - Starting execution step...")
-            
-            try:
-                execution_response = self.call_claude_with_cot(execution_prompt, enable_cot=False)
-                print(f"DEBUG: UI Editing Agent - Received execution response (length: {len(execution_response)})")
-                
-                # Debug: Log execution response
-                print(f"DEBUG: UI Editing Agent Execution Response: {execution_response[:500]}...")
-                if len(execution_response) > 500:
-                    print(f"DEBUG: Full UI Editing Agent Execution Response: {execution_response}")
-            except Exception as e:
-                print(f"ERROR: UI Editing Agent - Execution step failed: {e}")
+            # Step 3: Check for ambiguity and handle clarification if needed
+            if modification_plan.get('requires_clarification', False):
+                clarification_options = modification_plan.get('clarification_options', [])
                 return {
                     "success": False,
-                    "error": f"Execution step failed: {str(e)}",
+                    "error": "Multiple possible targets found",
                     "original_template": current_template,
-                    "modification_plan": modification_plan,
+                    "user_feedback": user_feedback,
+                    "clarification_needed": True,
+                    "clarification_options": clarification_options
+                }
+            
+            # Step 4: Executor Agent executes the plan
+            print(f"DEBUG: Executing modification plan with Executor Agent...")
+            execution_result = self.executor_agent.execute_modification_plan(
+                modification_plan, current_template
+            )
+            
+            if not execution_result.get('success', False):
+                return {
+                    "success": False,
+                    "error": execution_result.get('error', 'Failed to execute modification plan'),
+                    "original_template": current_template,
                     "user_feedback": user_feedback
                 }
             
-            # Parse the final results
-            print(f"DEBUG: UI Editing Agent - Starting to parse execution response...")
-            print(f"DEBUG: Execution response first 500 chars: {execution_response[:500]}...")
+            # Step 5: Return the successful result
+            modified_template = execution_result.get('modified_template', current_template)
+            changes_summary = execution_result.get('changes_summary', [])
             
-            # Check if the response indicates an API error
-            if "Error calling Claude API" in execution_response or "overloaded_error" in execution_response:
-                print(f"DEBUG: API error detected in response, returning error result")
-                return {
-                    "success": False,
-                    "error": "Claude API is currently overloaded. Please try again in a moment.",
-                    "original_template": current_template,
-                    "modification_request": message,
-                    "modification_plan": "Unable to process due to API limitations",
-                    "user_feedback": "API temporarily unavailable"
-                }
-            
-            final_results = self._parse_final_output_from_response(execution_response, current_template)
-            
-            # Debug: Log parsing result
-            print(f"DEBUG: UI Editing Agent Final Results: {final_results}")
-            
-            # Write debug info to file for inspection
-            try:
-                import json
-                debug_info = {
-                    "timestamp": str(__import__("datetime").datetime.now()),
-                    "execution_response_length": len(execution_response),
-                    "execution_response_first_500": execution_response[:500],
-                    "final_results": str(final_results),
-                    "final_results_type": type(final_results).__name__
-                }
-                with open("debug_ui_editing.json", "w") as f:
-                    json.dump(debug_info, f, indent=2)
-            except Exception as debug_e:
-                print(f"DEBUG: Failed to write debug file: {debug_e}")
-            
-            # Debug: Check if final_results contains modified_template
-            if final_results and "modified_template" in final_results:
-                modified_template = final_results["modified_template"]
-                if modified_template and "style_css" in modified_template:
-                    css_content = modified_template["style_css"]
-                    print(f"DEBUG: Modified CSS length: {len(css_content)}")
-                    if "background-color:" in css_content.lower():
-                        print(f"DEBUG: Found background-color in modified CSS")
-                        # Extract background-color values
-                        import re
-                        bg_colors = re.findall(r'background-color:\s*([^;]+)', css_content)
-                        print(f"DEBUG: Background colors found: {bg_colors[:5]}")  # Show first 5
-                    else:
-                        print(f"DEBUG: No background-color found in modified CSS")
-                else:
-                    print(f"DEBUG: No style_css in modified_template")
-            else:
-                print(f"DEBUG: No modified_template in final_results")
-            
-            if not final_results:
-                return {
-                    "success": False,
-                    "error": "Failed to execute modification plan",
-                    "original_template": current_template,
-                    "modification_plan": modification_plan,
-                    "user_feedback": user_feedback
-                }
-            
-            # Combine all results into final response
             return {
-                "success": final_results.get("validation_report", {}).get("is_valid", True),
-                "original_template": current_template,
-                "modified_template": final_results.get("modified_template"),
-                "modification_request": modification_plan.get("analysis", {}),
-                "modification_plan": modification_plan.get("modification_plan", {}),
-                "validation_result": final_results.get("validation_report", {}),
-                "changes_summary": final_results.get("changes_summary", [])
+                "success": True,
+                "modified_template": modified_template,
+                "changes_summary": changes_summary
             }
             
         except Exception as e:
-            self.logger.error(f"Error in two-step modification process: {e}")
+            self.logger.error(f"Error in multi-step modification process: {e}")
             return {
                 "success": False,
                 "error": f"Modification process failed: {str(e)}",
@@ -486,930 +423,869 @@ You focus on sophisticated mockup UI modifications and improvements."""
                 "user_feedback": user_feedback
             }
     
-    def _build_analysis_and_planning_prompt(self, user_feedback: str, current_template: Dict[str, Any]) -> str:
-        """
-        [PROMPT ENGINEERING] Creates the prompt for the first API call,
-        asking the LLM to both analyze the request and create an implementation plan.
-        """
-        # Extract template information for context
-        html_content = current_template.get('html_export', '')
-        global_css = current_template.get('globals_css', '')
-        style_css = current_template.get('style_css', '')
-        
-        # Combine CSS for analysis
-        css_content = f"{global_css}\n{style_css}"
-        
-        template_name = current_template.get('name', 'Unknown Template')
-        template_category = current_template.get('category', 'general')
-        
-        prompt = f"""You are an expert UI/UX analyst and implementation strategist.
-Your task is to analyze a user's modification request and create a detailed, step-by-step implementation plan.
-
-## CONTEXT
-- Template: {template_name} ({template_category})
-- User Request: "{user_feedback}"
-- Current HTML Code Length: {len(html_content)} characters
-- Current CSS Code Length: {len(css_content)} characters
-
-## CURRENT CODE FOR ANALYSIS
-### HTML:
-{html_content}
-
-### CSS:
-{css_content}
-
-## YOUR TASK
-Analyze the user's intent and the current code to produce a comprehensive plan.
-Return a single JSON object with the exact structure below, containing two main keys: "analysis" and "modification_plan".
-
-## OUTPUT STRUCTURE
-```json
-{{
-  "analysis": {{
-    "overall_intent": "A summary of what the user is trying to achieve.",
-    "modification_type": "A single keyword (e.g., 'styling', 'layout', 'content', 'color', 'sizing').",
-    "affected_elements": ["A list of CSS selectors or element descriptions that will be changed."],
-    "complexity_level": "simple|moderate|complex",
-    "confidence_score": 0.9
-  }},
-  "modification_plan": {{
-    "implementation_strategy": "A brief, high-level approach for the changes.",
-    "modification_steps": [
-      {{
-        "step_number": 1,
-        "description": "Describe the change for this step.",
-        "change_type": "A keyword like 'modify-css', 'add-html', 'remove-html', 'update-text'.",
-        "target_element": "The CSS selector for the element to modify.",
-        "detailed_instructions": "Specific instructions for what code to add, change, or remove. For CSS, specify the properties and new values."
-      }}
-    ]
-  }}
-}}
-```
-
-Focus on understanding the user's intent and providing precise, actionable instructions that will result in exactly what the user requested."""
-        
-        return prompt
-    
-    def _parse_plan_from_response(self, response: str) -> Optional[Dict[str, Any]]:
-        """
-        Parses the JSON response from the first API call to extract the modification plan.
-        """
-        try:
-            parsed_response = self._extract_json_from_response(response, "analysis_and_planning")
-            
-            if parsed_response:
-                # Validate that both required sections are present
-                if "analysis" in parsed_response and "modification_plan" in parsed_response:
-                    self.logger.info(f"Successfully parsed modification plan with {len(parsed_response.get('modification_plan', {}).get('modification_steps', []))} steps")
-                    return parsed_response
-                else:
-                    self.logger.warning("Missing required sections in parsed plan")
-            
-            return None
-            
-        except Exception as e:
-            self.logger.error(f"Error parsing plan from response: {e}")
-            return None
-    
-    def _build_apply_validate_summary_prompt(self, modification_plan: Dict[str, Any], original_template: Dict[str, Any]) -> str:
-        """
-        [PROMPT ENGINEERING] Creates the prompt for the second API call,
-        providing the plan and asking the LLM to execute, validate, and summarize.
-        """
-        import json
-        
-        # Extract original code
-        original_html = original_template.get('html_export', '')
-        original_global_css = original_template.get('globals_css', '')
-        original_style_css = original_template.get('style_css', '')
-        
-        # Convert modification plan to JSON string for inclusion in prompt
-        modification_plan_json = json.dumps(modification_plan, indent=2)
-        
-        # Truncate long code sections to prevent token limit issues
-        max_code_length = 8000  # Conservative limit to prevent truncation
-        
-        def truncate_code(code: str, max_length: int) -> str:
-            if len(code) <= max_length:
-                return code
-            return code[:max_length] + f"\n/* ... truncated for length ({len(code)} chars total) ... */"
-        
-        original_html_truncated = truncate_code(original_html, max_code_length)
-        original_global_css_truncated = truncate_code(original_global_css, max_code_length)
-        original_style_css_truncated = truncate_code(original_style_css, max_code_length)
-        
-        prompt = f"""You are an expert web developer. Execute the modification plan and return JSON only.
-
-## MODIFICATION PLAN
-{modification_plan_json}
-
-## ORIGINAL CODE (truncated if too long)
-### HTML
-```html
-{original_html_truncated}
-```
-
-### GLOBAL CSS
-```css
-{original_global_css_truncated}
-```
-
-### STYLE CSS
-```css
-{original_style_css_truncated}
-```
-
-## TASK
-1. Apply the modification plan to the code
-2. Validate your changes
-3. Summarize what was done
-
-Return ONLY this JSON structure:
-```json
-{{
-  "modified_code": {{
-    "html_export": "complete HTML or empty string",
-    "globals_css": "complete global CSS or empty string", 
-    "style_css": "complete style CSS or empty string"
-  }},
-  "validation_report": {{
-    "is_valid": true,
-    "quality_score": 0.9,
-    "warnings": [],
-    "reasoning": "brief validation explanation"
-  }},
-  "changes_summary": [
-    "change description 1",
-    "change description 2"
-  ]
-}}
-```
-
-**RULES**: Return complete files only, no partial code or placeholders."""
-        
-        return prompt
-    
     def _parse_final_output_from_response(self, response: str, original_template: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Parses the final JSON response containing the modified code, validation, and summary.
+        Parses the final JSON response containing the complete modified code for all three files.
+        This method is kept for backward compatibility but is not used in the new architecture.
         """
         try:
             print(f"DEBUG: Parsing final output response (length: {len(response)})")
             parsed_response = self._extract_json_from_response(response, "final_output")
             
-            # If JSON parsing failed, try to extract the CSS directly from the response
-            if not parsed_response:
-                print("DEBUG: JSON parsing failed, attempting direct CSS extraction")
-                print(f"DEBUG: Response contains #87CEEB: {'#87CEEB' in response}")
-                print(f"DEBUG: Response contains background-color: {'background-color' in response.lower()}")
-                print(f"DEBUG: Response snippet: {response[:1000]}...")
-                parsed_response = self._extract_css_from_failed_response(response)
-                print(f"DEBUG: Fallback extraction result: {bool(parsed_response)}")
-                if parsed_response:
-                    print(f"DEBUG: Fallback extracted keys: {list(parsed_response.keys())}")
-            
             if parsed_response:
                 print(f"DEBUG: Successfully extracted JSON with keys: {list(parsed_response.keys())}")
                 
                 # Validate that all required sections are present
-                required_keys = ["modified_code", "validation_report", "changes_summary"]
+                required_keys = ["html_export", "style_css", "globals_css", "changes_summary"]
                 missing_keys = [key for key in required_keys if key not in parsed_response]
                 
                 if not missing_keys:
+                    # Check if the response contains placeholder text (which should not happen with our improved prompt)
+                    html_content = parsed_response["html_export"]
+                    style_content = parsed_response["style_css"]
+                    globals_content = parsed_response["globals_css"]
                     
-                    # Create the modified template structure
+                    placeholder_indicators = [
+                        "/* Same as original",
+                        "(Same as original",
+                        "/* No changes",
+                        "/* Unchanged",
+                        "/* Original code",
+                        "<!-- Same as original",
+                        "<!-- No changes",
+                        "<!-- Unchanged"
+                    ]
+                    
+                    has_placeholders = any(indicator in html_content or indicator in style_content or indicator in globals_content 
+                                         for indicator in placeholder_indicators)
+                    
+                    if has_placeholders:
+                        print(f"WARNING: Placeholder text detected in response, this should not happen with improved prompt")
+                        # Return original template with error message
+                        return {
+                            "success": False,
+                            "error": "LLM returned placeholder text instead of actual code. This indicates a prompt compliance issue.",
+                            "original_template": original_template,
+                            "suggestion": "The system will retry with a stronger prompt."
+                        }
+                    
+                    # Create the modified template structure with complete code replacement
                     modified_template = original_template.copy()
-                    modified_code = parsed_response["modified_code"]
-                    print(f"DEBUG TEMPLATE: Original template keys: {list(original_template.keys())}")
-                    print(f"DEBUG TEMPLATE: Original style_css length: {len(original_template.get('style_css', ''))}")
-                    print(f"DEBUG TEMPLATE: Original html_export length: {len(original_template.get('html_export', ''))}")
                     
-                    # Update with new code, preserving existing content if LLM doesn't provide it
-                    # or if LLM returns placeholder comments
-                    if "html_export" in modified_code and modified_code["html_export"]:
-                        if not self._is_placeholder_content(modified_code["html_export"]):
-                            modified_template["html_export"] = modified_code["html_export"]
-                        else:
-                            self.logger.warning("html_export contains placeholder content, preserving original")
-                    elif not modified_template.get("html_export"):
-                        self.logger.warning("html_export missing from LLM response, preserving original")
-                    
-                    if "globals_css" in modified_code and modified_code["globals_css"]:
-                        if not self._is_placeholder_content(modified_code["globals_css"]):
-                            modified_template["globals_css"] = modified_code["globals_css"]
-                        else:
-                            self.logger.warning("globals_css contains placeholder content, preserving original")
-                    elif not modified_template.get("globals_css"):
-                        self.logger.warning("globals_css missing from LLM response, preserving original")
-                    
-                    if "style_css" in modified_code and modified_code["style_css"]:
-                        if not self._is_placeholder_content(modified_code["style_css"]):
-                            modified_template["style_css"] = modified_code["style_css"]
-                        else:
-                            self.logger.warning("style_css contains placeholder content, attempting to extract changes")
-                            # Try to extract the actual changes from the partial CSS
-                            partial_css = modified_code["style_css"]
-                            if self._try_apply_partial_css_changes(partial_css, modified_template):
-                                self.logger.info("Successfully applied partial CSS changes")
-                            else:
-                                self.logger.warning("Failed to apply partial CSS changes, preserving original")
-                    elif not modified_template.get("style_css"):
-                        self.logger.warning("style_css missing from LLM response, preserving original")
+                    # Replace all three files with the complete code from LLM
+                    modified_template["html_export"] = parsed_response["html_export"]
+                    modified_template["style_css"] = parsed_response["style_css"]
+                    modified_template["globals_css"] = parsed_response["globals_css"]
                     
                     # Add modification metadata
                     modified_template["modification_metadata"] = {
                         "changes_applied": parsed_response.get("changes_summary", []),
-                        "modification_type": "dynamic_two_step",
+                        "modification_type": "complete_code_replacement",
                         "modified_at": "2025-01-27T12:00:00Z"
                     }
                     
+                    # Check if this was a "no changes" response (text not found)
+                    changes_summary = parsed_response.get("changes_summary", [])
+                    if any("not found" in summary.lower() or "could not find" in summary.lower() or "no direct match" in summary.lower() 
+                           for summary in changes_summary):
+                        print(f"INFO: Target text not found, returning original template with error message")
+                        return {
+                            "success": False,
+                            "error": "Target text not found in the HTML structure",
+                            "original_template": original_template,
+                            "changes_summary": changes_summary,
+                            "suggestion": "Please check the exact text you want to modify or provide more context about the element location."
+                        }
+                    
                     return {
+                        "success": True,
                         "modified_template": modified_template,
-                        "validation_report": parsed_response["validation_report"],
                         "changes_summary": parsed_response["changes_summary"]
                     }
                 else:
                     print(f"ERROR: Missing required sections in final output: {missing_keys}")
                     self.logger.warning(f"Missing required sections in final output: {missing_keys}")
+                    return {
+                        "success": False,
+                        "error": f"Missing required sections: {missing_keys}"
+                    }
             else:
                 print(f"ERROR: Failed to extract JSON from final output response")
                 self.logger.warning("Failed to extract JSON from final output response")
-            
-            return None
+                return {
+                    "success": False,
+                    "error": "Failed to parse LLM response"
+                }
             
         except Exception as e:
             self.logger.error(f"Error parsing final output from response: {e}")
+            return {
+                "success": False,
+                "error": f"Parsing error: {str(e)}"
+            }
+    
+    def _build_single_prompt_modification(self, user_feedback: str, current_template: Dict[str, Any]) -> str:
+        """
+        [LEGACY METHOD] This method is kept for backward compatibility but is not used in the new architecture.
+        The new system uses the Planner-Executor approach instead.
+        """
+        # This method is deprecated in favor of the new multi-step architecture
+        return "This method is deprecated. Use the new Planner-Executor architecture instead."
+
+
+class PlannerAgent(BaseAgent):
+    """Specialized agent for creating detailed modification plans"""
+    
+    def __init__(self):
+        system_message = """You are an expert UI/UX modification planner with deep understanding of web development and user intent analysis.
+
+Your role is to:
+1. Analyze user requests with sophisticated understanding of intent
+2. Create detailed, step-by-step modification plans
+3. Handle ambiguity by identifying multiple possible targets
+4. Generate precise instructions for the executor agent
+
+**CRITICAL CSS SELECTOR REQUIREMENTS:**
+- ✅ ONLY use valid CSS selectors: `.class-name`, `#id-name`, `tag.class`, `tag#id`
+- ❌ NEVER use jQuery selectors: `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`
+- ✅ Every selector must be valid CSS that works in a real stylesheet
+- ✅ Use exact classes/IDs from HTML analysis - don't invent or guess
+- ✅ Validate every selector before including it in your plan
+
+You use the Claude-3-5-Sonnet model for complex reasoning and planning."""
+        
+        super().__init__("Planner", system_message, model="claude-3-5-sonnet-20241022")
+        self.logger = logging.getLogger(__name__)
+    
+    def _clean_json_string(self, json_str: str) -> str:
+        """Clean JSON string to remove control characters and fix common issues"""
+        # Remove control characters but preserve newlines and tabs in string values
+        json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', json_str)
+        # Escape unescaped newlines and tabs within strings
+        json_str = re.sub(r'(?<!\\)\n', '\\n', json_str)
+        json_str = re.sub(r'(?<!\\)\t', '\\t', json_str)
+        return json_str
+    
+    def _extract_json_from_response(self, response: str, context: str = "response") -> Optional[Dict[str, Any]]:
+        """Robust JSON extraction from LLM responses"""
+        try:
+            self.logger.debug(f"Extracting JSON from {context}: {response[:200]}...")
+            
+            # Strategy 1: Find JSON block with markers
+            if "```json" in response:
+                start = response.find("```json") + 7
+                end = response.find("```", start)
+                if end > start:
+                    json_str = response[start:end].strip()
+                    json_str = self._clean_json_string(json_str)
+                    try:
+                        return json.loads(json_str)
+                    except json.JSONDecodeError:
+                        pass
+            
+            # Strategy 2: Find first complete JSON object with proper brace matching
+            if "{" in response and "}" in response:
+                brace_count = 0
+                start_pos = -1
+                
+                for i, char in enumerate(response):
+                    if char == "{":
+                        if brace_count == 0:
+                            start_pos = i
+                        brace_count += 1
+                    elif char == "}":
+                        brace_count -= 1
+                        if brace_count == 0 and start_pos >= 0:
+                            # Found complete JSON object
+                            json_str = response[start_pos:i+1]
+                            json_str = self._clean_json_string(json_str)
+                            try:
+                                return json.loads(json_str)
+                            except json.JSONDecodeError:
+                                continue
+            
+            # Strategy 3: Extract content between first { and last } (fallback)
+            if "{" in response and "}" in response:
+                start = response.find("{")
+                end = response.rfind("}") + 1
+                json_str = response[start:end]
+                json_str = self._clean_json_string(json_str)
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    self.logger.warning(f"Failed to parse JSON in {context}: {e}")
+                    return None
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting JSON from {context}: {e}")
             return None
     
-    def analyze_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze user feedback using advanced prompt engineering for sophisticated understanding"""
-        
-        # Build comprehensive prompt for advanced analysis
-        prompt = self._build_analysis_prompt(user_feedback, current_template)
-        
-        # Call Claude with advanced reasoning
-        response = self.call_claude_with_cot(prompt, enable_cot=True)
-        
-        # Parse the response with enhanced error handling
-        return self._parse_analysis_response(response, user_feedback)
-    
-    def _build_analysis_prompt(self, user_feedback: str, current_template: Dict[str, Any]) -> str:
-        """Build sophisticated prompt for modification analysis"""
-        
-        # Extract template information
-        template_name = current_template.get('name', 'Unknown Template')
-        template_category = current_template.get('category', 'Unknown')
-        template_tags = current_template.get('tags', [])
-        template_description = current_template.get('description', 'No description available')
-        
-        # Get HTML and CSS content for analysis
-        html_content = current_template.get('html_export', '')
-        global_css = current_template.get('globals_css', '')
-        style_css = current_template.get('style_css', '')
-        
-        prompt = f"""
-You are an expert UI/UX modification analyst with deep understanding of web design principles, user psychology, and technical implementation. Your task is to analyze a user's UI mockup modification request and provide a comprehensive, structured analysis.
-
-## CURRENT TEMPLATE CONTEXT
-- **Template Name**: {template_name}
-- **Category**: {template_category}
-- **Description**: {template_description}
-- **Tags**: {', '.join(template_tags)}
-
-## CURRENT CODE STRUCTURE
-**HTML Content Length**: {len(html_content)} characters
-**Global CSS Length**: {len(global_css)} characters  
-**Component CSS Length**: {len(style_css)} characters
-
-## USER FEEDBACK
-"{user_feedback}"
-
-## ANALYSIS TASK
-Using Chain-of-Thought reasoning, analyze the user's UI mockup modification request and provide a comprehensive specification. Consider:
-
-1. **Intent Analysis**: What is the user trying to achieve?
-2. **Context Understanding**: How does this fit with the current template?
-3. **Technical Feasibility**: What changes are technically possible?
-4. **Design Impact**: How will changes affect the overall mockup design?
-5. **User Experience**: Will changes improve or hinder UX?
-6. **Implementation Strategy**: What's the best approach to implement changes?
-
-## OUTPUT FORMAT
-Return a JSON object with this exact structure:
-{{
-    "modification_type": "string (layout|styling|content|functionality|color-scheme|typography|structure|interaction)",
-    "priority": "string (high|medium|low)",
-    "complexity": "string (simple|moderate|complex)",
-    "affected_elements": ["list", "of", "elements", "to", "modify"],
-    "specific_changes": [
-        {{
-            "element_selector": "string (CSS selector or element description)",
-            "change_type": "string (color|size|position|text|layout|add|remove|modify|style)",
-            "current_value": "string (current state/value)",
-            "new_value": "string (desired new state/value)",
-            "reasoning": "string (detailed explanation of why this change is needed)",
-            "impact_assessment": "string (how this change affects the overall design)",
-            "implementation_notes": "string (technical notes for implementation)"
-        }}
-    ],
-    "overall_intent": "string (comprehensive explanation of what the user is trying to achieve)",
-    "design_principles": ["list", "of", "design", "principles", "being", "applied"],
-    "constraints": ["list", "of", "constraints", "or", "limitations"],
-    "suggestions": ["list", "of", "additional", "improvements", "or", "considerations"],
-    "confidence_score": 0.85,
-    "risk_assessment": "string (potential risks or issues with the proposed changes)",
-    "alternative_approaches": ["list", "of", "alternative", "ways", "to", "achieve", "the", "goal"]
-}}
-
-## CHAIN-OF-THOUGHT PROCESS
-Think through this systematically:
-1. **Parse User Intent**: Understand what the user wants to achieve
-2. **Analyze Current State**: Examine the existing template structure
-3. **Identify Required Changes**: Determine what needs to be modified
-4. **Consider Design Impact**: Assess how changes affect the overall design
-5. **Plan Implementation**: Determine the best approach to implement changes
-6. **Validate Approach**: Ensure the proposed changes are feasible and beneficial
-
-Remember: Focus on understanding the user's underlying goals, not just their explicit requests. Consider the broader context and design principles.
-"""
-        
-        return prompt
-    
-    def _parse_analysis_response(self, response: str, user_feedback: str) -> Dict[str, Any]:
-        """Parse the analysis response with enhanced error handling"""
-        
+    def create_modification_plan(self, user_feedback: str, current_template: Dict[str, Any], html_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a detailed modification plan based on user feedback and HTML analysis"""
         try:
-            # Try multiple JSON extraction strategies
-            parsed_response = self._extract_json_from_response(response, "analysis")
+            prompt = self._build_planning_prompt(user_feedback, current_template, html_analysis)
             
-            if parsed_response:
-                # Validate required fields
-                required_fields = self.keyword_manager.get_required_fields()["modification_request"]
-                for field in required_fields:
-                    if field not in parsed_response:
-                        parsed_response[field] = self._get_default_value(field)
-                
-                return parsed_response
+            self.logger.debug("Sending planning request to Claude Sonnet...")
+            response = self.call_claude_with_cot(prompt, enable_cot=True)
+            
+            # Parse the planning response
+            plan = self._parse_planning_response(response)
+            
+            if plan:
+                return {
+                    "success": True,
+                    "plan": plan
+                }
             else:
-                self.logger.warning("No valid JSON found in analysis response, using default")
-                return self._get_default_modification_request(user_feedback)
+                return {
+                    "success": False,
+                    "error": "Failed to create modification plan"
+                }
                 
         except Exception as e:
-            self.logger.error(f"Error parsing analysis response: {e}")
-            return self._get_default_modification_request(user_feedback)
+            self.logger.error(f"Error creating modification plan: {e}")
+            return {
+                "success": False,
+                "error": f"Planning failed: {str(e)}"
+            }
     
-    def _get_default_modification_request(self, user_feedback: str) -> Dict[str, Any]:
-        """Return sophisticated default modification request when analysis fails"""
-        return {
-            "modification_type": "general",
-            "priority": "medium",
-            "complexity": "moderate",
-            "affected_elements": ["general"],
-            "specific_changes": [
-                {
-                    "element_selector": "general",
-                    "change_type": "improvement",
-                    "current_value": "current state",
-                    "new_value": "improved state",
-                    "reasoning": f"User requested: {user_feedback}",
-                    "impact_assessment": "General improvement to enhance user experience",
-                    "implementation_notes": "Apply changes carefully to maintain existing functionality"
-                }
-            ],
-            "overall_intent": f"Improve the UI based on user feedback: {user_feedback}",
-            "design_principles": self.keyword_manager.get_design_principles(),
-            "constraints": ["maintain existing functionality", "preserve responsive design"],
-            "suggestions": ["Consider user feedback carefully", "Test changes thoroughly"],
-            "confidence_score": 0.5,
-            "risk_assessment": "Low risk - general improvements",
-            "alternative_approaches": ["Incremental changes", "User testing before full implementation"]
-        }
-    
-    def _get_default_value(self, field: str) -> Any:
-        """Get default value for missing fields"""
-        defaults = {
-            "modification_type": "general",
-            "priority": "medium",
-            "complexity": "moderate",
-            "affected_elements": ["general"],
-            "specific_changes": [],
-            "overall_intent": "General improvement",
-            "design_principles": ["user-centered design"],
-            "constraints": ["maintain existing functionality"],
-            "suggestions": ["Consider user feedback"],
-            "confidence_score": 0.5,
-            "risk_assessment": "Low risk",
-            "alternative_approaches": ["Incremental approach"]
-        }
-        return defaults.get(field, "Not specified")
-    
-    def generate_modification_plan(self, modification_request: Dict[str, Any], current_template: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate detailed modification plan using advanced prompt engineering"""
+    def _build_planning_prompt(self, user_feedback: str, current_template: Dict[str, Any], html_analysis: Dict[str, Any]) -> str:
+        """Build sophisticated prompt for modification planning with comprehensive HTML analysis"""
         
-        # Build sophisticated planning prompt
-        prompt = self._build_planning_prompt(modification_request, current_template)
+        template_name = current_template.get('name', 'Unknown Template')
+        template_category = current_template.get('category', 'general')
         
-        # Call Claude with advanced reasoning
-        response = self.call_claude_with_cot(prompt, enable_cot=True)
+        # Build comprehensive HTML structure analysis
+        structure_analysis = []
         
-        # Parse the response
-        return self._parse_planning_response(response, modification_request)
-    
-    def _build_planning_prompt(self, modification_request: Dict[str, Any], current_template: Dict[str, Any]) -> str:
-        """Build sophisticated prompt for modification planning"""
+        # 1. Overall statistics
+        debug_info = html_analysis.get("debug_info", {})
+        structure_analysis.append(f"## HTML STRUCTURE OVERVIEW")
+        structure_analysis.append(f"Total elements analyzed: {debug_info.get('total_elements_found', 0)}")
+        structure_analysis.append(f"Text elements found: {debug_info.get('text_elements_found', 0)}")
+        structure_analysis.append(f"Sample texts: {', '.join(debug_info.get('sample_texts', [])[:10])}")
+        structure_analysis.append("")
         
-        # Extract modification details
-        modification_type = modification_request.get("modification_type", "general")
-        specific_changes = modification_request.get("specific_changes", [])
-        overall_intent = modification_request.get("overall_intent", "")
+        # 2. All text elements with their details
+        if html_analysis.get("elements_by_text"):
+            structure_analysis.append("## ALL TEXT ELEMENTS")
+            structure_analysis.append("This is the complete list of all text elements found in the HTML:")
+            structure_analysis.append("")
+            
+            for text, info in html_analysis["elements_by_text"].items():
+                tag = info.get('tag', 'unknown')
+                classes = info.get('classes', [])
+                element_id = info.get('id', 'none')
+                full_attrs = info.get('full_attrs', '')
+                
+                structure_analysis.append(f"**Text**: '{text}'")
+                structure_analysis.append(f"  - Tag: {tag}")
+                structure_analysis.append(f"  - Classes: {classes}")
+                structure_analysis.append(f"  - ID: {element_id}")
+                if full_attrs:
+                    structure_analysis.append(f"  - Full attributes: {full_attrs}")
+                structure_analysis.append("")
         
-        # Get template content
-        html_content = current_template.get('html_export', '')
-        global_css = current_template.get('globals_css', '')
-        style_css = current_template.get('style_css', '')
+        # 3. Elements organized by class
+        if html_analysis.get("elements_by_class"):
+            structure_analysis.append("## ELEMENTS BY CSS CLASS")
+            structure_analysis.append("Elements organized by their CSS classes:")
+            structure_analysis.append("")
+            
+            for class_name, elements in html_analysis["elements_by_class"].items():
+                structure_analysis.append(f"**Class**: .{class_name}")
+                for element in elements:
+                    text = element.get('text', '')
+                    tag = element.get('tag', 'unknown')
+                    element_id = element.get('id', 'none')
+                    structure_analysis.append(f"  - '{text}' (tag: {tag}, id: {element_id})")
+                structure_analysis.append("")
         
-        prompt = f"""
-You are an expert UI/UX implementation strategist with deep knowledge of web development, design systems, and user experience optimization. Your task is to create a comprehensive modification plan for implementing UI changes.
+        # 4. Elements organized by ID
+        if html_analysis.get("elements_by_id"):
+            structure_analysis.append("## ELEMENTS BY ID")
+            structure_analysis.append("Elements with specific IDs:")
+            structure_analysis.append("")
+            
+            for element_id, info in html_analysis["elements_by_id"].items():
+                text = info.get('text', '')
+                tag = info.get('tag', 'unknown')
+                classes = info.get('classes', [])
+                structure_analysis.append(f"**ID**: #{element_id}")
+                structure_analysis.append(f"  - Text: '{text}'")
+                structure_analysis.append(f"  - Tag: {tag}")
+                structure_analysis.append(f"  - Classes: {classes}")
+                structure_analysis.append("")
+        
+        # 5. Header and navigation elements
+        if html_analysis.get("header_elements"):
+            structure_analysis.append("## HEADER ELEMENTS")
+            structure_analysis.append("Elements identified as header-related:")
+            structure_analysis.append("")
+            
+            for element in html_analysis["header_elements"]:
+                text = element.get('text', '')
+                tag = element.get('tag', 'unknown')
+                classes = element.get('classes', [])
+                element_id = element.get('id', 'none')
+                structure_analysis.append(f"  - '{text}' (tag: {tag}, classes: {classes}, id: {element_id})")
+            structure_analysis.append("")
+        
+        if html_analysis.get("navigation_elements"):
+            structure_analysis.append("## NAVIGATION ELEMENTS")
+            structure_analysis.append("Elements identified as navigation-related:")
+            structure_analysis.append("")
+            
+            for element in html_analysis["navigation_elements"]:
+                text = element.get('text', '')
+                tag = element.get('tag', 'unknown')
+                classes = element.get('classes', [])
+                element_id = element.get('id', 'none')
+                structure_analysis.append(f"  - '{text}' (tag: {tag}, classes: {classes}, id: {element_id})")
+            structure_analysis.append("")
+        
+        # 6. DOM structure overview
+        if html_analysis.get("dom_structure"):
+            structure_analysis.append("## DOM STRUCTURE OVERVIEW")
+            structure_analysis.append("Main sections and their content:")
+            structure_analysis.append("")
+            
+            for section_key, section_info in html_analysis["dom_structure"].items():
+                tag = section_info.get('tag', 'unknown')
+                classes = section_info.get('classes', [])
+                text_elements = section_info.get('text_elements', [])
+                structure_analysis.append(f"**Section**: {section_key}")
+                structure_analysis.append(f"  - Tag: {tag}")
+                structure_analysis.append(f"  - Classes: {classes}")
+                if text_elements:
+                    structure_analysis.append(f"  - Text elements: {text_elements}")
+                structure_analysis.append("")
+        
+        structure_analysis_text = "\n".join(structure_analysis)
+        
+        prompt = f"""You are an expert UI/UX modification planner. You have access to a comprehensive analysis of the HTML structure. Use this detailed information to create precise modification plans.
 
-## MODIFICATION REQUEST
-- **Type**: {modification_type}
-- **Intent**: {overall_intent}
-- **Specific Changes**: {len(specific_changes)} changes requested
+## USER REQUEST
+{user_feedback}
 
-## CURRENT TEMPLATE
-- **HTML Content**: {len(html_content)} characters
-- **Global CSS**: {len(global_css)} characters
-- **Component CSS**: {len(style_css)} characters
+## TEMPLATE CONTEXT
+- Template Name: {template_name}
+- Category: {template_category}
 
-## PLANNING TASK
-Create a detailed implementation plan that considers:
+## COMPREHENSIVE HTML STRUCTURE ANALYSIS
+{structure_analysis_text}
 
-1. **Implementation Strategy**: Best approach to implement changes
-2. **Code Quality**: Maintain clean, maintainable code
-3. **Performance Impact**: Minimize performance degradation
-4. **Responsive Design**: Ensure changes work across devices
-5. **Testing Strategy**: How to validate changes
-6. **Rollback Plan**: How to revert if needed
+## CRITICAL CSS SELECTOR RULES - READ CAREFULLY
+
+**VALID CSS SELECTORS ONLY:**
+- ✅ `.class-name` (targets elements with class)
+- ✅ `#id-name` (targets element with ID)
+- ✅ `tag.class` (e.g., `button.btn-primary`)
+- ✅ `tag#id` (e.g., `div#header`)
+- ✅ `.class1.class2` (multiple classes)
+
+**INVALID SELECTORS - NEVER USE:**
+- ❌ `:contains('text')` (jQuery selector)
+- ❌ `:has()` (jQuery selector)
+- ❌ `:text()` (jQuery selector)
+- ❌ `:first`, `:last` (jQuery selectors)
+- ❌ `:eq()` (jQuery selector)
+
+## FEW-SHOT EXAMPLES
+
+**Example 1: Valid CSS Selector**
+**User Request**: "change the color of the login button to blue"
+
+**HTML Analysis**: Found button with text "Login" and class "btn-primary"
+
+**Plan**:
+```json
+{{
+  "intent_analysis": {{
+    "user_goal": "Change the visual appearance of a login button",
+    "target_element_type": "button",
+    "modification_type": "styling",
+    "specific_change": "color change to blue"
+  }},
+  "target_identification": {{
+    "primary_target": {{
+      "text_content": "Login",
+      "css_selector": ".btn-primary",
+      "confidence": 0.95,
+      "reasoning": "Exact text match found with button class"
+    }},
+    "alternative_targets": []
+  }},
+  "requires_clarification": false,
+  "clarification_options": [],
+  "steps": [
+    {{
+      "step_number": 1,
+      "action": "modify_css",
+      "target_selector": ".btn-primary",
+      "property": "background-color",
+      "new_value": "#007bff",
+      "description": "Change button background color to blue"
+    }}
+  ],
+  "expected_outcome": "Login button will have a blue background color"
+}}
+```
+
+**Example 2: Multiple Classes**
+**User Request**: "change the connect link color to red"
+
+**HTML Analysis**: Found link with text "Connect" and classes "nav-link text-wrapper-10"
+
+**Plan**:
+```json
+{{
+  "intent_analysis": {{
+    "user_goal": "Change the color of a navigation link",
+    "target_element_type": "link",
+    "modification_type": "styling",
+    "specific_change": "text color change to red"
+  }},
+  "target_identification": {{
+    "primary_target": {{
+      "text_content": "Connect",
+      "css_selector": ".text-wrapper-10",
+      "confidence": 0.95,
+      "reasoning": "Unique class identifier for the Connect link"
+    }},
+    "alternative_targets": []
+  }},
+  "requires_clarification": false,
+  "clarification_options": [],
+  "steps": [
+    {{
+      "step_number": 1,
+      "action": "modify_css",
+      "target_selector": ".text-wrapper-10",
+      "property": "color",
+      "new_value": "#ff0000",
+      "description": "Change Connect link text color to red"
+    }}
+  ],
+  "expected_outcome": "The Connect link will appear in red color"
+}}
+```
+
+**Example 3: What NOT to do (INVALID)**
+**User Request**: "change the connect button color to red"
+
+**WRONG Plan (DO NOT USE):**
+```json
+{{
+  "steps": [
+    {{
+      "target_selector": ".text-wrapper-10:contains('Connect')",
+      "property": "color",
+      "new_value": "#ff0000"
+    }}
+  ]
+}}
+```
+
+**CORRECT Plan (USE THIS):**
+```json
+{{
+  "steps": [
+    {{
+      "target_selector": ".text-wrapper-10",
+      "property": "color", 
+      "new_value": "#ff0000"
+    }}
+  ]
+}}
+```
+
+## MANDATORY VALIDATION CHECKLIST
+
+Before generating any CSS selector, verify:
+1. ✅ Does it start with `.` (class), `#` (ID), or tag name?
+2. ✅ Does it contain ONLY valid CSS syntax?
+3. ✅ Does it NOT contain `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`?
+4. ✅ Can it be used in a real CSS file?
+5. ✅ Does it target the specific element from the HTML analysis?
+
+**REMEMBER**: If you're unsure about a selector, use the simplest valid option (e.g., `.class-name`).
+
+## YOUR TASK
+Create a detailed modification plan for the user request above. You have access to the complete HTML structure analysis above. Use this information to:
+
+1. **Find Exact Matches**: Look for exact text matches in the "ALL TEXT ELEMENTS" section
+2. **Identify Target Elements**: Use the detailed element information to find the best targets
+3. **Generate Precise Selectors**: Use the class and ID information to create accurate CSS selectors
+4. **Handle Ambiguity**: If multiple elements match, identify them for clarification
+
+## ANALYSIS GUIDELINES - EXACT CODE REQUIREMENTS
+
+**CRITICAL: You must return EXACT, VALID code that works immediately**
+
+- **Text Matching**: Look for exact text matches first, then partial matches
+- **CSS Selectors**: 
+  - ✅ **MUST USE ONLY**: `.class-name`, `#id-name`, `tag.class`, `tag#id`, `.class1.class2`
+  - ❌ **NEVER USE**: `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`
+  - **Prefer classes over IDs** for better maintainability
+  - **Use the EXACT class/ID from HTML analysis** - don't guess or invent
+  - **If targeting by text content**, use the class/ID of the element containing that text
+- **Context**: Consider the element's position (header, navigation, etc.)
+- **Confidence**: Base confidence on how well the target matches the request
+- **Code Quality**: Every selector must be valid CSS that can be used in a real stylesheet
 
 ## OUTPUT FORMAT
-Return a JSON object with this exact structure:
+Return ONLY this JSON structure:
+```json
 {{
-    "implementation_strategy": "string (detailed strategy for implementing changes)",
-    "modification_steps": [
-        {{
-            "step_number": 1,
-            "step_type": "string (html_modification|css_modification|content_update|structure_change)",
-            "element_selector": "string (CSS selector or element description)",
-            "current_state": "string (description of current state)",
-            "target_state": "string (description of desired state)",
-            "implementation_details": "string (detailed implementation instructions)",
-            "code_changes": {{
-                "html_changes": "string (specific HTML modifications)",
-                "global_css_changes": "string (specific global CSS modifications)",
-                "style_css_changes": "string (specific component CSS modifications)",
-                "new_elements": ["list", "of", "new", "elements", "to", "add"],
-                "removed_elements": ["list", "of", "elements", "to", "remove"]
-            }},
-            "validation_criteria": ["list", "of", "criteria", "to", "validate", "this", "step"],
-            "risk_assessment": "string (potential risks for this step)",
-            "estimated_effort": "string (low|medium|high)"
-        }}
-    ],
-    "quality_checks": ["list", "of", "quality", "checks", "to", "perform"],
-    "testing_requirements": ["list", "of", "testing", "requirements"],
-    "performance_considerations": ["list", "of", "performance", "considerations"],
-    "accessibility_checks": ["list", "of", "accessibility", "checks"],
-    "rollback_plan": "string (detailed plan for rolling back changes if needed)",
-    "success_criteria": ["list", "of", "criteria", "to", "determine", "success"],
-    "confidence_level": 0.85
+  "intent_analysis": {{
+    "user_goal": "string describing what the user wants to achieve",
+    "target_element_type": "string (text|button|image|section|etc)",
+    "modification_type": "string (styling|content|layout|structure)",
+    "specific_change": "string describing the exact change needed"
+  }},
+  "target_identification": {{
+    "primary_target": {{
+      "text_content": "string (exact text found)",
+      "css_selector": "string (best CSS selector)",
+      "confidence": 0.95,
+      "reasoning": "string explaining why this target was chosen"
+    }},
+    "alternative_targets": [
+      {{
+        "text_content": "string",
+        "css_selector": "string",
+        "confidence": 0.7,
+        "reasoning": "string"
+      }}
+    ]
+  }},
+  "requires_clarification": false,
+  "clarification_options": [],
+  "steps": [
+    {{
+      "step_number": 1,
+      "action": "string (modify_text|modify_css|modify_html|add_element|remove_element)",
+      "target_selector": "string (CSS selector)",
+      "property": "string (for CSS modifications)",
+      "new_value": "string (new value to set)",
+      "description": "string (what this step does)"
+    }}
+  ],
+  "expected_outcome": "string describing what the user will see after changes"
 }}
+```
 
-## CHAIN-OF-THOUGHT PROCESS
-Think through this systematically:
-1. **Analyze Requirements**: Understand what needs to be changed
-2. **Design Strategy**: Plan the best approach to implement changes
-3. **Break Down Steps**: Divide implementation into manageable steps
-4. **Consider Dependencies**: Identify dependencies between changes
-5. **Plan Validation**: Determine how to validate each step
-6. **Assess Risks**: Identify potential issues and mitigation strategies
-7. **Ensure Quality**: Plan for maintaining code quality and performance
+## FINAL VALIDATION - BEFORE SUBMITTING
 
-Remember: Focus on creating a robust, maintainable implementation that achieves the user's goals while preserving the template's integrity.
-"""
+**STOP AND CHECK YOUR CSS SELECTORS:**
+
+1. **Does every `target_selector` start with `.`, `#`, or a tag name?**
+2. **Does every `target_selector` NOT contain `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`?**
+3. **Can every `target_selector` be used in a real CSS file?**
+4. **Does every `target_selector` match an element from the HTML analysis above?**
+
+**IF ANY SELECTOR FAILS THESE CHECKS, FIX IT BEFORE SUBMITTING.**
+
+## IMPORTANT RULES
+- **Use the HTML Analysis**: Reference specific elements from the analysis above
+- **Be Precise**: Use exact text content and CSS selectors from the analysis
+- **Handle Ambiguity**: If multiple elements match, set requires_clarification to true
+- **Provide Clear Reasoning**: Explain why you chose specific targets
+- **VALIDATE EVERY SELECTOR**: Ensure it's valid CSS before including it
+- **Consider Context**: Use header/navigation information when relevant"""
         
         return prompt
     
-    def _parse_planning_response(self, response: str, modification_request: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse the planning response with enhanced JSON extraction"""
-        
+    def _parse_planning_response(self, response: str) -> Optional[Dict[str, Any]]:
+        """Parse the planning response"""
         try:
-            # Use shared robust JSON extraction
             parsed_response = self._extract_json_from_response(response, "planning")
             
             if parsed_response:
                 # Validate required fields
-                if "modification_steps" not in parsed_response:
-                    parsed_response["modification_steps"] = []
-                if "implementation_strategy" not in parsed_response:
-                    parsed_response["implementation_strategy"] = "Standard implementation approach"
+                required_fields = ["intent_analysis", "target_identification", "steps", "expected_outcome"]
+                missing_fields = [field for field in required_fields if field not in parsed_response]
                 
-                return parsed_response
+                if not missing_fields:
+                    return parsed_response
+                else:
+                    self.logger.warning(f"Missing required fields in plan: {missing_fields}")
+                    return None
             else:
-                self.logger.warning("No valid JSON found in planning response, using default")
-                return self._get_default_modification_plan(modification_request)
+                self.logger.warning("Failed to parse planning response")
+                return None
                 
         except Exception as e:
             self.logger.error(f"Error parsing planning response: {e}")
-            return self._get_default_modification_plan(modification_request)
+            return None
+
+
+class ExecutorAgent(BaseAgent):
+    """Specialized agent for executing modification plans"""
     
-    def _get_default_modification_plan(self, modification_request: Dict[str, Any]) -> Dict[str, Any]:
-        """Return default modification plan when parsing fails"""
-        return {
-            "implementation_strategy": "Standard implementation approach",
-            "modification_steps": [
-                {
-                    "step_number": 1,
-                    "step_type": "general_modification",
-                    "element_selector": "general",
-                    "current_state": "Current template state",
-                    "target_state": "Improved template state",
-                    "implementation_details": "Apply general improvements based on user feedback",
-                    "code_changes": {
-                        "html_changes": "Apply HTML modifications as needed",
-                        "global_css_changes": "Apply global CSS modifications as needed",
-                        "style_css_changes": "Apply component CSS modifications as needed",
-                        "new_elements": [],
-                        "removed_elements": []
-                    },
-                    "validation_criteria": ["Template renders correctly", "Changes are visible"],
-                    "risk_assessment": "Low risk - general improvements",
-                    "estimated_effort": "medium"
-                }
-            ],
-            "quality_checks": ["Code validation", "Visual inspection"],
-            "testing_requirements": ["Basic functionality testing"],
-            "performance_considerations": ["Maintain current performance"],
-            "accessibility_checks": ["Maintain accessibility standards"],
-            "rollback_plan": "Revert to original template if issues arise",
-            "success_criteria": ["Template renders correctly", "User requirements met"],
-            "confidence_level": 0.5
-        }
+    def __init__(self):
+        system_message = """You are an expert web development executor with precise code modification skills.
+
+Your role is to:
+1. Execute modification plans step by step
+2. Generate precise, syntactically correct code
+3. Maintain code quality and structure
+4. Return complete modified files
+
+You use the Claude-3-5-Haiku model for fast, efficient execution."""
+        
+        super().__init__("Executor", system_message, model="claude-3-5-haiku-20241022")
+        self.logger = logging.getLogger(__name__)
     
-    def apply_modifications(self, template: Dict[str, Any], modification_plan: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply modifications using prompt engineering to let the LLM do the work"""
-        
-        # Build comprehensive prompt for code modification
-        prompt = self._build_apply_modifications_prompt(template, modification_plan)
-        
-        # Call Claude to apply the modifications
-        response = self.call_claude_with_cot(prompt, enable_cot=True)
-        
-        # Parse the modified code from the response
-        modified_template = self._parse_modified_code_response(response, template)
-        
-        return modified_template
+    def _clean_json_string(self, json_str: str) -> str:
+        """Clean JSON string to remove control characters and fix common issues"""
+        # Remove control characters but preserve newlines and tabs in string values
+        json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', json_str)
+        # Escape unescaped newlines and tabs within strings
+        json_str = re.sub(r'(?<!\\)\n', '\\n', json_str)
+        json_str = re.sub(r'(?<!\\)\t', '\\t', json_str)
+        return json_str
     
-    def _build_apply_modifications_prompt(self, template: Dict[str, Any], modification_plan: Dict[str, Any]) -> str:
-        """Build prompt for applying modifications using LLM"""
-        
-        html_content = template.get('html_export', '')
-        global_css = template.get('globals_css', '')
-        style_css = template.get('style_css', '')
-        
-        implementation_strategy = modification_plan.get("implementation_strategy", "")
-        modification_steps = modification_plan.get("modification_steps", [])
-        
-        # Format modification steps for the prompt
-        steps_text = ""
-        for step in modification_steps:
-            steps_text += f"""
-Step {step.get('step_number', 1)}: {step.get('step_type', 'general')}
-- Element: {step.get('element_selector', 'general')}
-- Current State: {step.get('current_state', 'unknown')}
-- Target State: {step.get('target_state', 'unknown')}
-- Implementation: {step.get('implementation_details', 'Apply changes')}
-- HTML Changes: {step.get('code_changes', {}).get('html_changes', 'None')}
-- Global CSS Changes: {step.get('code_changes', {}).get('global_css_changes', 'None')}
-- Style CSS Changes: {step.get('code_changes', {}).get('style_css_changes', 'None')}
-"""
-        
-        prompt = f"""
-You are an expert web developer with deep knowledge of HTML, CSS, and modern web development practices. Your task is to apply specific modifications to a web template based on a detailed modification plan.
-
-## IMPLEMENTATION STRATEGY
-{implementation_strategy}
-
-## MODIFICATION STEPS
-{steps_text}
-
-## CURRENT CODE
-
-### HTML Content
-```html
-{html_content}
-```
-
-### Global CSS
-```css
-{global_css}
-```
-
-### Component CSS
-```css
-{style_css}
-```
-
-## YOUR TASK
-Apply the specified modifications to the code above. You must:
-
-1. **Follow the modification plan exactly**: Implement each step as specified
-2. **Maintain code quality**: Ensure the modified code is clean, valid, and well-structured
-3. **Preserve existing functionality**: Don't break any existing features
-4. **Apply changes to the correct files**: 
-   - HTML changes go to the HTML content
-   - Global CSS changes go to the global_css section
-   - Component CSS changes go to the style_css section
-5. **Ensure compatibility**: Make sure all changes work together
-
-## OUTPUT FORMAT
-Return a JSON object with this exact structure:
-```json
-{{
-    "html_export": "complete modified HTML content",
-    "globals_css": "complete modified global CSS content", 
-    "style_css": "complete modified component CSS content",
-    "changes_applied": [
-        {{
-            "step_number": 1,
-            "description": "What was changed",
-            "success": true
-        }}
-    ],
-    "validation_notes": "Any notes about the modifications made"
-}}
-```
-
-## IMPORTANT REQUIREMENTS
-- Return ONLY the JSON object, no additional text
-- Ensure all HTML and CSS is properly formatted and valid
-- Maintain the original structure where possible
-- Apply all specified changes from the modification plan
-- If a change cannot be applied exactly as specified, apply the closest possible modification
-
-Remember: You are rewriting the code to implement the requested changes. Be precise and thorough.
-"""
-        
-        return prompt
-    
-    def _parse_modified_code_response(self, response: str, original_template: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse the modified code from the LLM response"""
-        
+    def _extract_json_from_response(self, response: str, context: str = "response") -> Optional[Dict[str, Any]]:
+        """Robust JSON extraction from LLM responses"""
         try:
-            # Use shared robust JSON extraction
-            parsed_response = self._extract_json_from_response(response, "modified_code")
+            self.logger.debug(f"Extracting JSON from {context}: {response[:200]}...")
             
-            if parsed_response:
-                # Create modified template
-                modified_template = original_template.copy()
+            # Strategy 1: Find JSON block with markers
+            if "```json" in response:
+                start = response.find("```json") + 7
+                end = response.find("```", start)
+                if end > start:
+                    json_str = response[start:end].strip()
+                    json_str = self._clean_json_string(json_str)
+                    try:
+                        return json.loads(json_str)
+                    except json.JSONDecodeError:
+                        pass
+            
+            # Strategy 2: Find first complete JSON object with proper brace matching
+            if "{" in response and "}" in response:
+                brace_count = 0
+                start_pos = -1
                 
-                # Update with modified code
-                if "html_export" in parsed_response:
-                    modified_template["html_export"] = parsed_response["html_export"]
-                if "globals_css" in parsed_response:
-                    modified_template["globals_css"] = parsed_response["globals_css"]
-                if "style_css" in parsed_response:
-                    modified_template["style_css"] = parsed_response["style_css"]
-                
-                # Add modification metadata
-                modified_template["modification_metadata"] = {
-                    "changes_applied": parsed_response.get("changes_applied", []),
-                    "validation_notes": parsed_response.get("validation_notes", ""),
-                    "modified_at": "2025-01-27T12:00:00Z"
-                }
-                
-                return modified_template
-            else:
-                # If parsing fails, return original template
-                self.logger.warning("Could not parse modified code response, returning original template")
-                return original_template
-                
-        except Exception as e:
-            self.logger.error(f"Error parsing modified code response: {e}")
-            return original_template
-    
-    def validate_modifications(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate modifications using prompt engineering"""
-        
-        # Build validation prompt
-        prompt = self._build_validation_prompt(original_template, modified_template)
-        
-        # Call Claude for validation
-        response = self.call_claude_with_cot(prompt, enable_cot=True)
-        
-        # Parse validation result
-        return self._parse_validation_response(response)
-    
-    def _build_validation_prompt(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> str:
-        """Build prompt for validating modifications"""
-        
-        original_html = original_template.get('html_export', '')
-        original_global_css = original_template.get('globals_css', '')
-        original_style_css = original_template.get('style_css', '')
-        
-        modified_html = modified_template.get('html_export', '')
-        modified_global_css = modified_template.get('globals_css', '')
-        modified_style_css = modified_template.get('style_css', '')
-        
-        prompt = f"""
-You are an expert web developer and quality assurance specialist. Your task is to validate the modifications made to a web template.
-
-## ORIGINAL CODE
-
-### Original HTML
-```html
-{original_html}
-```
-
-### Original Global CSS
-```css
-{original_global_css}
-```
-
-### Original Component CSS
-```css
-{original_style_css}
-```
-
-## MODIFIED CODE
-
-### Modified HTML
-```html
-{modified_html}
-```
-
-### Modified Global CSS
-```css
-{modified_global_css}
-```
-
-### Modified Component CSS
-```css
-{modified_style_css}
-```
-
-## VALIDATION TASK
-Analyze the modifications and validate:
-
-1. **Code Quality**: Is the modified code clean, valid, and well-structured?
-2. **Functionality**: Do the modifications maintain existing functionality?
-3. **Compatibility**: Are all changes compatible with each other?
-4. **Best Practices**: Do the modifications follow web development best practices?
-5. **Performance**: Will the modifications impact performance negatively?
-
-## OUTPUT FORMAT
-Return a JSON object with this exact structure:
-```json
-{{
-    "is_valid": true,
-    "validation_details": "Detailed explanation of validation results",
-    "warnings": ["list", "of", "warnings", "if", "any"],
-    "errors": ["list", "of", "errors", "if", "any"],
-    "recommendations": ["list", "of", "improvement", "recommendations"],
-    "quality_score": 0.85,
-    "performance_impact": "low|medium|high",
-    "accessibility_impact": "improved|maintained|degraded"
-}}
-```
-
-## VALIDATION CRITERIA
-- **HTML**: Must be valid HTML5
-- **CSS**: Must be valid CSS3
-- **Structure**: Must maintain logical document structure
-- **Functionality**: Must preserve interactive elements
-- **Responsiveness**: Must maintain responsive design
-- **Accessibility**: Must maintain or improve accessibility
-
-Return ONLY the JSON object, no additional text.
-"""
-        
-        return prompt
-    
-    def _parse_validation_response(self, response: str) -> Dict[str, Any]:
-        """Parse validation response"""
-        
-        try:
-            # Try to extract JSON from response
+                for i, char in enumerate(response):
+                    if char == "{":
+                        if brace_count == 0:
+                            start_pos = i
+                        brace_count += 1
+                    elif char == "}":
+                        brace_count -= 1
+                        if brace_count == 0 and start_pos >= 0:
+                            # Found complete JSON object
+                            json_str = response[start_pos:i+1]
+                            json_str = self._clean_json_string(json_str)
+                            try:
+                                return json.loads(json_str)
+                            except json.JSONDecodeError:
+                                continue
+            
+            # Strategy 3: Extract content between first { and last } (fallback)
             if "{" in response and "}" in response:
                 start = response.find("{")
                 end = response.rfind("}") + 1
                 json_str = response[start:end]
-                return json.loads(json_str)
-            else:
-                return {
-                    "is_valid": False,
-                    "validation_details": "Could not parse validation response",
-                    "warnings": ["Validation parsing failed"],
-                    "errors": ["Unable to validate modifications"],
-                    "recommendations": ["Review modifications manually"],
-                    "quality_score": 0.0,
-                    "performance_impact": "unknown",
-                    "accessibility_impact": "unknown"
-                }
+                json_str = self._clean_json_string(json_str)
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    self.logger.warning(f"Failed to parse JSON in {context}: {e}")
+                    return None
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting JSON from {context}: {e}")
+            return None
+    
+    def execute_modification_plan(self, modification_plan: Dict[str, Any], current_template: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a modification plan step by step"""
+        try:
+            # Extract template content
+            html_content = current_template.get('html_export', '')
+            style_css = current_template.get('style_css', '')
+            globals_css = current_template.get('globals_css', '')
+            
+            # Create working copies
+            modified_html = html_content
+            modified_style_css = style_css
+            modified_globals_css = globals_css
+            
+            steps = modification_plan.get('steps', [])
+            changes_summary = []
+            
+            # Execute each step
+            for step in steps:
+                step_result = self._execute_single_step(step, modified_html, modified_style_css, modified_globals_css)
                 
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Error parsing validation response: {e}")
+                if step_result.get('success', False):
+                    # Update our working copies
+                    modified_html = step_result.get('html', modified_html)
+                    modified_style_css = step_result.get('style_css', modified_style_css)
+                    modified_globals_css = step_result.get('globals_css', modified_globals_css)
+                    changes_summary.append(step_result.get('description', f"Step {step.get('step_number', 'unknown')} completed"))
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Step {step.get('step_number', 'unknown')} failed: {step_result.get('error', 'Unknown error')}"
+                    }
+            
+            # Create modified template
+            modified_template = current_template.copy()
+            modified_template["html_export"] = modified_html
+            modified_template["style_css"] = modified_style_css
+            modified_template["globals_css"] = modified_globals_css
+            
+            # Add modification metadata
+            modified_template["modification_metadata"] = {
+                "changes_applied": changes_summary,
+                "modification_type": "planned_execution",
+                "modified_at": "2025-01-27T12:00:00Z",
+                "plan_executed": modification_plan
+            }
+            
             return {
-                "is_valid": False,
-                "validation_details": f"Validation parsing error: {str(e)}",
-                "warnings": ["Validation parsing failed"],
-                "errors": ["Unable to validate modifications"],
-                "recommendations": ["Review modifications manually"],
-                "quality_score": 0.0,
-                "performance_impact": "unknown",
-                "accessibility_impact": "unknown"
+                "success": True,
+                "modified_template": modified_template,
+                "changes_summary": changes_summary
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error executing modification plan: {e}")
+            return {
+                "success": False,
+                "error": f"Execution failed: {str(e)}"
             }
     
-    def _generate_changes_summary(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> List[str]:
-        """Generate precise changes summary for user communication"""
-        
-        # First try to extract changes from modification metadata if available
-        modification_metadata = modified_template.get("modification_metadata", {})
-        if modification_metadata.get("changes_applied"):
-            # Use the precise changes from the modification process
-            return modification_metadata["changes_applied"]
-        
-        # Fallback: Generate summary using prompt engineering for complex cases
-        prompt = self._build_changes_summary_prompt(original_template, modified_template)
-        
-        # Call Claude for summary (disable CoT for faster response)
-        response = self.call_claude_with_cot(prompt, enable_cot=False)
-        
-        # Parse summary
-        parsed_summary = self._parse_changes_summary_response(response)
-        
-        # Ensure we always return a meaningful summary
-        if not parsed_summary or len(parsed_summary) == 0:
-            return ["Applied the requested modifications to the template"]
-        
-        return parsed_summary
-    
-    def _build_changes_summary_prompt(self, original_template: Dict[str, Any], modified_template: Dict[str, Any]) -> str:
-        """Build prompt for generating user-friendly changes summary"""
-        
-        original_html = original_template.get('html_export', '')
-        original_global_css = original_template.get('globals_css', '')
-        original_style_css = original_template.get('style_css', '')
-        
-        modified_html = modified_template.get('html_export', '')
-        modified_global_css = modified_template.get('globals_css', '')
-        modified_style_css = modified_template.get('style_css', '')
-        
-        prompt = f"""
-You are a UX designer explaining changes to a client. Compare the original and modified code and create user-friendly descriptions of what changed.
-
-ORIGINAL CSS:
-{original_global_css}
-{original_style_css}
-
-MODIFIED CSS:
-{modified_global_css}
-{modified_style_css}
-
-Focus on visual changes that users would notice. Write descriptions as complete sentences that explain:
-- What specific element was changed (button, background, text, etc.)
-- What property was modified (color, size, spacing, etc.)  
-- What the change accomplishes (better visibility, improved design, etc.)
-
-Return ONLY a JSON object:
-{{
-    "summary_points": [
-        "Changed the background color from [old] to [new] for better visual appeal",
-        "Increased button height from [old] to [new] to improve accessibility",
-        "Updated text color to enhance readability"
-    ]
-}}
-
-Be specific about what changed and use user-friendly language. Focus on the 2-3 most important changes."""
-        
-        return prompt
-    
-    def _parse_changes_summary_response(self, response: str) -> List[str]:
-        """Parse changes summary response"""
-        
+    def _execute_single_step(self, step: Dict[str, Any], html_content: str, style_css: str, globals_css: str) -> Dict[str, Any]:
+        """Execute a single modification step"""
         try:
-            # Try to extract JSON from response
-            if "{" in response and "}" in response:
-                start = response.find("{")
-                end = response.rfind("}") + 1
-                json_str = response[start:end]
-                parsed_response = json.loads(json_str)
-                
-                # Return summary points
-                return parsed_response.get("summary_points", ["Changes summary not available"])
+            action = step.get('action', '')
+            target_selector = step.get('target_selector', '')
+            description = step.get('description', '')
+            
+            if action == 'modify_text':
+                return self._modify_text(step, html_content, style_css, globals_css)
+            elif action == 'modify_css':
+                return self._modify_css(step, html_content, style_css, globals_css)
+            elif action == 'modify_html':
+                return self._modify_html(step, html_content, style_css, globals_css)
             else:
-                return ["Could not generate changes summary"]
+                return {
+                    "success": False,
+                    "error": f"Unknown action: {action}"
+                }
                 
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Error parsing changes summary response: {e}")
-            return ["Error generating changes summary"] 
+        except Exception as e:
+            self.logger.error(f"Error executing step: {e}")
+            return {
+                "success": False,
+                "error": f"Step execution failed: {str(e)}"
+            }
+    
+    def _modify_text(self, step: Dict[str, Any], html_content: str, style_css: str, globals_css: str) -> Dict[str, Any]:
+        """Modify text content in HTML"""
+        try:
+            target_selector = step.get('target_selector', '')
+            new_value = step.get('new_value', '')
+            
+            # Use BeautifulSoup to modify text
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Find elements by CSS selector
+            elements = soup.select(target_selector)
+            
+            if not elements:
+                return {
+                    "success": False,
+                    "error": f"No elements found with selector: {target_selector}"
+                }
+            
+            # Modify the first matching element
+            element = elements[0]
+            element.string = new_value
+            
+            return {
+                "success": True,
+                "html": str(soup),
+                "style_css": style_css,
+                "globals_css": globals_css,
+                "description": f"Modified text in {target_selector} to '{new_value}'"
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Text modification failed: {str(e)}"
+            }
+    
+    def _modify_css(self, step: Dict[str, Any], html_content: str, style_css: str, globals_css: str) -> Dict[str, Any]:
+        """Modify CSS properties"""
+        try:
+            target_selector = step.get('target_selector', '')
+            property_name = step.get('property', '')
+            new_value = step.get('new_value', '')
+            
+            # Validate CSS selector - check for invalid jQuery-style selectors
+            invalid_selectors = [':contains(', ':has(', ':text(', ':first', ':last', ':eq(']
+            if any(invalid_sel in target_selector for invalid_sel in invalid_selectors):
+                return {
+                    "success": False,
+                    "error": f"Invalid CSS selector '{target_selector}' contains jQuery-style pseudo-selectors. Use only valid CSS selectors like .class-name or #id-name.",
+                    "suggestion": "The planner should generate valid CSS selectors based on element classes or IDs."
+                }
+            
+            # Test if the selector actually matches elements in the HTML
+            soup = BeautifulSoup(html_content, 'html.parser')
+            matching_elements = soup.select(target_selector)
+            
+            if not matching_elements:
+                return {
+                    "success": False,
+                    "error": f"CSS selector '{target_selector}' does not match any elements in the HTML",
+                    "suggestion": "Check the HTML structure and use a valid class or ID selector."
+                }
+            
+            # Build the CSS rule
+            css_rule = f"{target_selector} {{\n  {property_name}: {new_value};\n}}"
+            
+            # Add to style_css
+            modified_style_css = style_css + "\n" + css_rule
+            
+            return {
+                "success": True,
+                "html": html_content,
+                "style_css": modified_style_css,
+                "globals_css": globals_css,
+                "description": f"Added CSS rule: {target_selector} {{ {property_name}: {new_value}; }} (matched {len(matching_elements)} elements)"
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"CSS modification failed: {str(e)}"
+            }
+    
+    def _modify_html(self, step: Dict[str, Any], html_content: str, style_css: str, globals_css: str) -> Dict[str, Any]:
+        """Modify HTML structure"""
+        try:
+            # This is a placeholder for HTML structure modifications
+            # Can be expanded based on specific needs
+            
+            return {
+                "success": False,
+                "error": "HTML structure modification not yet implemented"
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"HTML modification failed: {str(e)}"
+            }
