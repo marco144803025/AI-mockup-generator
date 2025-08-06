@@ -27,13 +27,19 @@ class UICodeFileManager:
     def session_exists(self, session_id: str) -> bool:
         """Check if a session directory exists"""
         session_dir = self.get_session_dir(session_id)
-        return session_dir.exists() and session_dir.is_dir()
+        exists = session_dir.exists() and session_dir.is_dir()
+        self.logger.info(f"Session {session_id} exists: {exists} (path: {session_dir})")
+        self.logger.info(f"Base directory: {self.base_dir}")
+        self.logger.info(f"Base directory exists: {self.base_dir.exists()}")
+        return exists
     
     def create_session(self, session_id: str, template_data: Dict[str, Any]) -> bool:
         """Create a new session directory and write initial files"""
         try:
+            self.logger.info(f"Creating session {session_id} with template data: {list(template_data.keys())}")
             session_dir = self.get_session_dir(session_id)
             session_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.info(f"Session directory created: {session_dir}")
             
             # Extract template data
             html_content = template_data.get("html_export", "")
@@ -73,6 +79,7 @@ class UICodeFileManager:
             }
             self._write_json_file(session_dir / "history.json", history)
             
+            self.logger.info(f"Session {session_id} created successfully")
             return True
             
         except Exception as e:
@@ -82,8 +89,11 @@ class UICodeFileManager:
     def load_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Load session data from individual files"""
         try:
+            self.logger.info(f"Loading session {session_id}...")
             session_dir = self.get_session_dir(session_id)
+            self.logger.info(f"Session directory: {session_dir}")
             if not session_dir.exists():
+                self.logger.warning(f"Session directory does not exist: {session_dir}")
                 return None
             
             # Load individual files
@@ -94,7 +104,13 @@ class UICodeFileManager:
             history = self._read_json_file(session_dir / "history.json", {})
             
             # Validate that we have valid content
-            if not self._is_valid_code(html_content) or not self._is_valid_code(style_css):
+            self.logger.info(f"Validating content for session {session_id}...")
+            html_valid = self._is_valid_code(html_content)
+            style_valid = self._is_valid_code(style_css)
+            self.logger.info(f"HTML valid: {html_valid}, Style valid: {style_valid}")
+            self.logger.info(f"HTML length: {len(html_content)}, Style length: {len(style_css)}")
+            
+            if not html_valid or not style_valid:
                 self.logger.warning(f"Session {session_id} has insufficient content")
                 return None
             
@@ -341,14 +357,14 @@ class UICodeFileManager:
         # Additional checks for valid HTML/CSS
         if content.strip().startswith("<!DOCTYPE") or content.strip().startswith("<html"):
             # This looks like valid HTML - should be longer
-            return len(content.strip()) >= 50
+            return len(content.strip()) >= 30
         
         if "{" in content and "}" in content and ":" in content:
             # This looks like valid CSS - can be shorter
             return len(content.strip()) >= 10
         
         # If content is long enough and doesn't contain placeholders, it's probably valid
-        return len(content.strip()) >= 50
+        return len(content.strip()) >= 30
     
     def _clean_html_content(self, html_content: str) -> str:
         """Remove external CSS links from HTML content since CSS will be embedded"""

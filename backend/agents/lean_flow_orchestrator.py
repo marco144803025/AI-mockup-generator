@@ -298,6 +298,16 @@ class LeanFlowOrchestrator:
                 self.session_state["recommendations"] = recommendations_result["data"]["primary_result"]
             else:
                 self.session_state["recommendations"] = recommendations_result
+            
+            # Check if we have only one template - if so, skip question generation
+            recommendations = self.session_state["recommendations"]
+            if isinstance(recommendations, list) and len(recommendations) == 1:
+                self.logger.info(f"Only one template found ({recommendations[0].get('template', {}).get('name', 'Unknown')}), skipping question generation")
+                # Remove question_generation from agent_results if it exists
+                if "question_generation" in agent_results:
+                    del agent_results["question_generation"]
+                # Update session state to indicate no questions needed
+                self.session_state["questions"] = {"questions": [], "reasoning": "Single template found, no questions needed"}
         
         if "question_generation" in agent_results:
             # Extract primary_result from standardized response
@@ -312,8 +322,19 @@ class LeanFlowOrchestrator:
         
         # Use UserProxyAgent to create a proper response
         if isinstance(final_output, dict):
-            # Check if we need clarification questions
-            if "questions_for_clarification" in final_output and final_output.get("questions_for_clarification"):
+            # Check if we have only one template and should present it directly
+            recommendations = self.session_state.get("recommendations", [])
+            if isinstance(recommendations, list) and len(recommendations) == 1:
+                # Present the single template directly
+                response = self.user_proxy_agent.create_response_from_instructions(
+                    "present_single_template",
+                    {
+                        "template": recommendations[0],
+                        "requirements_data": final_output,
+                        "session_state": self.session_state
+                    }
+                )
+            elif "questions_for_clarification" in final_output and final_output.get("questions_for_clarification"):
                 response = self.user_proxy_agent.create_response_from_instructions(
                     "clarification_needed",
                     {
@@ -738,8 +759,26 @@ Return ONLY the intent type (e.g., "modification_request").
                 modified_template = modification_result.get("modified_template", selected_template)
                 self.session_state["modified_template"] = modified_template
                 
-                # Step 4.5: Save the modified template back to the temp_ui_files JSON file
-                await self._save_modified_template_to_file(modified_template)
+                # Step 4.5: Prepare complete template data for saving
+                complete_template_data = {
+                    "html_export": modified_template.get("html_export", ""),
+                    "style_css": modified_template.get("style_css", ""),
+                    "globals_css": modified_template.get("globals_css", ""),
+                    "template_id": selected_template.get("template_id", ""),
+                    "template_name": selected_template.get("name", ""),
+                    "template_category": selected_template.get("category", ""),
+                    "modification_metadata": {
+                        "user_request": message,
+                        "modification_type": "ui_agent",
+                        "changes_applied": modification_result.get("changes_summary", ["UI modifications applied"])
+                    }
+                }
+                
+                print(f"DEBUG ORCHESTRATOR: Prepared template data for saving - HTML length: {len(complete_template_data.get('html_export', ''))}")
+                print(f"DEBUG ORCHESTRATOR: Template data keys: {list(complete_template_data.keys())}")
+                
+                # Save the modified template back to the temp_ui_files JSON file
+                await self._save_modified_template_to_file(complete_template_data)
                 
                 # Step 5: Generate user response
                 response = self.user_proxy_agent.create_response_from_instructions(
@@ -1091,121 +1130,94 @@ Return ONLY the intent type (e.g., "modification_request").
     async def _get_current_ui_state(self, selected_template: Dict[str, Any]) -> Dict[str, Any]:
         """Get current UI state including any modifications"""
         try:
-            # Load complete template content from file system
-            complete_template = await self._load_complete_template_from_files(selected_template)
+            print(f"DEBUG ORCHESTRATOR: Getting current UI state for session {self.session_id}")
             
-            # ALWAYS start with the complete original template to avoid broken session files
+            # Step 1: Always try to load from session files first (this contains the current state)
+            print(f"DEBUG ORCHESTRATOR: Step 1 - Loading from session files for session: {self.session_id}")
+            session_ui_state = await self._load_ui_state_from_session()
+            if session_ui_state and session_ui_state.get("html_export"):
+                print(f"DEBUG ORCHESTRATOR: Using session UI state - HTML length: {len(session_ui_state.get('html_export', ''))}")
+                print(f"DEBUG ORCHESTRATOR: Session UI state CSS length: {len(session_ui_state.get('style_css', ''))}")
+                
+                # Check if the target text is in the session content
+                html_content = session_ui_state.get("html_export", "")
+                if "Welcome back!" in html_content or "Glad you're back!" in html_content:
+                    print(f"DEBUG ORCHESTRATOR: Found welcome text in session HTML")
+                else:
+                    print(f"DEBUG ORCHESTRATOR: Welcome text NOT found in session HTML")
+                
+                return session_ui_state
+            else:
+                print(f"DEBUG ORCHESTRATOR: No session UI state loaded, falling back to MongoDB template")
+            
+            # Step 2: Fallback to MongoDB template if no session file exists
+            print(f"DEBUG ORCHESTRATOR: No session file found, using MongoDB template")
             ui_state = {
                 "template_id": selected_template.get("_id"),
                 "template_name": selected_template.get("name"),
-                "html_export": complete_template.get("html_export", selected_template.get("html_export", "")),
-                "style_css": complete_template.get("style_css", selected_template.get("style_css", "")),
-                "globals_css": complete_template.get("globals_css", selected_template.get("globals_css", ""))
+                "html_export": selected_template.get("html_export", ""),
+                "style_css": selected_template.get("style_css", ""),
+                "globals_css": selected_template.get("globals_css", "")
             }
             
-            # Check if template has valid content
-            if not ui_state.get("html_export") or not ui_state.get("style_css"):
-                # Try to load from session file as fallback only if template is empty
-                session_ui_state = await self._load_ui_state_from_session()
-                
-                if session_ui_state and session_ui_state.get("html_export"):
-                    # Only use session file if it has complete content and original template is empty
-                    session_css_length = len(session_ui_state.get("style_css", ""))
-                    if session_css_length > 1000:  # Ensure it's complete CSS, not just button styles
-                        self.logger.info(f"Using session UI state with complete CSS (length: {session_css_length})")
-                        return session_ui_state
-                    else:
-                        self.logger.warning(f"Session file has incomplete CSS (length: {session_css_length}), using original template")
+            # Add debug logging to verify template content
+            print(f"DEBUG TEMPLATE: Template name: {selected_template.get('name')}")
+            print(f"DEBUG TEMPLATE: Template ID: {selected_template.get('_id')}")
+            print(f"DEBUG TEMPLATE: HTML length: {len(selected_template.get('html_export', ''))}")
+            print(f"DEBUG TEMPLATE: CSS length: {len(selected_template.get('style_css', ''))}")
+            
+            # Check if the target text is in the template
+            if "Welcome back!" in selected_template.get("html_export", ""):
+                print(f"DEBUG TEMPLATE: Found 'Welcome back!' in template HTML")
+            else:
+                print(f"DEBUG TEMPLATE: 'Welcome back!' NOT found in template HTML")
             
             # Apply any pending modifications to the complete template
             modifications = self.session_state.get("modifications", {})
             if modifications:
                 ui_state["pending_modifications"] = modifications
             
-            self.logger.info(f"Using complete original template - HTML: {len(ui_state.get('html_export', ''))}, CSS: {len(ui_state.get('style_css', ''))}")
+            self.logger.info(f"Using MongoDB template - HTML: {len(ui_state.get('html_export', ''))}, CSS: {len(ui_state.get('style_css', ''))}")
             return ui_state
             
         except Exception as e:
             self.logger.error(f"Error getting current UI state: {e}")
             return {}
     
-    async def _load_complete_template_from_files(self, selected_template: Dict[str, Any]) -> Dict[str, Any]:
-        """Load complete template content from UIpages file system"""
-        try:
-            import os
-            from pathlib import Path
-            
-            # Get template name and map it to file system location
-            template_name = selected_template.get("name", "")
-            template_category = selected_template.get("category", "")
-            print(f"DEBUG LOAD: Loading template '{template_name}' category '{template_category}'")
-            
-            # Template name mapping - map database names to file system directories
-            template_mappings = {
-                "About 1": "landing_UI_template_2",  # The About 1 template uses landing template files
-                "Landing 1": "landing_UI_template_2",
-                "Sign-up 1": "signup_UI_template_2"
-            }
-            
-            template_dir = template_mappings.get(template_name)
-            print(f"DEBUG LOAD: Mapped to directory '{template_dir}' for template '{template_name}'")
-            if not template_dir:
-                # Fallback: try to guess from name/category
-                if "about" in template_name.lower() or "about" in template_category.lower():
-                    template_dir = "landing_UI_template_2"
-                elif "landing" in template_name.lower():
-                    template_dir = "landing_UI_template_2"  
-                elif "signup" in template_name.lower() or "sign-up" in template_name.lower():
-                    template_dir = "signup_UI_template_2"
-                else:
-                    template_dir = "landing_UI_template_2"  # Default fallback
-            
-            # Construct file paths
-            ui_pages_dir = Path("..") / "UIpages" / template_dir
-            html_file = ui_pages_dir / "index.html"
-            css_file = ui_pages_dir / "style.css"
-            globals_file = ui_pages_dir / "globals.css"
-            
-            complete_template = {}
-            
-            # Load HTML
-            if html_file.exists():
-                with open(html_file, 'r', encoding='utf-8') as f:
-                    complete_template["html_export"] = f.read()
-                    print(f"DEBUG: Loaded HTML from {html_file}, length: {len(complete_template['html_export'])}")
-            
-            # Load main CSS
-            if css_file.exists():
-                with open(css_file, 'r', encoding='utf-8') as f:
-                    complete_template["style_css"] = f.read()
-                    print(f"DEBUG: Loaded CSS from {css_file}, length: {len(complete_template['style_css'])}")
-            
-            # Load globals CSS
-            if globals_file.exists():
-                with open(globals_file, 'r', encoding='utf-8') as f:
-                    complete_template["globals_css"] = f.read()
-                    print(f"DEBUG: Loaded globals CSS from {globals_file}, length: {len(complete_template['globals_css'])}")
-            
-            return complete_template
-            
-        except Exception as e:
-            self.logger.error(f"Error loading complete template from files: {e}")
-            return {}
+
 
     async def _load_ui_state_from_session(self) -> Optional[Dict[str, Any]]:
         """Load UI state from the session using file manager"""
         try:
             from utils.file_manager import UICodeFileManager
+            import os
             
-            # Initialize file manager
-            file_manager = UICodeFileManager()
+            # Initialize file manager with absolute path to match main.py
+            base_dir = os.path.join(os.getcwd(), "temp_ui_files")
+            file_manager = UICodeFileManager(base_dir=base_dir)
+            
+            print(f"DEBUG ORCHESTRATOR: Loading UI state for session: {self.session_id}")
             
             # Check if session exists in new file-based format
             if file_manager.session_exists(self.session_id):
+                print(f"DEBUG ORCHESTRATOR: Session {self.session_id} exists, loading data...")
                 session_data = file_manager.load_session(self.session_id)
                 if session_data and session_data.get("current_codes", {}).get("html_export"):
                     current_codes = session_data["current_codes"]
-                    self.logger.info(f"Loaded UI codes from file-based session {self.session_id} with HTML length: {len(current_codes.get('html_export', ''))}")
+                    html_length = len(current_codes.get('html_export', ''))
+                    css_length = len(current_codes.get('style_css', ''))
+                    print(f"DEBUG ORCHESTRATOR: Loaded session data - HTML: {html_length}, CSS: {css_length}")
+                    
+                    # Check if the target text is in the loaded content
+                    html_content = current_codes.get('html_export', '')
+                    if "Glad you're back!" in html_content:
+                        print(f"DEBUG ORCHESTRATOR: Found 'Glad you're back!' in session HTML")
+                    elif "Welcome back!" in html_content:
+                        print(f"DEBUG ORCHESTRATOR: Found 'Welcome back!' in session HTML")
+                    else:
+                        print(f"DEBUG ORCHESTRATOR: No welcome text found in session HTML")
+                    
+                    self.logger.info(f"Loaded UI codes from file-based session {self.session_id} with HTML length: {html_length}")
                     return {
                         "html_export": current_codes.get("html_export", ""),
                         "style_css": current_codes.get("style_css", ""),
@@ -1213,6 +1225,10 @@ Return ONLY the intent type (e.g., "modification_request").
                         "template_info": session_data.get("template_info", {}),
                         "session_file": f"temp_ui_files/{self.session_id}/"
                     }
+                else:
+                    print(f"DEBUG ORCHESTRATOR: Session data is empty or invalid")
+            else:
+                print(f"DEBUG ORCHESTRATOR: Session {self.session_id} does not exist")
             
             # Fallback: Check for old JSON format and migrate
             from pathlib import Path
@@ -1568,7 +1584,16 @@ Parse which template the user is selecting. Consider:
 - Implicit references: "that one", "this template", "the first option"
 - Partial matches: "landing" when there's only one landing template, "profile 1" for Profile 1
 
-If the user's selection is unclear, ambiguous, or doesn't match any template, return "unclear".
+**CRITICAL**: If there's only one template available and the user's message could reasonably refer to it, select that template.
+
+**EXAMPLES**:
+- "i choose landing 1" with only "Landing 1" available → return "1"
+- "i choose it" with only one template → return "1"
+- "landing 1" with only "Landing 1" available → return "1"
+- "the first one" with only one template → return "1"
+- "that template" with only one template → return "1"
+
+If the user's selection is truly unclear, ambiguous, or doesn't match any template, return "unclear".
 
 Return ONLY the template number (1, 2, 3, etc.) or "unclear" if the selection cannot be determined.
 """
@@ -1578,14 +1603,16 @@ Return ONLY the template number (1, 2, 3, etc.) or "unclear" if the selection ca
             response = self.requirements_agent.call_claude_with_cot(prompt, enable_cot=False)
             
             self.logger.info(f"LLM response for template selection: '{response}'")
+            self.logger.info(f"LLM response type: {type(response)}")
+            self.logger.info(f"LLM response length: {len(response) if response else 0}")
             
             # Parse response
             try:
                 selection = response.strip().lower()
                 self.logger.info(f"Parsed selection: '{selection}'")
                 
-                # Check if selection is unclear
-                if selection in self.keyword_manager.get_template_selection_keywords()["unclear_responses"]:
+                # Check if selection is unclear (use simple string check instead of hardcoded list)
+                if selection == "unclear" or selection == "unclear_responses":
                     self.logger.info(f"LLM could not parse template selection from: '{message}'")
                     return None
                 
@@ -1653,10 +1680,28 @@ Return ONLY the template number (1, 2, 3, etc.) or "unclear" if the selection ca
                 
                 # If we get here, the selection was unclear
                 self.logger.info(f"Could not match template selection '{selection}' to any available template")
+                
+                # Fallback: If there's only one template and the message isn't clearly rejecting it, select it
+                if len(recommendations) == 1:
+                    # Check if the message contains clear rejection words
+                    rejection_words = ["no", "not", "different", "other", "none", "don't", "doesn't", "wrong"]
+                    message_lower = message.lower()
+                    if not any(word in message_lower for word in rejection_words):
+                        self.logger.info(f"Fallback: Selecting the only available template since user didn't clearly reject it")
+                        selected_template = recommendations[0].get("template", {})
+                        return selected_template
+                
                 return None
                 
             except Exception as e:
                 self.logger.error(f"Error parsing template selection: {e}")
+                
+                # Fallback: If there's only one template, select it
+                if len(recommendations) == 1:
+                    self.logger.info(f"Fallback after error: Selecting the only available template")
+                    selected_template = recommendations[0].get("template", {})
+                    return selected_template
+                
                 return None
                 
         except Exception as e:
@@ -1691,6 +1736,8 @@ Determine which agents are needed and in what order based on:
 - Existing session state
 - Whether clarification is needed
 
+**CRITICAL OPTIMIZATION**: If template_recommendation returns only 1 template, skip question_generation and go directly to presenting the single template to the user.
+
 Return a structured JSON response:
 
 {{
@@ -1710,6 +1757,7 @@ EXAMPLES:
 - User says "show me template 1" → Skip requirements_analysis, go directly to template selection
 - User says "I'm not sure" → Use question_generation to get clarification
 - User says "make it more colorful" → Skip requirements_analysis, go to editing phase
+- If template_recommendation finds only 1 template → Skip question_generation, present single template
 """
 
             response = self.requirements_agent.call_claude_with_cot(prompt, enable_cot=True)
@@ -2550,28 +2598,53 @@ EXAMPLES:
                 }
             }
             
-            # Step 6: Save the JSON file
-            import json
+            # Step 6: Save using file manager (new format)
+            from utils.file_manager import UICodeFileManager
             import os
             
-            # Ensure temp_ui_files directory exists
-            temp_dir = "temp_ui_files"
-            if not os.path.exists(temp_dir):
-                os.makedirs(temp_dir)
+            # Use absolute path to match main.py
+            base_dir = os.path.join(os.getcwd(), "temp_ui_files")
+            file_manager = UICodeFileManager(base_dir=base_dir)
             
-            # Save the JSON file
-            json_filename = f"ui_codes_{self.session_id}.json"
-            json_filepath = os.path.join(temp_dir, json_filename)
+            # Create session with template data
+            template_data = {
+                "html_export": template_result.get("html_export", ""),
+                "style_css": template_result.get("style_css", ""),
+                "globals_css": template_result.get("global_css", ""),
+                "template_id": template_id,
+                "name": actual_template.get("name", "Unknown"),
+                "category": actual_template.get("category", "unknown")
+            }
             
-            with open(json_filepath, 'w') as f:
-                json.dump(ui_codes_data, f, indent=2)
+            import time
+            success = file_manager.create_session(self.session_id, template_data)
             
-            self.logger.info(f"JSON file created: {json_filepath}")
+            if success:
+                self.logger.info(f"[{time.strftime('%H:%M:%S')}] Session created using file manager: {self.session_id}")
+                # Add small delay to ensure files are written
+                time.sleep(0.1)
+            else:
+                self.logger.error(f"Failed to create session using file manager: {self.session_id}")
+                # Fallback to old JSON format
+                import json
+                import os
+                
+                temp_dir = "temp_ui_files"
+                if not os.path.exists(temp_dir):
+                    os.makedirs(temp_dir)
+                
+                json_filename = f"ui_codes_{self.session_id}.json"
+                json_filepath = os.path.join(temp_dir, json_filename)
+                
+                with open(json_filepath, 'w') as f:
+                    json.dump(ui_codes_data, f, indent=2)
+                
+                self.logger.info(f"Fallback JSON file created: {json_filepath}")
             
             # Step 7: Update session state
             self.session_state["current_phase"] = "editing"
             self.session_state["selected_template"] = selected_template
-            self.session_state["ui_codes_file"] = json_filepath
+            self.session_state["ui_codes_file"] = f"temp_ui_files/{self.session_id}/"
             self.session_state["phase_transition_completed"] = True
             
             # Update global session manager
@@ -2587,7 +2660,7 @@ EXAMPLES:
                     "sessionId": self.session_id,
                     "selectedTemplate": selected_template,
                     "category": selected_template.get("category"),
-                    "ui_codes_file": json_filename
+                    "ui_codes_file": f"temp_ui_files/{self.session_id}/"
                 }
             })
             
@@ -2606,7 +2679,7 @@ EXAMPLES:
                     "sessionId": self.session_id,
                     "selectedTemplate": selected_template,
                     "category": selected_template.get("category"),
-                    "ui_codes_file": json_filename
+                    "ui_codes_file": f"temp_ui_files/{self.session_id}/"
                 }
             }
             
@@ -2653,9 +2726,14 @@ EXAMPLES:
         """Save the modified template using file manager"""
         try:
             from utils.file_manager import UICodeFileManager
+            import os
             
-            # Initialize file manager
-            file_manager = UICodeFileManager()
+            print(f"DEBUG SAVE: Starting save process for session {self.session_id}")
+            print(f"DEBUG SAVE: Modified template keys: {list(modified_template.keys())}")
+            
+            # Initialize file manager with absolute path to match main.py
+            base_dir = os.path.join(os.getcwd(), "temp_ui_files")
+            file_manager = UICodeFileManager(base_dir=base_dir)
             
             # Check if session exists in new format, if not create it
             if not file_manager.session_exists(self.session_id):
@@ -2665,8 +2743,8 @@ EXAMPLES:
                     "style_css": modified_template.get("style_css", ""),
                     "globals_css": modified_template.get("globals_css", ""),
                     "template_id": modified_template.get("template_id", ""),
-                    "name": modified_template.get("template_info", {}).get("name", ""),
-                    "category": modified_template.get("template_info", {}).get("category", "")
+                    "name": modified_template.get("template_name", ""),
+                    "category": modified_template.get("template_category", "")
                 }
                 success = file_manager.create_session(self.session_id, template_data)
                 if not success:
@@ -2680,12 +2758,20 @@ EXAMPLES:
                     "changes_applied": modified_template.get("modification_metadata", {}).get("changes_applied", ["UI modifications applied"])
                 }
                 
-                success = file_manager.save_session(self.session_id, modified_template, modification_metadata)
+                # Prepare the data structure expected by file_manager.save_session
+                session_data = {
+                    "html_export": modified_template.get("html_export", ""),
+                    "style_css": modified_template.get("style_css", ""),
+                    "globals_css": modified_template.get("globals_css", "")
+                }
+                
+                success = file_manager.save_session(self.session_id, session_data, modification_metadata)
                 if not success:
                     self.logger.error(f"Failed to save session {self.session_id}")
                     return
             
             self.logger.info(f"Modified template saved using file manager for session {self.session_id}")
+            print(f"DEBUG SAVE: Template saved successfully")
             
             # Trigger screenshot regeneration
             try:

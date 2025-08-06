@@ -173,6 +173,37 @@ IMPORTANT RULES:
                 
                 response += "\nYou can:\n- Choose by number: 'I want template 1' or 'option 2'\n- Choose by name: 'I want Landing 1' or 'Login 2'\n- Ask for different options: 'show me other templates'"
             
+            elif "present_single_template" in instructions.lower():
+                template = final_data.get("template", {})
+                requirements_data = final_data.get("requirements_data", {})
+                
+                # Extract template information
+                template_name = template.get("name", "Unknown")
+                template_description = template.get("description", "No description available")
+                template_category = template.get("category", "Unknown")
+                template_tags = template.get("tags", [])
+                
+                # Extract requirements information
+                page_type = requirements_data.get("page_type", "Unknown")
+                
+                response = f"Perfect! I found exactly one template that matches your requirements for a {page_type} page.\n\n"
+                response += f"Template: {template_name}\n"
+                response += f"Category: {template_category}\n"
+                response += f"Description: {template_description}\n\n"
+                
+                if template_tags:
+                    response += f"Features: {', '.join(template_tags[:5])}"
+                    if len(template_tags) > 5:
+                        response += f" and {len(template_tags) - 5} more"
+                    response += "\n\n"
+                
+                response += "This template perfectly matches your requirements. To proceed, please choose this template by saying:\n"
+                response += "- 'I choose this template'\n"
+                response += f"- 'I choose {template_name}'\n"
+                response += "- 'Yes, this looks good'\n"
+                response += "- 'Let's go with this one'\n\n"
+                response += "Or if you'd like to see other options, just let me know!"
+            
             elif "present_filtered_recommendations" in instructions.lower():
                 templates = final_data.get("templates", [])
                 targeted_questions = final_data.get("targeted_questions", {})
@@ -277,6 +308,8 @@ IMPORTANT RULES:
                 return self._create_requirements_clarification_response(instructions)
             elif response_type == "requirements_analysis_complete":
                 return self._create_requirements_complete_response(instructions)
+            elif response_type == "present_single_template":
+                return self._create_present_single_template_response(instructions)
             else:
                 return self._create_default_response(instructions)
                 
@@ -414,3 +447,43 @@ IMPORTANT RULES:
         except Exception as e:
             self.logger.error(f"Error creating default response: {e}")
             return "I'm here to help you edit your UI. What would you like to change?"
+
+    def _create_present_single_template_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response when presenting a single template to the user"""
+        try:
+            template = instructions.get("template", {})
+            requirements_data = instructions.get("requirements_data", {})
+            
+            # Extract template information
+            template_name = template.get("name", "Unknown")
+            template_description = template.get("description", "No description available")
+            template_category = template.get("category", "Unknown")
+            template_tags = template.get("tags", [])
+            
+            # Extract requirements information
+            page_type = requirements_data.get("page_type", "Unknown")
+            style_preferences = requirements_data.get("style_preferences", [])
+            
+            response = f"Perfect! I found exactly one template that matches your requirements for a {page_type} page.\n\n"
+            response += f"Template: {template_name}\n"
+            response += f"Category: {template_category}\n"
+            response += f"Description: {template_description}\n\n"
+            
+            if template_tags:
+                response += f"Features: {', '.join(template_tags[:5])}"
+                if len(template_tags) > 5:
+                    response += f" and {len(template_tags) - 5} more"
+                response += "\n\n"
+            
+            response += "This template perfectly matches your requirements. To proceed, please choose this template by saying:\n"
+            response += "- 'I choose this template'\n"
+            response += f"- 'I choose {template_name}'\n"
+            response += "- 'Yes, this looks good'\n"
+            response += "- 'Let's go with this one'\n\n"
+            response += "Or if you'd like to see other options, just let me know!"
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error creating present single template response: {e}")
+            return "I found one template that matches your requirements. Would you like to proceed with this template?"

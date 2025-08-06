@@ -7,7 +7,6 @@ import json
 import re
 import logging
 from typing import Dict, Any, Optional, List
-from bs4 import BeautifulSoup
 
 from .base_agent import BaseAgent
 
@@ -25,14 +24,13 @@ Your role is to:
 4. Generate precise, valid CSS selectors and code modifications
 
 **CRITICAL CSS SELECTOR REQUIREMENTS:**
-- ✅ ONLY use valid CSS selectors: `.class-name`, `#id-name`, `tag.class`, `tag#id`
-- ❌ NEVER use jQuery selectors: `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`
-- ✅ Every selector must be valid CSS that works in a real stylesheet
-- ✅ Use exact classes/IDs from the code - don't invent or guess
-
-You use the Claude-3-5-Sonnet model for complex reasoning and code generation."""
+-  ONLY use valid CSS selectors: `.class-name`, `#id-name`, `tag.class`, `tag#id`
+-  NEVER use jQuery selectors: `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`
+-  Every selector must be valid CSS that works in a real stylesheet
+-  Use exact classes/IDs from the code - don't invent or guess
+"""
         
-        super().__init__("UIEditingAgent", system_message, model="claude-3-5-sonnet-20241022")
+        super().__init__("UIEditingAgent", system_message, model="claude-3-5-haiku-20241022")
         self.logger = logging.getLogger(__name__)
     
     def _clean_json_string(self, json_str: str) -> str:
@@ -47,7 +45,7 @@ You use the Claude-3-5-Sonnet model for complex reasoning and code generation.""
     def _extract_json_from_response(self, response: str, context: str = "response") -> Optional[Dict[str, Any]]:
         """Robust JSON extraction from LLM responses"""
         try:
-            self.logger.debug(f"Extracting JSON from {context}: {response[:200]}...")
+            self.logger.debug(f"🔍 JSON EXTRACTION: Extracting JSON from {context}: {response[:200]}...")
             
             # Strategy 1: Find JSON block with markers
             if "```json" in response:
@@ -91,181 +89,52 @@ You use the Claude-3-5-Sonnet model for complex reasoning and code generation.""
                 try:
                     return json.loads(json_str)
                 except json.JSONDecodeError as e:
-                    self.logger.warning(f"Failed to parse JSON in {context}: {e}")
+                    self.logger.warning(f"🔍 JSON EXTRACTION: Failed to parse JSON in {context}: {e}")
                     return None
             
+            self.logger.warning(f"🔍 JSON EXTRACTION: No JSON found in {context}")
             return None
             
         except Exception as e:
-            self.logger.error(f"Error extracting JSON from {context}: {e}")
+            self.logger.error(f"🔍 JSON EXTRACTION: Error extracting JSON from {context}: {e}")
             return None
     
-    def _analyze_html_structure_with_beautifulsoup(self, html_content: str) -> Dict[str, Any]:
-        """Analyze HTML structure using BeautifulSoup for comprehensive understanding"""
-        try:
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Extract all text elements with their context
-            text_elements = []
-            for element in soup.find_all(text=True):
-                if element.strip():
-                    parent = element.parent
-                    text_elements.append({
-                        "text": element.strip(),
-                        "tag": parent.name if parent else "unknown",
-                        "classes": parent.get('class', []) if parent else [],
-                        "id": parent.get('id', '') if parent else '',
-                        "parent_context": self._get_parent_context(parent) if parent else '',
-                        "sibling_context": self._get_sibling_context(parent) if parent else []
-                    })
-            
-            # Group elements by CSS class
-            elements_by_class = {}
-            for element in soup.find_all(class_=True):
-                for class_name in element.get('class', []):
-                    if class_name not in elements_by_class:
-                        elements_by_class[class_name] = []
-                    elements_by_class[class_name].append({
-                        "tag": element.name,
-                        "text": element.get_text(strip=True)[:50] + "..." if len(element.get_text(strip=True)) > 50 else element.get_text(strip=True),
-                        "id": element.get('id', ''),
-                        "classes": element.get('class', [])
-                    })
-            
-            # Group elements by ID
-            elements_by_id = {}
-            for element in soup.find_all(id=True):
-                element_id = element.get('id')
-                elements_by_id[element_id] = {
-                    "tag": element.name,
-                    "text": element.get_text(strip=True)[:50] + "..." if len(element.get_text(strip=True)) > 50 else element.get_text(strip=True),
-                    "classes": element.get('class', [])
-                }
-            
-            # Find header elements
-            header_elements = []
-            for element in soup.find_all(['header', 'nav', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-                header_elements.append({
-                    "tag": element.name,
-                    "text": element.get_text(strip=True)[:50] + "..." if len(element.get_text(strip=True)) > 50 else element.get_text(strip=True),
-                    "classes": element.get('class', []),
-                    "id": element.get('id', '')
-                })
-            
-            # Find navigation elements
-            nav_elements = []
-            for element in soup.find_all(['nav', 'a']) + soup.find_all(class_=re.compile(r'nav|menu|header')):
-                nav_elements.append({
-                    "tag": element.name,
-                    "text": element.get_text(strip=True)[:50] + "..." if len(element.get_text(strip=True)) > 50 else element.get_text(strip=True),
-                    "classes": element.get('class', []),
-                    "id": element.get('id', '')
-                })
-            
-            # Build simplified DOM structure
-            dom_structure = self._build_dom_structure(soup)
-            
-            return {
-                "text_elements": text_elements,
-                "elements_by_class": elements_by_class,
-                "elements_by_id": elements_by_id,
-                "header_elements": header_elements,
-                "navigation_elements": nav_elements,
-                "dom_structure": dom_structure,
-                "total_elements": len(soup.find_all()),
-                "total_text_elements": len(text_elements)
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Error analyzing HTML structure: {e}")
-            return {
-                "text_elements": [],
-                "elements_by_class": {},
-                "elements_by_id": {},
-                "header_elements": [],
-                "navigation_elements": [],
-                "dom_structure": {},
-                "total_elements": 0,
-                "total_text_elements": 0,
-                "error": str(e)
-            }
-    
-    def _get_parent_context(self, element) -> str:
-        """Get parent context for an element"""
-        if element and element.parent:
-            parent = element.parent
-            context_parts = []
-            if parent.name:
-                context_parts.append(parent.name)
-            if parent.get('class'):
-                context_parts.extend(parent.get('class'))
-            if parent.get('id'):
-                context_parts.append(f"#{parent.get('id')}")
-            return ".".join(context_parts)
-        return ""
-    
-    def _get_sibling_context(self, element) -> List[str]:
-        """Get sibling context for an element"""
-        if element and element.parent:
-            siblings = []
-            for sibling in element.parent.find_all(recursive=False):
-                if sibling != element:
-                    sibling_info = []
-                    if sibling.name:
-                        sibling_info.append(sibling.name)
-                    if sibling.get('class'):
-                        sibling_info.extend(sibling.get('class'))
-                    if sibling.get('id'):
-                        sibling_info.append(f"#{sibling.get('id')}")
-                    if sibling_info:
-                        siblings.append(".".join(sibling_info))
-            return siblings
-        return []
-    
-    def _build_dom_structure(self, soup) -> Dict[str, Any]:
-        """Build a simplified DOM structure for debugging"""
-        structure = {}
-        
-        # Find main sections
-        main_sections = soup.find_all(['main', 'section', 'div'], class_=re.compile(r'main|section|container|wrapper'))
-        for i, section in enumerate(main_sections[:5]):  # Limit to first 5
-            section_info = {
-                "tag": section.name,
-                "classes": section.get('class', []),
-                "id": section.get('id', ''),
-                "children_count": len(section.find_all(recursive=False))
-            }
-            structure[f"section_{i+1}"] = section_info
-        
-        return structure
+    # Note: All HTML analysis is now done by the LLM in the enhanced prompt
+    # No need for hardcoded BeautifulSoup analysis methods
     
     def process_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
         """Process a UI modification request using two-step LLM approach"""
         try:
-            self.logger.info(f"Processing modification request: {user_feedback}")
+            self.logger.info(f"🔄 UI EDITING AGENT: Starting modification request: {user_feedback}")
             
             # Extract current UI code
             html_content = current_template.get("html_export", "")
             style_css = current_template.get("style_css", "")
             globals_css = current_template.get("globals_css", "")
             
+            self.logger.info(f"📊 UI EDITING AGENT: Template loaded - HTML: {len(html_content)} chars, CSS: {len(style_css)} chars")
+            
             if not html_content:
+                self.logger.error(f"❌ UI EDITING AGENT: No HTML content found in template")
                 return {
                     "success": False,
                     "error": "No HTML content found in template"
                 }
             
             # Step 1: Create detailed modification plan
-            self.logger.debug("Step 1: Creating modification plan...")
+            self.logger.info(f"🎯 PLANNER PHASE: Creating modification plan...")
             plan_result = self._create_modification_plan(user_feedback, html_content, style_css, globals_css)
             
             if not plan_result.get("success"):
+                self.logger.error(f"❌ PLANNER PHASE: Failed to create modification plan")
                 return plan_result
             
             modification_plan = plan_result["plan"]
+            self.logger.info(f"✅ PLANNER PHASE: Plan created successfully")
             
             # Check if clarification is needed
             if modification_plan.get("requires_clarification", False):
+                self.logger.info(f"❓ PLANNER PHASE: Clarification needed from user")
                 return {
                     "success": True,
                     "requires_clarification": True,
@@ -274,11 +143,15 @@ You use the Claude-3-5-Sonnet model for complex reasoning and code generation.""
                 }
             
             # Step 2: Execute the plan and generate new code
-            self.logger.debug("Step 2: Executing modification plan...")
+            self.logger.info(f"⚡ EXECUTOR PHASE: Executing modification plan...")
             execution_result = self._execute_modification_plan(modification_plan, html_content, style_css, globals_css)
             
             if not execution_result.get("success"):
+                self.logger.error(f"❌ EXECUTOR PHASE: Failed to execute modification plan")
                 return execution_result
+            
+            self.logger.info(f"✅ EXECUTOR PHASE: Plan executed successfully")
+            self.logger.info(f"🎉 UI EDITING AGENT: Modification completed successfully")
             
             # Return the complete result
             return {
@@ -293,124 +166,61 @@ You use the Claude-3-5-Sonnet model for complex reasoning and code generation.""
             }
             
         except Exception as e:
-            self.logger.error(f"Error processing modification request: {e}")
+            self.logger.error(f"💥 UI EDITING AGENT: Error processing modification request: {e}")
             return {
                 "success": False,
                 "error": f"Processing failed: {str(e)}"
             }
     
     def _create_modification_plan(self, user_feedback: str, html_content: str, style_css: str, globals_css: str) -> Dict[str, Any]:
-        """Step 1: Create a detailed modification plan"""
+        """Step 1: Create a detailed modification plan using LLM analysis"""
         try:
-            # Analyze HTML structure
-            html_analysis = self._analyze_html_structure_with_beautifulsoup(html_content)
+            self.logger.info(f"🎯 PLANNER: Building enhanced planning prompt...")
             
-            # Build the planning prompt
-            prompt = self._build_planning_prompt(user_feedback, html_content, style_css, globals_css, html_analysis)
+            # Build the enhanced planning prompt that lets LLM do all analysis
+            prompt = self._build_enhanced_planning_prompt(user_feedback, html_content, style_css, globals_css)
             
-            self.logger.debug("Sending planning request to Claude Sonnet...")
+            self.logger.info(f"🎯 PLANNER: Sending planning request to Claude Sonnet...")
             response = self.call_claude_with_cot(prompt, enable_cot=True)
             
+            self.logger.info(f"🎯 PLANNER: Received response from Claude Sonnet (length: {len(response)})")
+            
             # Parse the planning response
+            self.logger.info(f"🎯 PLANNER: Parsing JSON from planning response...")
             plan = self._extract_json_from_response(response, "planning response")
             
             if plan:
+                self.logger.info(f"🎯 PLANNER: Successfully parsed modification plan")
                 return {
                     "success": True,
                     "plan": plan
                 }
             else:
+                self.logger.error(f"🎯 PLANNER: Failed to parse modification plan from LLM response")
                 return {
                     "success": False,
                     "error": "Failed to parse modification plan from LLM response"
                 }
-                
+            
         except Exception as e:
-            self.logger.error(f"Error creating modification plan: {e}")
+            self.logger.error(f"🎯 PLANNER: Error creating modification plan: {e}")
             return {
                 "success": False,
                 "error": f"Planning failed: {str(e)}"
             }
     
-    def _build_planning_prompt(self, user_feedback: str, html_content: str, style_css: str, globals_css: str, html_analysis: Dict[str, Any]) -> str:
-        """Build the planning prompt with full code context"""
+    def _build_enhanced_planning_prompt(self, user_feedback: str, html_content: str, style_css: str, globals_css: str) -> str:
+        """Build an enhanced prompt that lets the LLM do comprehensive analysis"""
         
-        # Format HTML analysis for the prompt
-        structure_analysis_text = f"""
-## HTML STRUCTURE ANALYSIS
+        return f"""# COMPREHENSIVE UI MODIFICATION ANALYSIS & PLANNING
 
-**Total Elements**: {html_analysis.get('total_elements', 0)}
-**Total Text Elements**: {html_analysis.get('total_text_elements', 0)}
-
-## ALL TEXT ELEMENTS
-"""
-        
-        for i, element in enumerate(html_analysis.get('text_elements', [])[:20]):  # Limit to first 20
-            structure_analysis_text += f"""
-{i+1}. Text: "{element['text']}"
-   Tag: {element['tag']}
-   Classes: {', '.join(element['classes']) if element['classes'] else 'none'}
-   ID: {element['id'] if element['id'] else 'none'}
-   Parent: {element['parent_context']}
-   Siblings: {', '.join(element['sibling_context'][:3]) if element['sibling_context'] else 'none'}
-"""
-        
-        structure_analysis_text += f"""
-
-## ELEMENTS BY CSS CLASS
-"""
-        
-        for class_name, elements in list(html_analysis.get('elements_by_class', {}).items())[:15]:  # Limit to first 15
-            structure_analysis_text += f"""
-.{class_name}:
-"""
-            for element in elements[:3]:  # Limit to first 3 elements per class
-                structure_analysis_text += f"  - {element['tag']}: '{element['text']}' (ID: {element['id'] or 'none'})\n"
-        
-        structure_analysis_text += f"""
-
-## ELEMENTS BY ID
-"""
-        
-        for element_id, element in list(html_analysis.get('elements_by_id', {}).items())[:10]:  # Limit to first 10
-            structure_analysis_text += f"""
-#{element_id}:
-  Tag: {element['tag']}
-  Text: '{element['text']}'
-  Classes: {', '.join(element['classes']) if element['classes'] else 'none'}
-"""
-        
-        structure_analysis_text += f"""
-
-## HEADER ELEMENTS
-"""
-        
-        for element in html_analysis.get('header_elements', [])[:10]:
-            structure_analysis_text += f"""
-- {element['tag']}: '{element['text']}' (Classes: {', '.join(element['classes']) if element['classes'] else 'none'}, ID: {element['id'] or 'none'})
-"""
-        
-        structure_analysis_text += f"""
-
-## NAVIGATION ELEMENTS
-"""
-        
-        for element in html_analysis.get('navigation_elements', [])[:10]:
-            structure_analysis_text += f"""
-- {element['tag']}: '{element['text']}' (Classes: {', '.join(element['classes']) if element['classes'] else 'none'}, ID: {element['id'] or 'none'})
-"""
-        
-        structure_analysis_text += f"""
-
-## DOM STRUCTURE OVERVIEW
-"""
-        
-        for section_name, section_info in html_analysis.get('dom_structure', {}).items():
-            structure_analysis_text += f"""
-{section_name}: {section_info['tag']} (Classes: {', '.join(section_info['classes']) if section_info['classes'] else 'none'}, ID: {section_info['id'] or 'none'}, Children: {section_info['children_count']})
-"""
-
-        return f"""# UI MODIFICATION PLANNING
+You are an expert UI/UX analyst and web developer with deep understanding of:
+- HTML structure and semantics
+- CSS styling and visual properties
+- UI/UX patterns and conventions
+- Spatial relationships and layout
+- Visual design principles
+- User intent interpretation
 
 ## USER REQUEST
 {user_feedback}
@@ -430,44 +240,95 @@ You use the Claude-3-5-Sonnet model for complex reasoning and code generation.""
 {globals_css}
 ```
 
-{structure_analysis_text}
+## YOUR COMPREHENSIVE ANALYSIS TASK
 
-## CRITICAL CSS SELECTOR RULES - READ CAREFULLY
+**Step 1: Analyze the Complete UI Structure**
+Analyze the HTML and CSS to understand:
+- **Visual Layout**: Identify top, bottom, left, right, center areas
+- **UI Patterns**: Recognize headers, navigation, hero sections, footers, sidebars, forms, buttons, cards
+- **Spatial Relationships**: Map element positions and visual hierarchy
+- **Visual Properties**: Identify colors, sizes, fonts, spacing, borders
+- **Interactive Elements**: Find buttons, links, forms, CTAs
+- **Content Structure**: Understand text content, images, sections
 
-**VALID CSS SELECTORS ONLY:**
-- ✅ `.class-name` (targets elements with class)
-- ✅ `#id-name` (targets element with ID)
-- ✅ `tag.class` (e.g., `button.btn-primary`)
-- ✅ `tag#id` (e.g., `div#header`)
-- ✅ `.class1.class2` (multiple classes)
+**Step 2: Understand User Intent**
+Interpret the user's request by considering:
+- **Location Descriptors**: "top", "bottom", "left", "right", "center", "side", "above", "below"
+- **Visual Descriptors**: "red", "blue", "large", "small", "bright", "dark", "bold"
+- **Semantic Descriptors**: "header", "navigation", "hero", "footer", "button", "form"
+- **Functional Descriptors**: "clickable", "interactive", "prominent", "hidden"
 
-**INVALID SELECTORS - NEVER USE:**
-- ❌ `:contains('text')` (jQuery selector)
-- ❌ `:has()` (jQuery selector)
-- ❌ `:text()` (jQuery selector)
-- ❌ `:first`, `:last` (jQuery selectors)
-- ❌ `:eq()` (jQuery selector)
+**Step 3: Identify Target Elements**
+Find the best matching elements based on:
+- **Exact Text Matches**: Direct text content matches
+- **Spatial Location**: Position-based identification
+- **Visual Properties**: Color, size, style-based identification
+- **Semantic Role**: Function-based identification (button, link, etc.)
+- **Context Clues**: Surrounding elements and layout context
+
+**Step 4: Generate Precise CSS Selectors**
+Create valid CSS selectors that:
+- Target the exact intended elements
+- Use valid CSS syntax (no jQuery selectors)
+- Are specific enough to avoid conflicts
+- Follow best practices for maintainability
+
+## ANALYSIS GUIDELINES
+
+### **Spatial Understanding**
+- **Top/Bottom**: Elements in upper/lower 25% of viewport
+- **Left/Right**: Elements in left/right 25% of viewport  
+- **Center**: Elements in middle 50% of viewport
+- **Above/Below Fold**: Visible without scrolling vs. requires scroll
+
+### **UI Pattern Recognition**
+- **Header/Navigation**: Top navigation bars, menus, logos
+- **Hero Sections**: Large banner areas, main headlines, prominent CTAs
+- **Content Areas**: Main text sections, articles, descriptions
+- **Sidebars**: Side navigation, secondary content, panels
+- **Footers**: Bottom sections, links, copyright info
+- **Forms**: Input fields, buttons, data entry areas
+- **Cards/Tiles**: Content containers, product cards, info boxes
+- **Modals/Popups**: Overlay dialogs, notifications
+
+### **Visual Property Analysis**
+- **Colors**: Background colors, text colors, border colors
+- **Sizes**: Width, height, font sizes, padding, margins
+- **Typography**: Font families, weights, styles
+- **Layout**: Position, display, flexbox, grid properties
+- **Effects**: Borders, shadows, gradients, animations
+
+### **CSS Selector Best Practices**
+- ✅ **Valid Selectors**: `.class-name`, `#id-name`, `tag.class`, `tag#id`
+- ❌ **Invalid Selectors**: `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`
+- **Specificity**: Use specific enough selectors to target intended elements
+- **Maintainability**: Prefer classes over IDs, avoid overly complex selectors
 
 ## FEW-SHOT EXAMPLES
 
-**Example 1: Valid CSS Selector**
-**User Request**: "change the color of the login button to blue"
+### **Example 1: Location-Based Request**
+**User Request**: "change the top navigation button to blue"
+
+**Analysis**:
+- Identifies navigation elements at the top of the page
+- Finds buttons within the navigation area
+- Analyzes current styling to understand the target
 
 **Plan**:
 ```json
 {{
   "intent_analysis": {{
-    "user_goal": "Change the visual appearance of a login button",
+    "user_goal": "Change the color of a navigation button at the top of the page",
     "target_element_type": "button",
     "modification_type": "styling",
-    "specific_change": "color change to blue"
+    "specific_change": "change button color to blue"
   }},
   "target_identification": {{
     "primary_target": {{
       "text_content": "Login",
-      "css_selector": ".btn-primary",
+      "css_selector": ".nav-top .btn-primary",
       "confidence": 0.95,
-      "reasoning": "Exact text match found with button class"
+      "reasoning": "Found navigation button in top area with class .btn-primary"
     }},
     "alternative_targets": []
   }},
@@ -477,34 +338,81 @@ You use the Claude-3-5-Sonnet model for complex reasoning and code generation.""
     {{
       "step_number": 1,
       "action": "modify_css",
-      "target_selector": ".btn-primary",
+      "target_selector": ".nav-top .btn-primary",
       "property": "background-color",
       "new_value": "#007bff",
-      "description": "Change button background color to blue"
+      "description": "Change top navigation button background to blue"
     }}
   ],
-  "expected_outcome": "Login button will have a blue background color"
+  "expected_outcome": "The top navigation button will have a blue background"
 }}
 ```
 
-**Example 2: Multiple Classes**
-**User Request**: "change the connect link color to red"
+### **Example 2: Visual-Based Request**
+**User Request**: "make the red button green"
+
+**Analysis**:
+- Scans all elements for red background colors
+- Identifies buttons with red styling
+- Determines the specific target element
 
 **Plan**:
 ```json
 {{
   "intent_analysis": {{
-    "user_goal": "Change the color of a navigation link",
-    "target_element_type": "link",
+    "user_goal": "Change the color of a red button to green",
+    "target_element_type": "button",
     "modification_type": "styling",
-    "specific_change": "text color change to red"
+    "specific_change": "change button color from red to green"
   }},
   "target_identification": {{
     "primary_target": {{
-      "text_content": "Connect",
-      "css_selector": ".text-wrapper-10",
+      "text_content": "Submit",
+      "css_selector": ".submit-btn",
       "confidence": 0.95,
-      "reasoning": "Unique class identifier for the Connect link"
+      "reasoning": "Found button with red background-color: #ff0000"
+    }},
+    "alternative_targets": []
+  }},
+  "requires_clarification": false,
+  "clarification_options": [],
+  "steps": [
+        {{
+            "step_number": 1,
+      "action": "modify_css",
+      "target_selector": ".submit-btn",
+      "property": "background-color",
+      "new_value": "#28a745",
+      "description": "Change button background from red to green"
+    }}
+  ],
+  "expected_outcome": "The red button will now have a green background"
+}}
+```
+
+### **Example 3: Semantic-Based Request**
+**User Request**: "update the hero section background"
+
+**Analysis**:
+- Identifies large banner/hero areas
+- Analyzes current background styling
+- Determines the main hero section
+
+**Plan**:
+```json
+{{
+  "intent_analysis": {{
+    "user_goal": "Modify the background of the main hero section",
+    "target_element_type": "section",
+    "modification_type": "styling",
+    "specific_change": "update hero section background"
+  }},
+  "target_identification": {{
+    "primary_target": {{
+      "text_content": "Welcome to Our Platform",
+      "css_selector": ".hero-section",
+      "confidence": 0.95,
+      "reasoning": "Identified large banner section with main headline as hero area"
     }},
     "alternative_targets": []
   }},
@@ -512,91 +420,25 @@ You use the Claude-3-5-Sonnet model for complex reasoning and code generation.""
   "clarification_options": [],
   "steps": [
     {{
-      "step_number": 1,
+                    "step_number": 1,
       "action": "modify_css",
-      "target_selector": ".text-wrapper-10",
-      "property": "color",
-      "new_value": "#ff0000",
-      "description": "Change Connect link text color to red"
+      "target_selector": ".hero-section",
+      "property": "background",
+      "new_value": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      "description": "Update hero section with gradient background"
     }}
   ],
-  "expected_outcome": "The Connect link will appear in red color"
+  "expected_outcome": "The hero section will have a new gradient background"
 }}
 ```
-
-**Example 3: What NOT to do (INVALID)**
-**User Request**: "change the connect button color to red"
-
-**WRONG Plan (DO NOT USE):**
-```json
-{{
-  "steps": [
-    {{
-      "target_selector": ".text-wrapper-10:contains('Connect')",
-      "property": "color",
-      "new_value": "#ff0000"
-    }}
-  ]
-}}
-```
-
-**CORRECT Plan (USE THIS):**
-```json
-{{
-  "steps": [
-    {{
-      "target_selector": ".text-wrapper-10",
-      "property": "color", 
-      "new_value": "#ff0000"
-    }}
-  ]
-}}
-```
-
-## MANDATORY VALIDATION CHECKLIST
-
-Before generating any CSS selector, verify:
-1. ✅ Does it start with `.` (class), `#` (ID), or tag name?
-2. ✅ Does it contain ONLY valid CSS syntax?
-3. ✅ Does it NOT contain `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`?
-4. ✅ Can it be used in a real CSS file?
-5. ✅ Does it target the specific element from the HTML analysis?
-
-**REMEMBER**: If you're unsure about a selector, use the simplest valid option (e.g., `.class-name`).
-
-## FINAL VALIDATION - BEFORE SUBMITTING
-
-**STOP AND CHECK YOUR CSS SELECTORS:**
-
-1. **Does every `target_selector` start with `.`, `#`, or a tag name?**
-2. **Does every `target_selector` NOT contain `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`?**
-3. **Can every `target_selector` be used in a real CSS file?**
-4. **Does every `target_selector` match an element from the HTML analysis above?**
-
-**IF ANY SELECTOR FAILS THESE CHECKS, FIX IT BEFORE SUBMITTING.**
 
 ## YOUR TASK
-Create a detailed modification plan for the user request above. You have access to the complete HTML structure analysis above AND the full raw code. Use this information to:
 
-1. **Find Exact Matches**: Look for exact text matches in the "ALL TEXT ELEMENTS" section
-2. **Identify Target Elements**: Use the detailed element information to find the best targets
-3. **Generate Precise Selectors**: Use the class and ID information to create accurate CSS selectors
-4. **Handle Ambiguity**: If multiple elements match, identify them for clarification
-
-## ANALYSIS GUIDELINES - EXACT CODE REQUIREMENTS
-
-**CRITICAL: You must return EXACT, VALID code that works immediately**
-
-- **Text Matching**: Look for exact text matches first, then partial matches
-- **CSS Selectors**: 
-  - ✅ **MUST USE ONLY**: `.class-name`, `#id-name`, `tag.class`, `tag#id`, `.class1.class2`
-  - ❌ **NEVER USE**: `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`
-  - **Prefer classes over IDs** for better maintainability
-  - **Use the EXACT class/ID from HTML analysis** - don't guess or invent
-  - **If targeting by text content**, use the class/ID of the element containing that text
-- **Context**: Consider the element's position (header, navigation, etc.)
-- **Confidence**: Base confidence on how well the target matches the request
-- **Code Quality**: Every selector must be valid CSS that can be used in a real stylesheet
+1. **Analyze the complete UI structure** using the HTML and CSS provided
+2. **Understand the user's intent** from their request
+3. **Identify the target elements** using spatial, visual, and semantic analysis
+4. **Generate a precise modification plan** with valid CSS selectors
+5. **Handle ambiguity** by providing clarification options if multiple targets match
 
 ## OUTPUT FORMAT
 Return ONLY this JSON structure:
@@ -627,8 +469,8 @@ Return ONLY this JSON structure:
   "requires_clarification": false,
   "clarification_options": [],
   "steps": [
-    {{
-      "step_number": 1,
+        {{
+            "step_number": 1,
       "action": "string (modify_text|modify_css|modify_html|add_element|remove_element)",
       "target_selector": "string (CSS selector)",
       "property": "string (for CSS modifications)",
@@ -640,27 +482,32 @@ Return ONLY this JSON structure:
 }}
 ```
 
-## IMPORTANT RULES
-- **Use the HTML Analysis**: Reference specific elements from the analysis above
-- **Be Precise**: Use exact text content and CSS selectors from the analysis
-- **Handle Ambiguity**: If multiple elements match, set requires_clarification to true
-- **Provide Clear Reasoning**: Explain why you chose specific targets
-- **VALIDATE EVERY SELECTOR**: Ensure it's valid CSS before including it
-- **Consider Context**: Use header/navigation information when relevant"""
+## CRITICAL REQUIREMENTS
+- **Use ONLY valid CSS selectors**: `.class-name`, `#id-name`, `tag.class`, `tag#id`
+- **NEVER use jQuery selectors**: `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`
+- **Be precise and specific**: Target exactly what the user intends
+- **Handle ambiguity gracefully**: Provide clarification options when needed
+- **Consider all context**: Spatial, visual, semantic, and functional aspects"""
     
     def _execute_modification_plan(self, modification_plan: Dict[str, Any], html_content: str, style_css: str, globals_css: str) -> Dict[str, Any]:
         """Step 2: Execute the modification plan and generate new code"""
         try:
+            self.logger.info(f"⚡ EXECUTOR: Building execution prompt...")
+            
             # Build the execution prompt
             prompt = self._build_execution_prompt(modification_plan, html_content, style_css, globals_css)
             
-            self.logger.debug("Sending execution request to Claude Sonnet...")
+            self.logger.info(f"⚡ EXECUTOR: Sending execution request to Claude Sonnet...")
             response = self.call_claude_with_cot(prompt, enable_cot=True)
             
+            self.logger.info(f"⚡ EXECUTOR: Received response from Claude Sonnet (length: {len(response)})")
+            
             # Parse the execution response
+            self.logger.info(f"⚡ EXECUTOR: Parsing execution response...")
             result = self._parse_execution_response(response, html_content, style_css, globals_css)
             
             if result:
+                self.logger.info(f"⚡ EXECUTOR: Successfully parsed execution result")
                 return {
                     "success": True,
                     "html": result.get("html", html_content),
@@ -669,13 +516,14 @@ Return ONLY this JSON structure:
                     "changes_summary": result.get("changes_summary", [])
                 }
             else:
+                self.logger.error(f"⚡ EXECUTOR: Failed to parse execution result from LLM response")
                 return {
                     "success": False,
                     "error": "Failed to parse execution result from LLM response"
                 }
                 
         except Exception as e:
-            self.logger.error(f"Error executing modification plan: {e}")
+            self.logger.error(f"⚡ EXECUTOR: Error executing modification plan: {e}")
             return {
                 "success": False,
                 "error": f"Execution failed: {str(e)}"
@@ -755,8 +603,32 @@ Return ONLY this JSON structure:
 - **Apply all steps**: Execute every step in the modification plan
 - **Maintain formatting**: Keep the code properly formatted and readable
 - **Track changes**: List each change you made in the changes_summary
+- **CRITICAL**: Ensure all CSS selectors are valid and will work in a real browser
+- **CRITICAL**: NEVER use placeholder comments like "/* Rest of the CSS remains unchanged */" or "// ... existing code ..."
+- **CRITICAL**: NEVER use ellipsis (...) or "and so on" in your code
+- **CRITICAL**: If you make ANY changes to a file, return the COMPLETE file content
 
-**CRITICAL**: Ensure all CSS selectors are valid and will work in a real browser."""
+**SPECIAL INSTRUCTION FOR NO CHANGES:**
+- If no changes are needed to a file, return exactly: "no change to this file"
+- This is the ONLY acceptable way to indicate no changes needed
+- Do NOT use any other placeholder text or descriptions
+
+**EXAMPLES OF CORRECT OUTPUT:**
+- If only HTML text changes: Return original CSS files unchanged
+- If only CSS changes: Return original HTML unchanged  
+- If no changes needed to CSS: Return "no change to this file" for style_css and globals_css
+- If no changes needed to HTML: Return "no change to this file" for html
+- If you modify CSS: Return the COMPLETE CSS file with all rules, not just the changed parts
+- If you modify HTML: Return the COMPLETE HTML file with all elements, not just the changed parts
+
+**FORBIDDEN PHRASES (NEVER USE THESE):**
+- "/* Rest of the CSS remains unchanged */"
+- "// ... existing code ..."
+- "and so on"
+- "..."
+- "/* unchanged */"
+- "/* same as before */"
+- Any other placeholder or abbreviated text"""
     
     def _parse_execution_response(self, response: str, original_html: str, original_style: str, original_globals: str) -> Optional[Dict[str, Any]]:
         """Parse the execution response and extract the modified code"""
@@ -774,6 +646,37 @@ Return ONLY this JSON structure:
                 if key not in result:
                     self.logger.error(f"Missing required key in execution result: {key}")
                     return None
+            
+            # Handle "no change to this file" responses
+            if result["style_css"].lower().strip() == "no change to this file":
+                self.logger.info("Detected 'no change to this file' for style_css, using original CSS")
+                result["style_css"] = original_style
+                
+            if result["globals_css"].lower().strip() == "no change to this file":
+                self.logger.info("Detected 'no change to this file' for globals_css, using original CSS")
+                result["globals_css"] = original_globals
+                
+            if result["html"].lower().strip() == "no change to this file":
+                self.logger.info("Detected 'no change to this file' for html, using original HTML")
+                result["html"] = original_html
+            
+            # Validate that no forbidden placeholder phrases are used
+            forbidden_phrases = [
+                "/* rest of the css remains unchanged */",
+                "// ... existing code ...",
+                "and so on",
+                "/* unchanged */",
+                "/* same as before */",
+                "/* unchanged */",
+                "/* same as before */"
+            ]
+            
+            for field_name, field_content in [("html", result["html"]), ("style_css", result["style_css"]), ("globals_css", result["globals_css"])]:
+                field_lower = field_content.lower()
+                for phrase in forbidden_phrases:
+                    if phrase in field_lower:
+                        self.logger.error(f"Detected forbidden placeholder phrase '{phrase}' in {field_name}")
+                        return None
             
             # Validate that the code was actually modified
             if (result["html"] == original_html and 

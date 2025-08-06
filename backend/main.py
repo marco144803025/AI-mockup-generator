@@ -378,13 +378,42 @@ async def get_session_ui_codes(session_id: str):
     try:
         from utils.file_manager import UICodeFileManager
         
-        # Initialize file manager
-        file_manager = UICodeFileManager()
+        # Initialize file manager with absolute path
+        import os
+        base_dir = os.path.join(os.getcwd(), "temp_ui_files")
+        file_manager = UICodeFileManager(base_dir=base_dir)
         
         # Check if session exists in new file-based format
+        import time
+        import os
+        logger.info(f"[{time.strftime('%H:%M:%S')}] Checking if session {session_id} exists in file-based format...")
+        logger.info(f"[{time.strftime('%H:%M:%S')}] Current working directory: {os.getcwd()}")
+        
+        # Add retry logic for race conditions
+        max_retries = 3
+        retry_delay = 0.1  # 100ms
+        
+        for attempt in range(max_retries):
+            if file_manager.session_exists(session_id):
+                logger.info(f"[{time.strftime('%H:%M:%S')}] Session found on attempt {attempt + 1}")
+                break
+            elif attempt < max_retries - 1:
+                logger.info(f"[{time.strftime('%H:%M:%S')}] Session not found on attempt {attempt + 1}, retrying in {retry_delay}s...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                logger.warning(f"[{time.strftime('%H:%M:%S')}] Session not found after {max_retries} attempts")
+        
         if file_manager.session_exists(session_id):
+            logger.info(f"Session {session_id} exists, loading session data...")
             # Load session from file-based structure
             session_data = file_manager.load_session(session_id)
+            logger.info(f"Session data loaded: {session_data is not None}")
+            if session_data:
+                logger.info(f"Session data keys: {list(session_data.keys())}")
+                logger.info(f"HTML content length: {len(session_data.get('current_codes', {}).get('html_export', ''))}")
+            else:
+                logger.warning(f"Session data is None for session {session_id}")
             if session_data:
                 # Generate screenshot for session template
                 try:
@@ -471,6 +500,17 @@ async def get_session_ui_codes(session_id: str):
                     }
         
         # Return default if no session file exists
+        import time
+        logger.warning(f"[{time.strftime('%H:%M:%S')}] No session file found for session_id: {session_id}")
+        logger.info(f"[{time.strftime('%H:%M:%S')}] Falling back to default template")
+        
+        # Additional debug: List all sessions to see what's available
+        try:
+            all_sessions = file_manager.list_sessions()
+            logger.info(f"[{time.strftime('%H:%M:%S')}] Available sessions: {all_sessions}")
+        except Exception as e:
+            logger.error(f"[{time.strftime('%H:%M:%S')}] Error listing sessions: {e}")
+        
         return await get_default_ui_codes()
         
     except Exception as e:
@@ -501,8 +541,10 @@ async def reset_session_to_original(session_id: str):
     try:
         from utils.file_manager import UICodeFileManager
         
-        # Initialize file manager
-        file_manager = UICodeFileManager()
+        # Initialize file manager with absolute path
+        import os
+        base_dir = os.path.join(os.getcwd(), "temp_ui_files")
+        file_manager = UICodeFileManager(base_dir=base_dir)
         
         # Check if session exists
         if not file_manager.session_exists(session_id):
