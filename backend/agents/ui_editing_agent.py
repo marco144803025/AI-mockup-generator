@@ -80,12 +80,6 @@ You focus on sophisticated mockup UI modifications and improvements."""
                     return json.loads(json_str)
                 except json.JSONDecodeError as e:
                     self.logger.warning(f"Failed to parse JSON in {context}: {e}")
-                    
-                    # Check if this is due to API overload or malformed response
-                    if "line 1 column 2 (char 1)" in str(e):
-                        print(f"DEBUG: Detected malformed JSON from API overload, response starts with: '{response[:50]}'")
-                        # This often happens when API returns error text instead of JSON
-                    
                     return None
             
             return None
@@ -93,6 +87,8 @@ You focus on sophisticated mockup UI modifications and improvements."""
         except Exception as e:
             self.logger.error(f"Error extracting JSON from {context}: {e}")
             return None
+    
+
     
     def _is_placeholder_content(self, content: str) -> bool:
         """
@@ -591,75 +587,66 @@ Focus on understanding the user's intent and providing precise, actionable instr
         # Convert modification plan to JSON string for inclusion in prompt
         modification_plan_json = json.dumps(modification_plan, indent=2)
         
-        prompt = f"""You are an expert web developer tasked with executing a pre-defined modification plan, validating your work, and summarizing the results.
-
-## CONTEXT
-You will be modifying the provided original code based only on the instructions in the modification plan.
+        # Truncate long code sections to prevent token limit issues
+        max_code_length = 8000  # Conservative limit to prevent truncation
+        
+        def truncate_code(code: str, max_length: int) -> str:
+            if len(code) <= max_length:
+                return code
+            return code[:max_length] + f"\n/* ... truncated for length ({len(code)} chars total) ... */"
+        
+        original_html_truncated = truncate_code(original_html, max_code_length)
+        original_global_css_truncated = truncate_code(original_global_css, max_code_length)
+        original_style_css_truncated = truncate_code(original_style_css, max_code_length)
+        
+        prompt = f"""You are an expert web developer. Execute the modification plan and return JSON only.
 
 ## MODIFICATION PLAN
-```json
 {modification_plan_json}
-```
 
-## ORIGINAL CODE
+## ORIGINAL CODE (truncated if too long)
 ### HTML
 ```html
-{original_html}
+{original_html_truncated}
 ```
 
 ### GLOBAL CSS
 ```css
-{original_global_css}
+{original_global_css_truncated}
 ```
 
 ### STYLE CSS
 ```css
-{original_style_css}
+{original_style_css_truncated}
 ```
 
-## YOUR TASK
-Perform three actions in sequence:
+## TASK
+1. Apply the modification plan to the code
+2. Validate your changes
+3. Summarize what was done
 
-1. **EXECUTE**: Apply the steps in the modification plan to the original code.
-2. **VALIDATE**: Critically review your own changes for correctness, quality, and adherence to the plan.
-3. **SUMMARIZE**: Describe the changes you made in a user-friendly way.
-
-Return a single JSON object with the exact structure below. Do not include any other text or explanation.
-
-## OUTPUT STRUCTURE
+Return ONLY this JSON structure:
 ```json
 {{
   "modified_code": {{
-    "html_export": "The complete, new HTML code (if modified) OR empty string if unchanged.",
-    "globals_css": "The complete, new global CSS code (if modified) OR empty string if unchanged.", 
-    "style_css": "The complete, new style CSS code (if modified) OR empty string if unchanged."
+    "html_export": "complete HTML or empty string",
+    "globals_css": "complete global CSS or empty string", 
+    "style_css": "complete style CSS or empty string"
   }},
   "validation_report": {{
     "is_valid": true,
     "quality_score": 0.9,
-    "warnings": ["List any potential issues or deviations from the plan."],
-    "reasoning": "Explain why the changes are valid and meet the plan's requirements."
+    "warnings": [],
+    "reasoning": "brief validation explanation"
   }},
   "changes_summary": [
-    "A bullet point describing the first major change.",
-    "A bullet point describing the second major change."
+    "change description 1",
+    "change description 2"
   ]
 }}
 ```
 
-**CRITICAL REQUIREMENTS**:
-1. **Complete Code Only**: If you modify HTML or CSS, you MUST return the COMPLETE, FULL file content - never partial code with comments like "/* Rest unchanged */".
-2. **Empty String for Unchanged**: If HTML, CSS, or other code sections are completely unchanged, return an empty string ("") for those fields.
-3. **No Partial Code**: Never return partial code with placeholder comments like "/* Rest of CSS remains unchanged */" or "/* ... rest of CSS ... */".
-4. **No Truncation**: If you make ANY changes to a CSS file, return the ENTIRE CSS file with your changes integrated.
-
-**EXAMPLES**:
-- ✅ CORRECT: Return empty string "" if no changes to CSS
-- ✅ CORRECT: Return complete full CSS file if any changes made
-- ❌ WRONG: Return partial CSS ending with "/* Rest unchanged */"
-- ❌ WRONG: Return any placeholder comments instead of complete code
-
-Execute the plan precisely, validate your work thoroughly, and provide clear summaries of what was accomplished."""
+**RULES**: Return complete files only, no partial code or placeholders."""
         
         return prompt
     

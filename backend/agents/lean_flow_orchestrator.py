@@ -991,8 +991,28 @@ Return ONLY the intent type (e.g., "modification_request").
             return {}
 
     async def _load_ui_state_from_session(self) -> Optional[Dict[str, Any]]:
-        """Load UI state from the session file"""
+        """Load UI state from the session using file manager"""
         try:
+            from utils.file_manager import UICodeFileManager
+            
+            # Initialize file manager
+            file_manager = UICodeFileManager()
+            
+            # Check if session exists in new file-based format
+            if file_manager.session_exists(self.session_id):
+                session_data = file_manager.load_session(self.session_id)
+                if session_data and session_data.get("current_codes", {}).get("html_export"):
+                    current_codes = session_data["current_codes"]
+                    self.logger.info(f"Loaded UI codes from file-based session {self.session_id} with HTML length: {len(current_codes.get('html_export', ''))}")
+                    return {
+                        "html_export": current_codes.get("html_export", ""),
+                        "style_css": current_codes.get("style_css", ""),
+                        "globals_css": current_codes.get("globals_css", ""),
+                        "template_info": session_data.get("template_info", {}),
+                        "session_file": f"temp_ui_files/{self.session_id}/"
+                    }
+            
+            # Fallback: Check for old JSON format and migrate
             from pathlib import Path
             import json
             
@@ -1009,22 +1029,23 @@ Return ONLY the intent type (e.g., "modification_request").
                 session_file = temp_dir / pattern
                 if session_file.exists():
                     try:
-                        with open(session_file, 'r', encoding='utf-8') as f:
-                            session_data = json.load(f)
-                        
-                        # Extract current_codes which contains the actual HTML/CSS
-                        current_codes = session_data.get("current_codes", {})
-                        if current_codes.get("html_export"):
-                            self.logger.info(f"Loaded UI codes from {pattern} with HTML length: {len(current_codes.get('html_export', ''))}")
-                            return {
-                                "html_export": current_codes.get("html_export", ""),
-                                "style_css": current_codes.get("style_css", ""),
-                                "globals_css": current_codes.get("globals_css", ""),
-                                "template_info": session_data.get("template_info", {}),
-                                "session_file": str(session_file)
-                            }
+                        # Migrate from old JSON format to new file-based format
+                        success = file_manager.migrate_from_json(self.session_id, str(session_file))
+                        if success:
+                            # Retry loading the migrated session
+                            session_data = file_manager.load_session(self.session_id)
+                            if session_data and session_data.get("current_codes", {}).get("html_export"):
+                                current_codes = session_data["current_codes"]
+                                self.logger.info(f"Migrated and loaded UI codes from {pattern} with HTML length: {len(current_codes.get('html_export', ''))}")
+                                return {
+                                    "html_export": current_codes.get("html_export", ""),
+                                    "style_css": current_codes.get("style_css", ""),
+                                    "globals_css": current_codes.get("globals_css", ""),
+                                    "template_info": session_data.get("template_info", {}),
+                                    "session_file": f"temp_ui_files/{self.session_id}/"
+                                }
                     except Exception as e:
-                        self.logger.warning(f"Failed to load session file {pattern}: {e}")
+                        self.logger.warning(f"Failed to migrate session file {pattern}: {e}")
                         continue
             
             self.logger.warning("No valid session file found with UI codes")
@@ -2427,66 +2448,56 @@ EXAMPLES:
         return complete_html
     
     async def _save_modified_template_to_file(self, modified_template: Dict[str, Any]) -> None:
-        """Save the modified template back to the temp_ui_files JSON file"""
+        """Save the modified template using file manager"""
         try:
-            import os
-            import json
-            from datetime import datetime
+            from utils.file_manager import UICodeFileManager
             
-            # Find the existing JSON file for this session
-            temp_dir = "temp_ui_files"
-            json_filename = f"ui_codes_{self.session_id}.json"
-            json_filepath = os.path.join(temp_dir, json_filename)
+            # Initialize file manager
+            file_manager = UICodeFileManager()
             
-            if os.path.exists(json_filepath):
-                # Load the existing JSON data
-                with open(json_filepath, 'r', encoding='utf-8') as f:
-                    ui_codes_data = json.load(f)
-                
-                # Update the current_codes with the modified template
-                print(f"DEBUG SAVE: Modified template keys: {list(modified_template.keys())}")
-                print(f"DEBUG SAVE: HTML length: {len(modified_template.get('html_export', ''))}")
-                print(f"DEBUG SAVE: CSS length: {len(modified_template.get('style_css', ''))}")
-                print(f"DEBUG SAVE: Globals length: {len(modified_template.get('globals_css', ''))}")
-                
-                ui_codes_data["current_codes"]["html_export"] = modified_template.get("html_export", "")
-                ui_codes_data["current_codes"]["globals_css"] = modified_template.get("globals_css", "")
-                ui_codes_data["current_codes"]["style_css"] = modified_template.get("style_css", "")
-                
-                # Update metadata
-                ui_codes_data["last_updated"] = datetime.now().isoformat()
-                
-                # Add to history
-                if "history" not in ui_codes_data:
-                    ui_codes_data["history"] = []
-                
-                ui_codes_data["history"].append({
-                    "timestamp": datetime.now().isoformat(),
-                    "modification": "UI Agent modification",
-                    "changes": modified_template.get("modification_metadata", {}).get("changes_applied", [])
-                })
-                
-                # Save the updated JSON file
-                with open(json_filepath, 'w', encoding='utf-8') as f:
-                    json.dump(ui_codes_data, f, indent=2, ensure_ascii=False)
-                
-                self.logger.info(f"Modified template saved to {json_filepath}")
-                
-                # Trigger screenshot regeneration
-                try:
-                    from services.screenshot_service import get_screenshot_service
-                    screenshot_service = await get_screenshot_service()
-                    html_content = ui_codes_data["current_codes"]["html_export"]
-                    css_content = ui_codes_data["current_codes"]["globals_css"] + "\n" + ui_codes_data["current_codes"]["style_css"]
-                    result = await screenshot_service.generate_screenshot(html_content, css_content, self.session_id)
-                    self.logger.info(f"Screenshot regenerated: {result['success']}")
-                except Exception as e:
-                    self.logger.error(f"Error regenerating screenshot: {e}")
+            # Check if session exists in new format, if not create it
+            if not file_manager.session_exists(self.session_id):
+                # Create new session with the modified template
+                template_data = {
+                    "html_export": modified_template.get("html_export", ""),
+                    "style_css": modified_template.get("style_css", ""),
+                    "globals_css": modified_template.get("globals_css", ""),
+                    "template_id": modified_template.get("template_id", ""),
+                    "name": modified_template.get("template_info", {}).get("name", ""),
+                    "category": modified_template.get("template_info", {}).get("category", "")
+                }
+                success = file_manager.create_session(self.session_id, template_data)
+                if not success:
+                    self.logger.error(f"Failed to create new session {self.session_id}")
+                    return
             else:
-                self.logger.warning(f"JSON file not found: {json_filepath}")
+                # Save modifications to existing session
+                modification_metadata = {
+                    "user_request": modified_template.get("modification_metadata", {}).get("user_request", "UI modification"),
+                    "modification_type": "ui_agent",
+                    "changes_applied": modified_template.get("modification_metadata", {}).get("changes_applied", ["UI modifications applied"])
+                }
+                
+                success = file_manager.save_session(self.session_id, modified_template, modification_metadata)
+                if not success:
+                    self.logger.error(f"Failed to save session {self.session_id}")
+                    return
+            
+            self.logger.info(f"Modified template saved using file manager for session {self.session_id}")
+            
+            # Trigger screenshot regeneration
+            try:
+                from services.screenshot_service import get_screenshot_service
+                screenshot_service = await get_screenshot_service()
+                html_content = modified_template.get("html_export", "")
+                css_content = modified_template.get("globals_css", "") + "\n" + modified_template.get("style_css", "")
+                result = await screenshot_service.generate_screenshot(html_content, css_content, self.session_id)
+                self.logger.info(f"Screenshot regenerated: {result['success']}")
+            except Exception as e:
+                self.logger.error(f"Error regenerating screenshot: {e}")
                 
         except Exception as e:
-            self.logger.error(f"Error saving modified template to file: {e}")
+            self.logger.error(f"Error saving modified template using file manager: {e}")
     
     async def process_ui_edit_request(self, message: str, current_ui_codes: Optional[Dict[str, Any]] = None, session_id: str = None) -> Dict[str, Any]:
         """

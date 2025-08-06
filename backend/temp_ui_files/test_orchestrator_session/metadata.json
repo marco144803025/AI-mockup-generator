@@ -1,0 +1,9 @@
+{
+  "template_id": "orchestrator_template",
+  "template_name": "Orchestrator Test Template",
+  "template_category": "test",
+  "session_id": "test_orchestrator_session",
+  "created_at": "2025-08-05T21:16:26.992258",
+  "last_updated": "2025-08-05T21:16:26.992258",
+  "version": "1.0"
+}

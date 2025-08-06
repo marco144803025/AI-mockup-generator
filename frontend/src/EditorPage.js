@@ -418,23 +418,38 @@ function EditorPage() {
 
   const handleResetButton = async () => {
     try {
-      if (!originalUICodes) {
-        throw new Error('No original UI template state available for reset');
+      // Call backend to reset session to original state
+      const response = await fetch(`http://localhost:8000/api/ui-codes/session/${sessionId}/reset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to reset session to original state');
       }
 
-      // Restore the original UI template state
-      setUiCodes(originalUICodes);
+      const data = await response.json();
       
-      // Add success message to chat
-      const successMessage = {
-        id: Date.now(),
-        type: 'ai',
-        content: "✅ I've restored the UI template to its original state! All modifications have been reset.",
-        timestamp: new Date().toISOString()
-      };
-      setChatMessages(prev => [...prev, successMessage]);
-      
-      console.log('UI template restored to original state');
+      if (data.success) {
+        // Refresh UI codes from the reset session
+        await fetchUICodes();
+        
+        // Add success message to chat
+        const successMessage = {
+          id: Date.now(),
+          type: 'ai',
+          content: "✅ I've restored the UI template to its original state! All modifications have been reset.",
+          timestamp: new Date().toISOString()
+        };
+        setChatMessages(prev => [...prev, successMessage]);
+        
+        console.log('UI template restored to original state via backend');
+      } else {
+        throw new Error(data.message || 'Failed to reset session');
+      }
     } catch (error) {
       console.error('Error resetting UI template:', error);
       

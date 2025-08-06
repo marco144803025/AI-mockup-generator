@@ -1,0 +1,11 @@
+{
+  "session_id": "test_session",
+  "template_id": "test_template",
+  "template_name": "Test Template",
+  "template_category": "test",
+  "created_at": "2025-08-03T06:20:30.292511",
+  "last_updated": "2025-08-03T06:20:30.292511",
+  "version": "1.0",
+  "migrated_from": "temp_ui_files\\ui_codes_test_session.json",
+  "migration_date": "2025-08-06T00:48:24.950239"
+}

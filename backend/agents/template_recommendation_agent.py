@@ -184,7 +184,7 @@ IMPORTANT:
             # Call Claude
             response = client.messages.create(
                 model=self.model,
-                max_tokens=4000,
+                max_tokens=8000,
                 messages=messages,
                 tools=tools if tools else None,
                 tool_choice={"type": "auto"} if tools else None
@@ -236,7 +236,7 @@ IMPORTANT:
                     
                     final_response = client.messages.create(
                         model=self.model,
-                        max_tokens=4000,
+                        max_tokens=8000,
                         messages=[{"role": "user", "content": tool_response_prompt}]
                     )
                     

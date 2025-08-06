@@ -374,59 +374,104 @@ body {
 
 @app.get("/api/ui-codes/session/{session_id}")
 async def get_session_ui_codes(session_id: str):
-    """Get UI codes for a specific session from temporary files"""
+    """Get UI codes for a specific session using file manager"""
     try:
+        from utils.file_manager import UICodeFileManager
+        
+        # Initialize file manager
+        file_manager = UICodeFileManager()
+        
+        # Check if session exists in new file-based format
+        if file_manager.session_exists(session_id):
+            # Load session from file-based structure
+            session_data = file_manager.load_session(session_id)
+            if session_data:
+                # Generate screenshot for session template
+                try:
+                    screenshot_service = await get_screenshot_service()
+                    html_content = session_data["current_codes"]["html_export"]
+                    css_content = session_data["current_codes"]["globals_css"] + "\n" + session_data["current_codes"]["style_css"]
+                    result = await screenshot_service.generate_screenshot(html_content, css_content, session_id)
+                    screenshot_base64 = result["base64_image"] if result["success"] else ""
+                    logger.info(f"Screenshot generated for session {session_id}")
+                except Exception as e:
+                    logger.error(f"Error generating screenshot for session {session_id}: {e}")
+                    screenshot_base64 = ""
+                
+                return {
+                    "success": True,
+                    "template_id": session_data["template_id"],
+                    "session_id": session_id,
+                    "ui_codes": {
+                        "current_codes": {
+                            "html_export": session_data["current_codes"]["html_export"],
+                            "globals_css": session_data["current_codes"]["globals_css"],
+                            "style_css": session_data["current_codes"]["style_css"]
+                        },
+                        "original_codes": session_data.get("original_codes", {}),
+                        "template_info": session_data.get("template_info", {}),
+                        "metadata": {
+                            "last_modified": session_data["last_updated"],
+                            "file_path": f"temp_ui_files/{session_id}/",
+                            "history_count": len(session_data.get("history", [])),
+                            "template_info": session_data.get("template_info", {})
+                        }
+                    },
+                    "screenshot_preview": screenshot_base64
+                }
+        
+        # Fallback: Check for old JSON format and migrate
         import json
         from pathlib import Path
         
         temp_dir = Path("temp_ui_files")
-        
-        # Find the most recent file for this session
         session_files = list(temp_dir.glob(f"ui_codes_{session_id}.json"))
         
-        if not session_files:
-            # Return default if no session file exists
-            return await get_default_ui_codes()
+        if session_files:
+            # Migrate from old JSON format to new file-based format
+            latest_file = max(session_files, key=lambda x: x.stat().st_mtime)
+            success = file_manager.migrate_from_json(session_id, str(latest_file))
+            
+            if success:
+                # Retry loading the migrated session
+                session_data = file_manager.load_session(session_id)
+                if session_data:
+                    # Generate screenshot for session template
+                    try:
+                        screenshot_service = await get_screenshot_service()
+                        html_content = session_data["current_codes"]["html_export"]
+                        css_content = session_data["current_codes"]["globals_css"] + "\n" + session_data["current_codes"]["style_css"]
+                        result = await screenshot_service.generate_screenshot(html_content, css_content, session_id)
+                        screenshot_base64 = result["base64_image"] if result["success"] else ""
+                        logger.info(f"Screenshot generated for migrated session {session_id}")
+                    except Exception as e:
+                        logger.error(f"Error generating screenshot for migrated session {session_id}: {e}")
+                        screenshot_base64 = ""
+                    
+                    return {
+                        "success": True,
+                        "template_id": session_data["template_id"],
+                        "session_id": session_id,
+                        "ui_codes": {
+                            "current_codes": {
+                                "html_export": session_data["current_codes"]["html_export"],
+                                "globals_css": session_data["current_codes"]["globals_css"],
+                                "style_css": session_data["current_codes"]["style_css"]
+                            },
+                            "original_codes": session_data.get("original_codes", {}),
+                            "template_info": session_data.get("template_info", {}),
+                            "metadata": {
+                                "last_modified": session_data["last_updated"],
+                                "file_path": f"temp_ui_files/{session_id}/",
+                                "history_count": len(session_data.get("history", [])),
+                                "template_info": session_data.get("template_info", {})
+                            }
+                        },
+                        "screenshot_preview": screenshot_base64
+                    }
         
-        # Get the most recent file
-        latest_file = max(session_files, key=lambda x: x.stat().st_mtime)
-        
-        with open(latest_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # Generate screenshot for session template
-        try:
-            screenshot_service = await get_screenshot_service()
-            html_content = data["current_codes"]["html_export"]
-            css_content = data["current_codes"]["globals_css"] + "\n" + data["current_codes"]["style_css"]
-            result = await screenshot_service.generate_screenshot(html_content, css_content, session_id)
-            screenshot_base64 = result["base64_image"] if result["success"] else ""
-            logger.info(f"Screenshot generated for session {session_id}")
-        except Exception as e:
-            logger.error(f"Error generating screenshot for session {session_id}: {e}")
-            screenshot_base64 = ""
-        
-        return {
-            "success": True,
-            "template_id": data["template_id"],
-            "session_id": session_id,
-            "ui_codes": {
-                "current_codes": {
-                "html_export": data["current_codes"]["html_export"],
-                "globals_css": data["current_codes"]["globals_css"],
-                    "style_css": data["current_codes"]["style_css"]
-            },
-                "original_codes": data.get("original_codes", {}),
-                "template_info": data.get("template_info", {}),
-            "metadata": {
-                "last_modified": data["last_updated"],
-                "file_path": str(latest_file),
-                "history_count": len(data.get("history", [])),
-                "template_info": data.get("template_info", {})
-            }
-            },
-            "screenshot_preview": screenshot_base64
-        }
+        # Return default if no session file exists
+        return await get_default_ui_codes()
         
     except Exception as e:
         logger.error(f"Error fetching session UI codes: {e}")
@@ -449,6 +494,54 @@ async def reset_session(session_id: str = None):
     except Exception as e:
         logger.error(f"Error resetting session: {e}")
         raise HTTPException(status_code=500, detail=f"Error resetting session: {str(e)}")
+
+@app.post("/api/ui-codes/session/{session_id}/reset")
+async def reset_session_to_original(session_id: str):
+    """Reset UI codes for a specific session to their original state"""
+    try:
+        from utils.file_manager import UICodeFileManager
+        
+        # Initialize file manager
+        file_manager = UICodeFileManager()
+        
+        # Check if session exists
+        if not file_manager.session_exists(session_id):
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        
+        # Reset to original
+        success = file_manager.reset_to_original(session_id)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to reset session to original state")
+        
+        # Generate new screenshot after reset
+        try:
+            screenshot_service = await get_screenshot_service()
+            session_data = file_manager.load_session(session_id)
+            if session_data:
+                html_content = session_data["current_codes"]["html_export"]
+                css_content = session_data["current_codes"]["globals_css"] + "\n" + session_data["current_codes"]["style_css"]
+                result = await screenshot_service.generate_screenshot(html_content, css_content, session_id)
+                screenshot_base64 = result["base64_image"] if result["success"] else ""
+                logger.info(f"Screenshot regenerated after reset for session {session_id}")
+            else:
+                screenshot_base64 = ""
+        except Exception as e:
+            logger.error(f"Error generating screenshot after reset for session {session_id}: {e}")
+            screenshot_base64 = ""
+        
+        return {
+            "success": True,
+            "message": "Session reset to original state successfully",
+            "session_id": session_id,
+            "screenshot_preview": screenshot_base64
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resetting session {session_id} to original: {e}")
+        raise HTTPException(status_code=500, detail=f"Error resetting session to original: {str(e)}")
 
 @app.post("/api/ui-preview/generate-screenshot")
 async def generate_ui_preview_screenshot(request: ScreenshotRequest):

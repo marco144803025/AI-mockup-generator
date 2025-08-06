@@ -59,7 +59,7 @@ class BaseAgent:
             response = self.claude_client.messages.create(
                 model=self.model,
                 messages=messages,
-                max_tokens=4000
+                max_tokens=8000
             )
             
             # Debug: Log LLM response for all agents inheriting from BaseAgent

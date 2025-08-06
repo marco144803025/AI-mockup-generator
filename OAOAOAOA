@@ -1,0 +1,173 @@
+[33mcommit 3cf3486b59cb14e62a697233d5949fc344d6c375[m[33m ([m[1;36mHEAD -> [m[1;32mmaster[m[33m)[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Tue Aug 5 19:14:14 2025 +0100
+
+    fixed some bug on phase 1
+
+[33mcommit 089916b885e8b3ac17213c2e603277b880a1e578[m[33m ([m[1;31morigin/master[m[33m, [m[1;31mgithub/master[m[33m)[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Tue Aug 5 08:32:08 2025 +0100
+
+    improved functionality of editing agent
+
+[33mcommit d1a155d294f975cc338ea46ae79fd46b4c32df35[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Tue Aug 5 07:34:12 2025 +0100
+
+    added migration strategy for myself
+
+[33mcommit 588a9577dac37de21e08e8bdc22143a52bcb1abc[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Tue Aug 5 07:29:04 2025 +0100
+
+    fixed more bug on editing agent
+
+[33mcommit b30cd55224d89a20714e0c45896de7db951a3be6[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Tue Aug 5 07:11:16 2025 +0100
+
+    fixed more bug
+
+[33mcommit a0c9a9b2ae24800e8f5c108aecbb30fbb928d13b[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Tue Aug 5 06:18:45 2025 +0100
+
+    fixed a lot of bug regarding editing UI page
+
+[33mcommit 44dc957a8862c586e4e7f15b85606651ba46729a[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Tue Aug 5 03:52:15 2025 +0100
+
+    fixed various bugs
+
+[33mcommit 98111121aa16106c42aad4223eb9693eeadda0b8[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Tue Aug 5 02:39:52 2025 +0100
+
+    deleted wrong keyword in keyword manager, also chaged backlog to focus on LLM response
+
+[33mcommit 4b570cb0ca93f84bfbe0e844dfb9dfcbe3bd4a5a[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Sun Aug 3 23:11:28 2025 +0100
+
+    changed preview approach to screen-shot based, combined similar API calling of editing-agent to reduce latency
+
+[33mcommit e45dc6c876c34d2b3dcc4b6c13b2ab5e17a0777f[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Sat Aug 2 05:50:01 2025 +0100
+
+    added editor page, added html injection logic, kept chat interface conversation between states, improved visibility of the preview, added reset button(to be further developed)
+
+[33mcommit 7659b386e1bf1f48873444b6f499faf546d9c37a[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Fri Aug 1 21:49:35 2025 +0100
+
+    deleted testing files
+
+[33mcommit 7e81e15c4a31903fded99a4be8ab8bf416fe8fc4[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Fri Aug 1 03:40:59 2025 +0100
+
+    added editor page with placeholder chat interface and UI preview, also added collapsible sidebar
+
+[33mcommit 4b48d6f9c5730f437710f34e082364f76cd4b7db[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Fri Aug 1 03:00:52 2025 +0100
+
+    improved logical flow and requirement collection by adding a keyword manager and config file, also reduced the hard-coding part of the agents.
+
+[33mcommit e6a5837155b28758118f57129fceb603bd5126dc[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Thu Jul 31 05:42:03 2025 +0100
+
+    changed multiple agent's interaction logic, combined agent with similar features, fixed mongodb calling tools function
+
+[33mcommit 662ca46e53118f0d715a12f3e72ef211c1881b2f[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Wed Jul 30 01:05:29 2025 +0100
+
+    incorportated the layer into the agent and other files
+
+[33mcommit 53f2a3f99624df7685179fab3d21b88ca92f1592[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Mon Jul 28 04:28:14 2025 +0100
+
+    adding multiple intelligence layer handler for agentic AI system, also added frontend debugging panel
+
+[33mcommit 87b99e90932d2ea36d0ef6c65aa2682b229b7af0[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Mon Jul 28 01:03:04 2025 +0100
+
+    adding list of category for user to choose from
+
+[33mcommit 92e3005d7d8610f9a97ceb107a5009db034e466d[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Sun Jul 27 22:25:04 2025 +0100
+
+    started the skeleton for multiagent system using autogen framework, multiple bugs found that needs to be fixed
+
+[33mcommit 8179cb2338d0b11ac3a1788a6ce836077f53b686[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Sat Jul 26 03:17:54 2025 +0100
+
+    added multiple ui templates into database
+
+[33mcommit d254d4475e709e64794b97a5289aadeb5020e78d[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Fri Jul 25 05:22:40 2025 +0100
+
+    added mongoDB database and couple UI template with tag and description for recommendation system
+
+[33mcommit 1dce72b43071941cad3533ad9d19d6138da3cd1b[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Wed Jul 16 03:12:44 2025 +0100
+
+    added image uploading feature, will hide component until Claude deems neccessary for user to upload image
+
+[33mcommit fd17d56f9bf75f357b6852f3158ac9abda8b92cf[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Wed Jul 16 02:58:16 2025 +0100
+
+    connected frontend to backend for calling claude API throught fastAPI
+
+[33mcommit 23547b09cc399971d03bb3958f0f63ed55a104b2[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Fri Jul 11 21:00:49 2025 +0100
+
+    added readme
+
+[33mcommit c7c16b872988265c64fa8448461259464848ca68[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Fri Jul 11 20:57:02 2025 +0100
+
+    reorganizing project to include all directory
+
+[33mcommit eea8325c016571d0948b9604da605b7abb67b188[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Fri Jul 11 20:48:22 2025 +0100
+
+    reorganizing project to include all directory
+
+[33mcommit cf23d07b68bc59975f0a079cbcc3a7a65c5b7b40[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Wed Jul 9 02:01:03 2025 +0100
+
+    testing recommendation page + upload image function
+
+[33mcommit abc35a4c70094c21666000388104e5471b9a9b79[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Mon Jul 7 23:52:05 2025 +0100
+
+    added chat bubble and scrolling logic
+
+[33mcommit 4152c4814f6c1c991b27d52363c331f394e5ff90[m
+Author: yat Cheng <yxc1142@student.bham.ac.uk>
+Date:   Sun Jul 6 23:09:16 2025 +0100
+
+    minor change in color
+
+[33mcommit b10e9f745f1bd6a99e6bafea9f54988df975c49d[m
+Author: Yat Hin Cheng <marco14480@gmail.com>
+Date:   Sun Jul 6 22:05:11 2025 +0100
+
+    initial commit, a pyototype of the interface
