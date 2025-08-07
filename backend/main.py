@@ -717,6 +717,39 @@ async def serve_css_file(file_name: str):
         logger.error(f"Error serving CSS file {file_name}: {e}")
         raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
 
+@app.get("/api/reports/download/{filename}")
+async def download_report(filename: str):
+    """Download generated PDF reports"""
+    try:
+        # Security check - only allow PDF files
+        if not filename.endswith('.pdf'):
+            raise HTTPException(status_code=404, detail="Only PDF files are allowed")
+        
+        # Look for the report in the reports directory
+        reports_dir = os.path.join("reports")
+        if not os.path.exists(reports_dir):
+            os.makedirs(reports_dir, exist_ok=True)
+        
+        file_path = os.path.join(reports_dir, filename)
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail=f"Report file {filename} not found")
+        
+        # Return the file with proper headers for download
+        return FileResponse(
+            file_path,
+            media_type='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"'
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading report {filename}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 

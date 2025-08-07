@@ -13,6 +13,11 @@ function EditorPage() {
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef(null);
   
+  // Report download state (keeping for backward compatibility but not using popup)
+  const [showReportDownload, setShowReportDownload] = useState(false);
+  const [reportFile, setReportFile] = useState(null);
+  const [reportMetadata, setReportMetadata] = useState(null);
+  
   // Logo upload state
   const [uploadedLogo, setUploadedLogo] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -202,6 +207,11 @@ function EditorPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+  
+  // Debug popup state changes
+  useEffect(() => {
+    console.log('🔍 DEBUG: Popup state changed - showReportDownload:', showReportDownload);
+  }, [showReportDownload]);
 
   const fetchUICodes = useCallback(async () => {
     try {
@@ -337,6 +347,9 @@ function EditorPage() {
 
       const data = await response.json();
       
+      // Debug logging for popup issue
+      console.log('🔍 DEBUG: Report generated:', data.report_generated, 'Report file:', data.report_file);
+      
       if (data.success) {
         // Add AI response to chat
         const aiMessage = {
@@ -346,6 +359,20 @@ function EditorPage() {
           timestamp: new Date().toISOString()
         };
         setChatMessages(prev => [...prev, aiMessage]);
+        
+        // Check if a report was generated
+        if (data.report_generated && data.report_file) {
+          console.log('✅ Report generated, adding download button to chat');
+          // Add a download button message to the chat instead of popup
+          const downloadMessage = {
+            id: Date.now() + 2,
+            type: 'download',
+            reportFile: data.report_file,
+            reportMetadata: data.report_metadata || {},
+            timestamp: new Date().toISOString()
+          };
+          setChatMessages(prev => [...prev, downloadMessage]);
+        }
         
         // Refresh UI codes if modifications were made
         if (data.ui_modifications && data.metadata?.intent === "modification_request") {
@@ -468,6 +495,79 @@ function EditorPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  const handleReportDownload = async () => {
+    if (!reportFile) return;
+    
+    try {
+      const response = await fetch(`http://localhost:8000/api/reports/download/${reportFile}`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // Create a blob from the response
+      const blob = await response.blob();
+      
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = reportFile;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Clean up
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      // Close the popup
+      setShowReportDownload(false);
+      setReportFile(null);
+      setReportMetadata(null);
+      
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      alert('Error downloading report. Please try again.');
+    }
+  };
+
+  const closeReportDownload = () => {
+    setShowReportDownload(false);
+    setReportFile(null);
+    setReportMetadata(null);
+  };
+
+  const handleReportDownloadFromChat = async (reportFileName) => {
+    if (!reportFileName) return;
+    
+    try {
+      const response = await fetch(`http://localhost:8000/api/reports/download/${reportFileName}`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = reportFileName;
+      document.body.appendChild(a);
+      a.click();
+      
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      alert('Error downloading report. Please try again.');
     }
   };
 
@@ -818,13 +918,44 @@ function EditorPage() {
                 </div>
               )}
               
-              <p className={`text-sm ${
-                message.type === 'ai' 
-                  ? 'text-blue-800' 
-                  : 'text-gray-800'
-              }`}>
-                <strong>{message.type === 'ai' ? 'AI:' : 'You:'}</strong> {message.content}
-              </p>
+              {message.type === 'download' ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-green-800 font-semibold mb-1">
+                        📄 Report Generated Successfully!
+                      </p>
+                      <p className="text-xs text-green-600 mb-2">
+                        Your project report is ready for download.
+                      </p>
+                      {message.reportMetadata && (
+                        <div className="text-xs text-green-600">
+                          <p><strong>Project:</strong> {message.reportMetadata.project_name || 'Unknown'}</p>
+                          <p><strong>Template:</strong> {message.reportMetadata.template_name || 'Unknown'}</p>
+                          <p><strong>Generated:</strong> {new Date(message.reportMetadata.generated_at).toLocaleString()}</p>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleReportDownloadFromChat(message.reportFile)}
+                      className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition flex items-center"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Download
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className={`text-sm ${
+                  message.type === 'ai' 
+                    ? 'text-blue-800' 
+                    : 'text-gray-800'
+                }`}>
+                  <strong>{message.type === 'ai' ? 'AI:' : 'You:'}</strong> {message.content}
+                </p>
+              )}
               
               {/* Logo Analysis Results for AI Messages */}
               {message.logoAnalysis && (
@@ -975,6 +1106,7 @@ function EditorPage() {
               >
                 Reset to Original
               </button>
+
             </div>
           </div>
         </div>
@@ -984,6 +1116,8 @@ function EditorPage() {
           {viewMode === 'preview' ? renderPreview() : renderCode()}
         </div>
       </div>
+
+
     </div>
   );
 }

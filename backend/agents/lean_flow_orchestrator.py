@@ -12,7 +12,7 @@ import json
 import asyncio
 
 from .requirements_analysis_agent import RequirementsAnalysisAgent
-from .template_recommendation_agent import TemplateRecommendationAgent
+from .template_recommendation_agent_enhanced import TemplateRecommendationAgentEnhanced as TemplateRecommendationAgent
 from .question_generation_agent import QuestionGenerationAgent
 from .user_proxy_agent import UserProxyAgent
 from .ui_editing_agent import UIEditingAgent
@@ -130,6 +130,21 @@ class LeanFlowOrchestrator:
         This allows users to make modifications even if they haven't gone through the full workflow.
         """
         try:
+            # First, check for completion/report generation requests that should NOT be treated as modifications
+            completion_patterns = [
+                r'generate.*report', r'create.*report', r'show.*final', r'i.*done',
+                r'that.*perfect', r'finished', r'complete', r'finalize', r'generate.*summary', r'create.*summary'
+            ]
+            
+            import re
+            message_lower = message.lower()
+            
+            # Check for completion requests first
+            for pattern in completion_patterns:
+                if re.search(pattern, message_lower):
+                    self.logger.debug(f"Completion request detected with pattern: {pattern}, NOT treating as UI modification")
+                    return False
+            
             modification_patterns = [
                 # Color changes
                 r'change.*color', r'make.*color', r'background.*color', r'text.*color',
@@ -147,13 +162,10 @@ class LeanFlowOrchestrator:
                 # Layout changes  
                 r'move.*', r'position.*', r'align.*', r'center.*',
                 
-                # General modification verbs
-                r'change.*', r'modify.*', r'update.*', r'edit.*', r'adjust.*',
+                # General modification verbs (more specific to avoid false positives)
+                r'change.*(color|size|font|style|layout|position)', r'modify.*', r'update.*', r'edit.*', r'adjust.*',
                 r'fix.*', r'improve.*', r'alter.*'
             ]
-            
-            import re
-            message_lower = message.lower()
             
             for pattern in modification_patterns:
                 if re.search(pattern, message_lower):
@@ -673,6 +685,14 @@ class LeanFlowOrchestrator:
     async def _detect_editing_intent_advanced(self, message: str, selected_template: Dict[str, Any]) -> str:
         """Enhanced intent detection specifically for editing phase"""
         try:
+            # First, try the simple keyword-based detection for completion requests
+            message_lower = message.lower()
+            if any(phrase in message_lower for phrase in [
+                "generate report", "generate the report", "create report", "show me the final", "i'm done", 
+                "that's perfect", "finished", "complete", "finalize", "generate summary", "create summary"
+            ]):
+                return "completion_request"
+            
             template_name = selected_template.get("name", "Unknown Template")
             
             prompt = f"""
@@ -1067,25 +1087,38 @@ Return ONLY the intent type (e.g., "modification_request").
             # Transition to report generation phase
             self.session_state["current_phase"] = "report_generation"
             
-            response = self.user_proxy_agent.create_response_from_instructions(
-                "editing_completion",
-                {
-                    "template": selected_template,
-                    "modifications": self.session_state.get("modifications", {}),
-                    "session_id": self.session_id
+            # Actually generate the report
+            report_result = await self._handle_report_generation(message, context)
+            
+            if report_result.get("success", False):
+                # Report was generated successfully
+                response = f"✅ Report generated successfully! Your project report is ready for download."
+                
+                result = {
+                    "success": True,
+                    "response": response,
+                    "session_id": self.session_id,
+                    "phase": "report_generation",
+                    "intent": "completion_request",
+                    "phase_transition": True,
+                    "report_generated": True,
+                    "report_file": report_result.get("report_file"),
+                    "report_metadata": report_result.get("metadata", {})
                 }
-            )
-            
-            self._add_to_conversation_history(response, "assistant")
-            
-            return {
-                "success": True,
-                "response": response,
-                "session_id": self.session_id,
-                "phase": "report_generation",
-                "intent": "completion_request",
-                "phase_transition": True
-            }
+                
+                return result
+            else:
+                # Report generation failed
+                response = f"❌ Sorry, I encountered an error while generating the report: {report_result.get('response', 'Unknown error')}"
+                
+                return {
+                    "success": False,
+                    "response": response,
+                    "session_id": self.session_id,
+                    "phase": "editing",
+                    "intent": "completion_request",
+                    "report_generated": False
+                }
             
         except Exception as e:
             self.logger.error(f"Error handling editing completion request: {e}")
@@ -1336,29 +1369,70 @@ Return ONLY the intent type (e.g., "modification_request").
     async def _handle_report_generation(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle report generation"""
         
-        # Prepare project data
-        project_data = {
-            "project_name": f"UI Project {self.session_id[:8]}",
-            "created_date": self.session_state["created_at"].isoformat(),
-            "user_requirements": self.session_state["requirements"],
-            "selected_template": self.session_state["selected_template"],
-            "conversation_history": self.session_state["conversation_history"]
-        }
-        
-        # Generate report using focused agent
-        report_filepath = self.report_agent.generate_project_report_advanced(project_data)
-        
-        response = f"Report generated successfully! You can find it at: {report_filepath}"
-        
-        self._add_to_conversation_history(response, "assistant")
-        
-        return {
-            "success": True,
-            "response": response,
-            "session_id": self.session_id,
-            "phase": "report_generation",
-            "report_filepath": report_filepath
-        }
+        try:
+            # Prepare project data
+            created_at = self.session_state.get("created_at")
+            if isinstance(created_at, str):
+                try:
+                    created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                except:
+                    created_at = datetime.now()
+            elif not isinstance(created_at, datetime):
+                created_at = datetime.now()
+            
+            # Get current UI state for screenshot
+            current_ui_state = await self._get_current_ui_state(self.session_state.get("selected_template", {}))
+                
+            project_data = {
+                "project_name": f"UI Project {self.session_id[:8]}",
+                "created_date": created_at.isoformat(),
+                "user_requirements": self.session_state.get("requirements", {}),
+                "selected_template": self.session_state.get("selected_template", {}),
+                "conversation_history": self.session_state.get("conversation_history", []),
+                "session_id": self.session_id,
+                "current_ui_state": current_ui_state
+            }
+            
+            # Generate report using focused agent
+            report_filepath = self.report_agent.generate_project_report_advanced(project_data)
+            
+            if report_filepath and report_filepath != "report_generation_failed.pdf":
+                # Report was generated successfully
+                response = f"✅ Report generated successfully! Your project report is ready for download."
+                
+                result = {
+                    "success": True,
+                    "response": response,
+                    "session_id": self.session_id,
+                    "phase": "report_generation",
+                    "report_file": report_filepath,
+                    "metadata": {
+                        "project_name": project_data["project_name"],
+                        "template_name": project_data["selected_template"].get("name", "Unknown"),
+                        "generated_at": datetime.now().isoformat()
+                    }
+                }
+                
+                return result
+            else:
+                # Report generation failed
+                response = f"❌ Sorry, I encountered an error while generating the report."
+                
+                return {
+                    "success": False,
+                    "response": response,
+                    "session_id": self.session_id,
+                    "phase": "report_generation"
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Error in report generation: {e}")
+            return {
+                "success": False,
+                "response": f"❌ Sorry, I encountered an error while generating the report: {str(e)}",
+                "session_id": self.session_id,
+                "phase": "report_generation"
+            }
     
     async def _detect_initial_intent(self, message: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Use LLM to detect the initial intent and page type from user message"""
@@ -2820,15 +2894,44 @@ EXAMPLES:
                         "metadata": {"error": "no_template_selected"}
                     }
             
-            # Route the request through the existing editing phase handler
-            result = await self._handle_editing_modification_request(
-                message=message,
-                selected_template=self.session_state["selected_template"],
-                context={"ui_codes": current_ui_codes}
-            )
+            # Step 1: Detect the intent first
+            editing_intent = await self._detect_editing_intent_advanced(message, self.session_state["selected_template"])
+            print(f"DEBUG ORCHESTRATOR: UI Editor intent detected: {editing_intent}")
+            
+            # Step 2: Route based on intent
+            if editing_intent == "modification_request":
+                result = await self._handle_editing_modification_request(
+                    message=message,
+                    selected_template=self.session_state["selected_template"],
+                    context={"ui_codes": current_ui_codes}
+                )
+            elif editing_intent == "clarification_request":
+                result = await self._handle_editing_clarification_request(
+                    message=message,
+                    selected_template=self.session_state["selected_template"],
+                    context={"ui_codes": current_ui_codes}
+                )
+            elif editing_intent == "completion_request":
+                result = await self._handle_editing_completion_request(
+                    message=message,
+                    selected_template=self.session_state["selected_template"],
+                    context={"ui_codes": current_ui_codes}
+                )
+            elif editing_intent == "preview_request":
+                result = await self._handle_editing_preview_request(
+                    message=message,
+                    selected_template=self.session_state["selected_template"],
+                    context={"ui_codes": current_ui_codes}
+                )
+            else:
+                result = await self._handle_editing_general_request(
+                    message=message,
+                    selected_template=self.session_state["selected_template"],
+                    context={"ui_codes": current_ui_codes}
+                )
             
             # Format the response for the UI Editor API
-            return {
+            response = {
                 "success": result.get("success", True),
                 "response": result.get("response", "Processing your request..."),
                 "ui_modifications": result.get("modification_result"),
@@ -2839,6 +2942,14 @@ EXAMPLES:
                     "feature": "ui_editor_agent"
                 }
             }
+            
+            # Add report-related fields if they exist
+            if result.get("report_generated"):
+                response["report_generated"] = result.get("report_generated")
+                response["report_file"] = result.get("report_file")
+                response["report_metadata"] = result.get("report_metadata")
+            
+            return response
             
         except Exception as e:
             self.logger.error(f"Error processing UI edit request: {e}")

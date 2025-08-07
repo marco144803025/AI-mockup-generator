@@ -41,13 +41,13 @@ You focus on business value, design decisions, and project outcomes rather than 
         try:
             # Step 1: Analyze project data
             analysis_result = self.analyze_project_data_advanced(project_data)
-            
+        
             # Step 2: Generate report content
             report_content = self.generate_report_content_advanced(project_data, analysis_result)
-            
+        
             # Step 3: Create professional PDF report
             pdf_filepath = self.create_professional_pdf_report(report_content, project_data)
-            
+        
             return pdf_filepath
             
         except Exception as e:
@@ -325,7 +325,7 @@ Focus on business value, user experience, and project success.
             story = []
             
             # Add content sections
-            story.extend(self._create_executive_summary(report_content))
+            story.extend(self._create_executive_summary(report_content, project_data))
             story.append(PageBreak())
             story.extend(self._create_technical_documentation(report_content))
             
@@ -339,7 +339,7 @@ Focus on business value, user experience, and project success.
             self.logger.error(f"Error creating PDF report: {e}")
             return "report_creation_failed.pdf"
     
-    def _create_executive_summary(self, report_content: Dict[str, Any]) -> List:
+    def _create_executive_summary(self, report_content: Dict[str, Any], project_data: Dict[str, Any]) -> List:
         """Create executive summary section"""
         story = []
         styles = getSampleStyleSheet()
@@ -353,8 +353,44 @@ Focus on business value, user experience, and project success.
             alignment=TA_CENTER,
             textColor=colors.darkblue
         )
-        story.append(Paragraph("UI Mockup Project Report", title_style))
+        story.append(Paragraph("UI MOCKUP REPORT", title_style))
         story.append(Spacer(1, 20))
+        
+        # Add current UI screenshot if available
+        current_ui_state = project_data.get('current_ui_state', {})
+        screenshot_preview = current_ui_state.get('screenshot_preview')
+        
+        if screenshot_preview:
+            try:
+                # Convert base64 screenshot to image
+                import base64
+                from io import BytesIO
+                from PIL import Image
+                
+                # Decode base64 image
+                image_data = base64.b64decode(screenshot_preview)
+                image = Image.open(BytesIO(image_data))
+                
+                # Save to temporary file
+                session_id = project_data.get('session_id', 'unknown')[:8]
+                temp_image_path = f"temp_screenshot_{session_id}.png"
+                image.save(temp_image_path)
+                
+                # Add screenshot to report
+                story.append(Paragraph("Current UI Mockup", styles['Heading3']))
+                story.append(Spacer(1, 12))
+                
+                # Add image to report (scale to fit page width)
+                img = Image(temp_image_path, width=5*inch, height=3*inch)
+                story.append(img)
+                story.append(Spacer(1, 20))
+                
+                # Clean up temporary file
+                os.remove(temp_image_path)
+                
+            except Exception as e:
+                self.logger.error(f"Error adding screenshot to report: {e}")
+                # Continue without screenshot if there's an error
         
         # Executive Summary Header
         story.append(Paragraph("Executive Summary", styles['Heading2']))
