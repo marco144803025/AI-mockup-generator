@@ -165,9 +165,9 @@ Focus on extracting actionable design information that can be used to modify the
                 }
             ]
             
-            # Call Claude with vision model
+            # Call Claude with vision-capable model (Haiku per project choice)
             response = self.claude_client.messages.create(
-                model="claude-3-5-sonnet-20241022",  # Use vision-capable model
+                model="claude-3-5-haiku-20241022",
                 max_tokens=4000,
                 messages=messages
             )
@@ -351,8 +351,8 @@ CONTEXT:
 
 {logo_context}
 
-TASK:
-Analyze the user's requirements and provide a comprehensive specification. Return a JSON object with this structure:
+ TASK:
+ Analyze the user's requirements and provide a comprehensive specification. Return ONLY a JSON object with this exact structure and NO extra text before or after:
 
 {{
     "page_type": "{page_type}",
@@ -386,7 +386,7 @@ IMPORTANT:
 - Consider the available templates and tags
 - Focus on what can be implemented
 - Identify any missing information that needs clarification
-"""
+ """
         
         return prompt
     
@@ -484,21 +484,25 @@ IMPORTANT:
     def _parse_requirements_response(self, response: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Parse the LLM response and return structured requirements"""
         try:
-            # Try to extract JSON from response
-            if "{" in response and "}" in response:
-                start = response.find("{")
-                end = response.rfind("}") + 1
-                json_str = response[start:end]
-                # Clean up common JSON issues
-                json_str = json_str.replace('\n', ' ').replace('\r', ' ')
-                try:
-                    specifications = json.loads(json_str)
-                except json.JSONDecodeError as e:
-                    print(f"ERROR: Failed to parse JSON response: {e}")
-                    print(f"JSON string: {json_str}")
-                    specifications = self._get_default_specifications()
+            # Prefer robust base extractor
+            extracted = self._extract_json_from_text(response)
+            if extracted is not None:
+                specifications = extracted
             else:
-                specifications = self._get_default_specifications()
+                # Fallback legacy approach
+                if "{" in response and "}" in response:
+                    start = response.find("{")
+                    end = response.rfind("}") + 1
+                    json_str = response[start:end]
+                    json_str = json_str.replace('\n', ' ').replace('\r', ' ')
+                    try:
+                        specifications = json.loads(json_str)
+                    except json.JSONDecodeError as e:
+                        print(f"ERROR: Failed to parse JSON response: {e}")
+                        print(f"JSON string: {json_str}")
+                        specifications = self._get_default_specifications()
+                else:
+                    specifications = self._get_default_specifications()
             
             # Ensure page_type from context is preserved
             if context.get("page_type"):

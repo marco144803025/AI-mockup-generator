@@ -3,15 +3,13 @@ from typing import Dict, Any, List, Optional
 import json
 from datetime import datetime
 import os
-import anthropic
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
-import base64
-import io
+from reportlab.lib.enums import TA_CENTER
+from utils.file_manager import UICodeFileManager
 
 class ReportGenerationAgent(BaseAgent):
     """Professional Business Report Generation Agent for UI Mockup Documentation"""
@@ -36,23 +34,19 @@ You focus on business value, design decisions, and project outcomes rather than 
         self.logger = logging.getLogger(__name__)
     
     def generate_project_report_advanced(self, project_data: Dict[str, Any]) -> str:
-        """Generate a professional business report for UI mockup projects"""
-        
-        try:
-            # Step 1: Analyze project data
-            analysis_result = self.analyze_project_data_advanced(project_data)
-        
-            # Step 2: Generate report content
-            report_content = self.generate_report_content_advanced(project_data, analysis_result)
-        
-            # Step 3: Create professional PDF report
-            pdf_filepath = self.create_professional_pdf_report(report_content, project_data)
-        
-            return pdf_filepath
-            
-        except Exception as e:
-            self.logger.error(f"Error generating report: {e}")
-            return "report_generation_failed.pdf"
+        """Deprecated LLM-based path retained for compatibility. Redirects to file-based generator."""
+        session_id = project_data.get('session_id') or 'unknown'
+        report_options = project_data.get('report_options') or {}
+        project_info = project_data.get('selected_template') or {}
+        # Redirect to new tool
+        from tools.report_generator import ReportGenerator
+        return ReportGenerator().generate(session_id=session_id, report_options=report_options, project_info=project_info)
+
+        session_id = project_data.get('session_id') or 'unknown'
+        report_options = project_data.get('report_options') or {}
+        project_info = project_data.get('selected_template') or {}
+        from tools.report_generator import ReportGenerator
+        return ReportGenerator().generate(session_id=session_id, report_options=report_options, project_info=project_info)
     
     def analyze_project_data_advanced(self, project_data: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze project data for business report insights"""

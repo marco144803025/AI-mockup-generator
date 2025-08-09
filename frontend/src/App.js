@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
-import UIRecommendationPage from "./UIRecommendationPage";
 import ChatScreen from "./ChatScreen";
 import EditorPage from "./EditorPage";
+import ReportPage from "./ReportPage";
 
 function Sidebar({ isCollapsed, toggleSidebar }) {
   return (
@@ -29,14 +29,8 @@ function Sidebar({ isCollapsed, toggleSidebar }) {
       <Link to="/chat" className={`hover:bg-purple-200 rounded px-3 py-2 ${isCollapsed ? 'text-center text-xs' : ''}`}>
         {isCollapsed ? '🤖' : 'AI UI Workflow'}
       </Link>
-      <Link to="/ui-recommendation" className={`hover:bg-purple-200 rounded px-3 py-2 ${isCollapsed ? 'text-center text-xs' : ''}`}>
-        {isCollapsed ? '🎨' : 'UI Recommendation'}
-      </Link>
       <Link to="/editor" className={`hover:bg-purple-200 rounded px-3 py-2 ${isCollapsed ? 'text-center text-xs' : ''}`}>
         {isCollapsed ? '⚡' : 'UI Editor'}
-      </Link>
-      <Link to="/created" className={`hover:bg-purple-200 rounded px-3 py-2 ${isCollapsed ? 'text-center text-xs' : ''}`}>
-        {isCollapsed ? '📄' : 'Created'}
       </Link>
     </div>
   );
@@ -48,19 +42,8 @@ function MainPage() {
       <h1 className="text-3xl font-bold mb-6">Welcome to Launchpad AI</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-xl">
         <Link to="/chat" className="bg-blue-500 text-white rounded-lg p-6 text-center shadow hover:bg-blue-600 transition">AI UI Workflow</Link>
-        <Link to="/ui-recommendation" className="bg-purple-500 text-white rounded-lg p-6 text-center shadow hover:bg-purple-600 transition">UI Recommendations</Link>
         <Link to="/editor" className="bg-green-500 text-white rounded-lg p-6 text-center shadow hover:bg-green-600 transition">UI Editor (Phase 2)</Link>
-        <Link to="/created" className="bg-orange-500 text-white rounded-lg p-6 text-center shadow hover:bg-orange-600 transition">View Created Pages</Link>
       </div>
-    </div>
-  );
-}
-
-function CreatedPage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Created Pages</h1>
-      <div className="bg-gray-100 rounded-lg p-4">No pages created yet.</div>
     </div>
   );
 }
@@ -80,9 +63,8 @@ function App() {
           <Routes>
             <Route path="/" element={<MainPage />} />
             <Route path="/chat" element={<ChatScreen />} />
-            <Route path="/ui-recommendation" element={<UIRecommendationPage />} />
             <Route path="/editor" element={<EditorPage />} />
-            <Route path="/created" element={<CreatedPage />} />
+            <Route path="/report" element={<ReportPage />} />
           </Routes>
         </div>
       </div>

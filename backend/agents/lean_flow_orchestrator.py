@@ -12,11 +12,11 @@ import json
 import asyncio
 
 from .requirements_analysis_agent import RequirementsAnalysisAgent
-from .template_recommendation_agent_enhanced import TemplateRecommendationAgentEnhanced as TemplateRecommendationAgent
+from .template_recommendation_agent import TemplateRecommendationAgent
 from .question_generation_agent import QuestionGenerationAgent
 from .user_proxy_agent import UserProxyAgent
 from .ui_editing_agent import UIEditingAgent
-from .report_generation_agent import ReportGenerationAgent
+from tools.report_generator import ReportGenerator
 from config.keyword_config import KeywordManager
 from session_manager import session_manager
 
@@ -32,7 +32,7 @@ class LeanFlowOrchestrator:
         self.question_agent = QuestionGenerationAgent()
         self.user_proxy_agent = UserProxyAgent()
         self.editing_agent = UIEditingAgent()
-        self.report_agent = ReportGenerationAgent()
+        self.report_agent = ReportGenerator()
         
         # Initialize keyword manager
         self.keyword_manager = KeywordManager()
@@ -2959,3 +2959,178 @@ EXAMPLES:
                 "session_id": session_id,
                 "metadata": {"error": "processing_error"}
             } 
+
+    async def generate_custom_report(self, session_id: str, report_options: Dict[str, bool], current_ui_codes: Optional[Dict[str, Any]] = None, project_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Generate a custom report based on user-selected content options"""
+        try:
+            self.logger.info(f"Generating custom report for session: {session_id}")
+            self.logger.info(f"Report options: {report_options}")
+            
+            # Get current UI state
+            if current_ui_codes:
+                ui_state = current_ui_codes
+            else:
+                ui_state = await self._get_current_ui_state(self.session_state.get("selected_template", {}))
+            
+            # Prepare report data based on selected options
+            report_data = {
+                "session_id": session_id,
+                "generated_at": datetime.now().isoformat(),
+                "report_options": report_options
+            }
+            
+            # Add content based on user selections
+            if report_options.get("uiDescription", True):
+                report_data["ui_description"] = self._generate_ui_description(ui_state, project_info)
+            
+            if report_options.get("uiTags", True):
+                report_data["ui_tags"] = self._generate_ui_tags(ui_state, project_info)
+            
+            if report_options.get("uiPreview", True):
+                report_data["ui_preview"] = ui_state.get("html_export", "")
+                report_data["ui_styles"] = {
+                    "style_css": ui_state.get("style_css", ""),
+                    "globals_css": ui_state.get("globals_css", "")
+                }
+            
+            if report_options.get("uiCode", False):
+                report_data["ui_code"] = {
+                    "html": ui_state.get("html_export", ""),
+                    "style_css": ui_state.get("style_css", ""),
+                    "globals_css": ui_state.get("globals_css", "")
+                }
+            
+            if report_options.get("changesMade", True):
+                report_data["changes_made"] = self._get_changes_history(session_id)
+            
+            if report_options.get("creationDate", True):
+                report_data["creation_date"] = project_info.get("created_at", datetime.now().isoformat()) if project_info else datetime.now().isoformat()
+                report_data["project_info"] = project_info or {}
+            
+            # Generate the PDF report
+            report_result = await self.report_agent.create_custom_pdf_report(report_data)
+            
+            if report_result.get("success"):
+                return {
+                    "success": True,
+                    "report_file": report_result.get("report_file"),
+                    "report_metadata": {
+                        "session_id": session_id,
+                        "generated_at": report_data["generated_at"],
+                        "project_name": project_info.get("template_name", "UI Mockup") if project_info else "UI Mockup",
+                        "template_name": project_info.get("template_name", "Unknown") if project_info else "Unknown",
+                        "options_selected": [k for k, v in report_options.items() if v]
+                    }
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": report_result.get("error", "Failed to generate report")
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Error generating custom report: {e}")
+            return {
+                "success": False,
+                "error": f"Report generation failed: {str(e)}"
+            }
+    
+    def _generate_ui_description(self, ui_state: Dict[str, Any], project_info: Optional[Dict[str, Any]] = None) -> str:
+        """Generate a description of the UI based on its content and structure"""
+        try:
+            html_content = ui_state.get("html_export", "")
+            
+            # Basic analysis of HTML structure
+            description_parts = []
+            
+            if "header" in html_content.lower() or "nav" in html_content.lower():
+                description_parts.append("Navigation header")
+            
+            if "hero" in html_content.lower() or "banner" in html_content.lower():
+                description_parts.append("Hero section")
+            
+            if "form" in html_content.lower():
+                description_parts.append("Form elements")
+            
+            if "button" in html_content.lower():
+                description_parts.append("Interactive buttons")
+            
+            if "card" in html_content.lower() or "container" in html_content.lower():
+                description_parts.append("Card-based layout")
+            
+            if "footer" in html_content.lower():
+                description_parts.append("Footer section")
+            
+            template_name = project_info.get("template_name", "Custom") if project_info else "Custom"
+            category = project_info.get("category", "UI") if project_info else "UI"
+            
+            if description_parts:
+                description = f"This {category.lower()} UI mockup ({template_name}) features a {', '.join(description_parts).lower()} design with modern styling and responsive layout."
+            else:
+                description = f"This {category.lower()} UI mockup ({template_name}) presents a clean, modern interface with responsive design principles."
+            
+            return description
+            
+        except Exception as e:
+            self.logger.error(f"Error generating UI description: {e}")
+            return "A modern UI mockup with responsive design and clean aesthetics."
+    
+    def _generate_ui_tags(self, ui_state: Dict[str, Any], project_info: Optional[Dict[str, Any]] = None) -> List[str]:
+        """Generate relevant tags for the UI based on its content and structure"""
+        try:
+            html_content = ui_state.get("html_export", "").lower()
+            tags = []
+            
+            # Template category
+            category = project_info.get("category", "UI") if project_info else "UI"
+            tags.append(category.lower())
+            
+            # Layout tags
+            if "grid" in html_content or "flex" in html_content:
+                tags.append("responsive")
+            
+            if "hero" in html_content or "banner" in html_content:
+                tags.append("hero-section")
+            
+            if "card" in html_content:
+                tags.append("card-based")
+            
+            if "form" in html_content:
+                tags.append("form-based")
+            
+            if "button" in html_content:
+                tags.append("interactive")
+            
+            # Style tags
+            if "modern" in html_content or "clean" in html_content:
+                tags.append("modern")
+            
+            if "minimal" in html_content or "simple" in html_content:
+                tags.append("minimalist")
+            
+            # Add template name as tag
+            template_name = project_info.get("template_name", "custom") if project_info else "custom"
+            tags.append(template_name.lower().replace(" ", "-"))
+            
+            return list(set(tags))  # Remove duplicates
+            
+        except Exception as e:
+            self.logger.error(f"Error generating UI tags: {e}")
+            return ["ui", "mockup", "responsive"]
+    
+    def _get_changes_history(self, session_id: str) -> List[Dict[str, Any]]:
+        """Get the history of changes made to the UI"""
+        try:
+            # This would ideally come from a proper change tracking system
+            # For now, return a placeholder
+            return [
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "change_type": "initial_creation",
+                    "description": "UI mockup created from template",
+                    "reasoning": "Template selected based on user requirements and preferences"
+                }
+            ]
+        except Exception as e:
+            self.logger.error(f"Error getting changes history: {e}")
+            return []

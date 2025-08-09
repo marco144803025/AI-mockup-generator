@@ -41,8 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize the lean flow orchestrator
-orchestrator = LeanFlowOrchestrator()
+# Note: Do not create a global orchestrator instance to avoid cross-request state leakage
 
 # Claude API configuration
 CLAUDE_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -78,6 +77,13 @@ class UIEditorChatResponse(BaseModel):
     ui_modifications: Optional[Dict[str, Any]] = None
     session_id: str
     metadata: Optional[Dict[str, Any]] = None
+
+class GenerateReportRequest(BaseModel):
+    session_id: Optional[str] = None
+    report_options: Optional[Dict[str, Any]] = None
+    current_ui_codes: Optional[Dict[str, Any]] = None
+    screenshot_preview: Optional[str] = None
+    project_info: Optional[Dict[str, Any]] = None
 
 class ScreenshotRequest(BaseModel):
     session_id: str
@@ -668,6 +674,66 @@ async def analyze_logo(request: LogoAnalysisRequest):
         logger.error(f"Error in logo analysis: {e}")
         raise HTTPException(status_code=500, detail=f"Error analyzing logo: {str(e)}")
 
+@app.post("/api/ui-editor/generate-custom-report")
+async def generate_custom_report(request: GenerateReportRequest):
+    """Generate a custom PDF report based on UI and project data."""
+    try:
+        # Lazy import to avoid circulars
+        from agents.report_generation_agent import ReportGenerationAgent
+
+        logger.info(f"[Report API] Generate report request for session: {request.session_id}")
+
+        session_id = request.session_id or "demo_session"
+        report_options = request.report_options or {}
+        current_ui_codes = request.current_ui_codes or {}
+        project_info = request.project_info or {}
+
+        # Build minimal project data first (avoid sending huge code blocks)
+        # File-based generation using session files (no LLM)
+        from tools.report_generator import ReportGenerator
+        generator = ReportGenerator()
+        logger.info("[Report API] Invoking file-based report generator")
+        pdf_path = generator.generate(
+            session_id=session_id,
+            report_options=report_options,
+            project_info=project_info,
+        )
+
+        if not pdf_path or not os.path.exists(pdf_path):
+            raise HTTPException(status_code=500, detail="Report generation failed")
+
+        filename = os.path.basename(pdf_path)
+        logger.info(f"[Report API] Report generated: {filename}")
+        return {
+            "success": True,
+            "report_file": filename,
+            "report_metadata": {
+                "session_id": session_id,
+                "generated_at": datetime.now().isoformat(),
+                "options": report_options
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating custom report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/reports/download/{filename}")
+async def download_report(filename: str):
+    """Download a previously generated report by filename."""
+    try:
+        reports_dir = os.path.join(os.getcwd(), "reports")
+        file_path = os.path.join(reports_dir, filename)
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Report not found")
+        return FileResponse(file_path, filename=filename, media_type="application/pdf")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading report {filename}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Static file serving routes (must come after API routes)
 
 @app.get("/templates/{template_name}/{file_name}")
@@ -716,39 +782,6 @@ async def serve_css_file(file_name: str):
     except Exception as e:
         logger.error(f"Error serving CSS file {file_name}: {e}")
         raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
-
-@app.get("/api/reports/download/{filename}")
-async def download_report(filename: str):
-    """Download generated PDF reports"""
-    try:
-        # Security check - only allow PDF files
-        if not filename.endswith('.pdf'):
-            raise HTTPException(status_code=404, detail="Only PDF files are allowed")
-        
-        # Look for the report in the reports directory
-        reports_dir = os.path.join("reports")
-        if not os.path.exists(reports_dir):
-            os.makedirs(reports_dir, exist_ok=True)
-        
-        file_path = os.path.join(reports_dir, filename)
-        
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail=f"Report file {filename} not found")
-        
-        # Return the file with proper headers for download
-        return FileResponse(
-            file_path,
-            media_type='application/pdf',
-            headers={
-                'Content-Disposition': f'attachment; filename="{filename}"'
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error downloading report {filename}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

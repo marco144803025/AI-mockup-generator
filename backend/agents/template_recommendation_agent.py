@@ -143,8 +143,8 @@ EVALUATION CRITERIA:
 4. Brand Consistency (15% weight): Does it align with the target audience?
 5. Technical Quality (10% weight): Is the implementation solid and maintainable?
 
-TASK:
-Score each template and provide detailed reasoning. Return a JSON array with this structure:
+ TASK:
+ Score each template and provide detailed reasoning. Return ONLY a JSON array with this structure and NO extra text before or after:
 
 [
     {{
@@ -258,16 +258,20 @@ IMPORTANT:
         
         print(f"DEBUG: Parsing response with {len(templates)} templates available")
         try:
-            # Extract JSON from the response using multiple strategies
-            json_str = self._extract_json_from_response(response)
-            if not json_str:
-                print("No JSON found in response, using fallback scoring")
-                fallback_result = self._fallback_scoring(templates)
-                print(f"DEBUG: Fallback scoring returned {len(fallback_result)} templates")
-                return fallback_result
-            
-            print(f"DEBUG: Extracted JSON: {json_str[:200]}...")
-            recommendations = json.loads(json_str)
+            # Prefer robust base extractor first
+            extracted = self._extract_json_from_text(response)
+            if extracted is None:
+                # Preserve legacy extractor behavior for arrays in strings
+                json_str = self._extract_json_from_response(response)
+                if not json_str:
+                    print("No JSON found in response, using fallback scoring")
+                    fallback_result = self._fallback_scoring(templates)
+                    print(f"DEBUG: Fallback scoring returned {len(fallback_result)} templates")
+                    return fallback_result
+                print(f"DEBUG: Extracted JSON: {json_str[:200]}...")
+                recommendations = json.loads(json_str)
+            else:
+                recommendations = extracted
             print(f"DEBUG: Parsed JSON has {len(recommendations)} recommendations")
             
             scored_templates = []

@@ -168,7 +168,7 @@ Your role is to:
         except Exception as e:
             self.logger.error(f"💥 UI EDITING AGENT: Error processing modification request: {e}")
             return {
-                "success": False,
+                    "success": False,
                 "error": f"Processing failed: {str(e)}"
             }
     
@@ -180,10 +180,10 @@ Your role is to:
             # Build the enhanced planning prompt that lets LLM do all analysis
             prompt = self._build_enhanced_planning_prompt(user_feedback, html_content, style_css, globals_css)
             
-            self.logger.info(f"🎯 PLANNER: Sending planning request to Claude Sonnet...")
+            self.logger.info(f"🎯 PLANNER: Sending planning request to Claude Haiku...")
             response = self.call_claude_with_cot(prompt, enable_cot=True)
             
-            self.logger.info(f"🎯 PLANNER: Received response from Claude Sonnet (length: {len(response)})")
+            self.logger.info(f"🎯 PLANNER: Received response from Claude Haiku (length: {len(response)})")
             
             # Parse the planning response
             self.logger.info(f"🎯 PLANNER: Parsing JSON from planning response...")
@@ -200,7 +200,7 @@ Your role is to:
                 return {
                     "success": False,
                     "error": "Failed to parse modification plan from LLM response"
-                }
+            }
             
         except Exception as e:
             self.logger.error(f"🎯 PLANNER: Error creating modification plan: {e}")
@@ -497,10 +497,10 @@ Return ONLY this JSON structure:
             # Build the execution prompt
             prompt = self._build_execution_prompt(modification_plan, html_content, style_css, globals_css)
             
-            self.logger.info(f"⚡ EXECUTOR: Sending execution request to Claude Sonnet...")
+            self.logger.info(f"⚡ EXECUTOR: Sending execution request to Claude Haiku...")
             response = self.call_claude_with_cot(prompt, enable_cot=True)
             
-            self.logger.info(f"⚡ EXECUTOR: Received response from Claude Sonnet (length: {len(response)})")
+            self.logger.info(f"⚡ EXECUTOR: Received response from Claude Haiku (length: {len(response)})")
             
             # Parse the execution response
             self.logger.info(f"⚡ EXECUTOR: Parsing execution response...")

@@ -77,8 +77,8 @@ Consider these dimensions when crafting questions:
 - Visual Design Preferences: Style, color schemes, layout preferences
 - Business Context: Target audience, brand alignment, conversion goals
 
-TASK:
-Generate strategic questions and return a JSON object with this structure:
+ TASK:
+ Generate strategic questions and return ONLY a JSON object with this structure and NO extra text before or after:
 
 {{
     "questions": [
@@ -137,13 +137,15 @@ IMPORTANT:
         """Parse the LLM response for question generation"""
         
         try:
-            # Find JSON in the response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if not json_match:
-                return self._fallback_question_generation(templates)
-            
-            json_str = json_match.group()
-            parsed_response = json.loads(json_str)
+            # Prefer robust base extractor
+            parsed_response = self._extract_json_from_text(response)
+            if parsed_response is None:
+                # Fallback regex approach
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if not json_match:
+                    return self._fallback_question_generation(templates)
+                json_str = json_match.group()
+                parsed_response = json.loads(json_str)
             
             questions = parsed_response.get("questions", [])
             focus_areas = parsed_response.get("focus_areas", [])

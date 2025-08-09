@@ -217,6 +217,92 @@ Format your response as:
             output["metadata"]["context_used"] = context
         
         return output
+
+    def _clean_json_string_enhanced(self, json_str: str) -> str:
+        """Clean JSON-ish strings to improve parse success without changing meaning."""
+        try:
+            # Strip markdown code fences
+            json_str = json_str.strip()
+            if json_str.startswith("```json"):
+                json_str = json_str[7:]
+            if json_str.startswith("```"):
+                json_str = json_str[3:]
+            if json_str.endswith("```"):
+                json_str = json_str[:-3]
+            json_str = json_str.strip()
+            
+            # Remove trailing commas before } or ]
+            import re
+            json_str = re.sub(r',\s*(\}|\])', r'\1', json_str)
+            # Ensure double quotes
+            if "'" in json_str and '"' not in json_str:
+                json_str = json_str.replace("'", '"')
+            return json_str
+        except Exception:
+            return json_str
+
+    def _extract_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
+        """Robust JSON extraction that handles prose, code fences, and partials.
+
+        Strategies:
+        - Prefer ```json fenced blocks
+        - Balanced brace scan for first complete object/array
+        - Fallback to widest { ... } or [ ... ] slice with cleanup
+        """
+        try:
+            import json
+            # 1) Code-fenced json block
+            if "```json" in text:
+                start = text.find("```json") + 7
+                end = text.find("```", start)
+                if end > start:
+                    candidate = text[start:end].strip()
+                    candidate = self._clean_json_string_enhanced(candidate)
+                    try:
+                        return json.loads(candidate)
+                    except json.JSONDecodeError:
+                        pass
+            # 2) Balanced braces/brackets scan
+            for open_char, close_char in (("{", "}"), ("[", "]")):
+                depth = 0
+                start_idx = -1
+                for i, ch in enumerate(text):
+                    if ch == open_char:
+                        if depth == 0:
+                            start_idx = i
+                        depth += 1
+                    elif ch == close_char:
+                        if depth > 0:
+                            depth -= 1
+                            if depth == 0 and start_idx >= 0:
+                                candidate = text[start_idx:i+1]
+                                candidate = self._clean_json_string_enhanced(candidate)
+                                try:
+                                    return json.loads(candidate)
+                                except json.JSONDecodeError:
+                                    continue
+            # 3) Greedy slice between first { and last }
+            if "{" in text and "}" in text:
+                s = text.find("{")
+                e = text.rfind("}") + 1
+                candidate = self._clean_json_string_enhanced(text[s:e])
+                try:
+                    import json
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    pass
+            # 4) Greedy slice between first [ and last ]
+            if "[" in text and "]" in text:
+                s = text.find("[")
+                e = text.rfind("]") + 1
+                candidate = self._clean_json_string_enhanced(text[s:e])
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    pass
+            return None
+        except Exception:
+            return None
         
         # Add context information
         if context:
