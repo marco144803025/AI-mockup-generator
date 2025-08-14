@@ -14,7 +14,7 @@ from .base_agent import BaseAgent
 class UIEditingAgent(BaseAgent):
     """Simplified UI Editing Agent using two-step LLM process"""
     
-    def __init__(self):
+    def __init__(self, session_id: str = None):
         system_message = """You are an expert UI/UX modification agent with deep understanding of web development, HTML, CSS, and user intent analysis.
 
 Your role is to:
@@ -22,6 +22,7 @@ Your role is to:
 2. Apply those plans to generate complete, working code
 3. Handle ambiguity and provide clarification when needed
 4. Generate precise, valid CSS selectors and code modifications
+
 
 **CRITICAL CSS SELECTOR REQUIREMENTS:**
 -  ONLY use valid CSS selectors: `.class-name`, `#id-name`, `tag.class`, `tag#id`
@@ -32,6 +33,7 @@ Your role is to:
         
         super().__init__("UIEditingAgent", system_message, model="claude-3-5-haiku-20241022")
         self.logger = logging.getLogger(__name__)
+        self.session_id = session_id
     
     def _clean_json_string(self, json_str: str) -> str:
         """Clean JSON string to remove control characters and fix common issues"""
@@ -45,7 +47,7 @@ Your role is to:
     def _extract_json_from_response(self, response: str, context: str = "response") -> Optional[Dict[str, Any]]:
         """Robust JSON extraction from LLM responses"""
         try:
-            self.logger.debug(f"🔍 JSON EXTRACTION: Extracting JSON from {context}: {response[:200]}...")
+            self.logger.debug(f"JSON EXTRACTION: Extracting JSON from {context}: {response[:200]}...")
             
             # Strategy 1: Find JSON block with markers
             if "```json" in response:
@@ -89,14 +91,14 @@ Your role is to:
                 try:
                     return json.loads(json_str)
                 except json.JSONDecodeError as e:
-                    self.logger.warning(f"🔍 JSON EXTRACTION: Failed to parse JSON in {context}: {e}")
+                    self.logger.warning(f" JSON EXTRACTION: Failed to parse JSON in {context}: {e}")
                     return None
             
-            self.logger.warning(f"🔍 JSON EXTRACTION: No JSON found in {context}")
+            self.logger.warning(f" JSON EXTRACTION: No JSON found in {context}")
             return None
             
         except Exception as e:
-            self.logger.error(f"🔍 JSON EXTRACTION: Error extracting JSON from {context}: {e}")
+            self.logger.error(f" JSON EXTRACTION: Error extracting JSON from {context}: {e}")
             return None
     
     # Note: All HTML analysis is now done by the LLM in the enhanced prompt
@@ -104,37 +106,50 @@ Your role is to:
     
     def process_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
         """Process a UI modification request using two-step LLM approach"""
+        import time
+        phase_start_time = time.time()
         try:
             self.logger.info(f"🔄 UI EDITING AGENT: Starting modification request: {user_feedback}")
+            print(f"DEBUG: UI Editing Agent - Starting modification request...")
             
             # Extract current UI code
+            code_extraction_start_time = time.time()
             html_content = current_template.get("html_export", "")
             style_css = current_template.get("style_css", "")
             globals_css = current_template.get("globals_css", "")
+            code_extraction_end_time = time.time()
+            print(f"DEBUG: UI Editing Agent - Code extraction completed in {code_extraction_end_time - code_extraction_start_time:.2f} seconds")
             
             self.logger.info(f"📊 UI EDITING AGENT: Template loaded - HTML: {len(html_content)} chars, CSS: {len(style_css)} chars")
             
             if not html_content:
-                self.logger.error(f"❌ UI EDITING AGENT: No HTML content found in template")
+                self.logger.error(f"UI EDITING AGENT: No HTML content found in template")
+                print(f"DEBUG: UI Editing Agent - Failed after {time.time() - phase_start_time:.2f} seconds (no HTML content)")
                 return {
                     "success": False,
                     "error": "No HTML content found in template"
                 }
             
             # Step 1: Create detailed modification plan
-            self.logger.info(f"🎯 PLANNER PHASE: Creating modification plan...")
+            planner_start_time = time.time()
+            self.logger.info(f"PLANNER PHASE: Creating modification plan...")
+            print(f"DEBUG: UI Editing Agent - Starting planner phase...")
             plan_result = self._create_modification_plan(user_feedback, html_content, style_css, globals_css)
+            planner_end_time = time.time()
+            print(f"DEBUG: UI Editing Agent - Planner phase completed in {planner_end_time - planner_start_time:.2f} seconds")
             
             if not plan_result.get("success"):
-                self.logger.error(f"❌ PLANNER PHASE: Failed to create modification plan")
+                self.logger.error(f"PLANNER PHASE: Failed to create modification plan")
+                print(f"DEBUG: UI Editing Agent - Failed after {time.time() - phase_start_time:.2f} seconds (planner failed)")
                 return plan_result
             
             modification_plan = plan_result["plan"]
-            self.logger.info(f"✅ PLANNER PHASE: Plan created successfully")
+            self.logger.info(f"PLANNER PHASE: Plan created successfully")
             
             # Check if clarification is needed
             if modification_plan.get("requires_clarification", False):
                 self.logger.info(f"❓ PLANNER PHASE: Clarification needed from user")
+                print(f"DEBUG: UI Editing Agent - Clarification needed, total time: {time.time() - phase_start_time:.2f} seconds")
                 return {
                     "success": True,
                     "requires_clarification": True,
@@ -143,15 +158,29 @@ Your role is to:
                 }
             
             # Step 2: Execute the plan and generate new code
-            self.logger.info(f"⚡ EXECUTOR PHASE: Executing modification plan...")
-            execution_result = self._execute_modification_plan(modification_plan, html_content, style_css, globals_css)
+            executor_start_time = time.time()
+            self.logger.info(f"EXECUTOR PHASE: Executing modification plan...")
+            print(f"DEBUG: UI Editing Agent - Starting executor phase...")
+            execution_result = self._execute_modification_plan(modification_plan, html_content, style_css, globals_css, user_feedback)
+            executor_end_time = time.time()
+            print(f"DEBUG: UI Editing Agent - Executor phase completed in {executor_end_time - executor_start_time:.2f} seconds")
             
             if not execution_result.get("success"):
-                self.logger.error(f"❌ EXECUTOR PHASE: Failed to execute modification plan")
+                self.logger.error(f"EXECUTOR PHASE: Failed to execute modification plan")
+                print(f"DEBUG: UI Editing Agent - Failed after {time.time() - phase_start_time:.2f} seconds (executor failed)")
                 return execution_result
             
-            self.logger.info(f"✅ EXECUTOR PHASE: Plan executed successfully")
-            self.logger.info(f"🎉 UI EDITING AGENT: Modification completed successfully")
+            self.logger.info(f"EXECUTOR PHASE: Plan executed successfully")
+            self.logger.info(f"UI EDITING AGENT: Modification completed successfully")
+            
+            # Log total execution time
+            phase_end_time = time.time()
+            print(f"DEBUG: UI Editing Agent - Total execution time: {phase_end_time - phase_start_time:.2f} seconds")
+            print(f"DEBUG: Breakdown:")
+            print(f"  - Code extraction: {code_extraction_end_time - code_extraction_start_time:.2f} seconds")
+            print(f"  - Planner phase: {planner_end_time - planner_start_time:.2f} seconds")
+            print(f"  - Executor phase: {executor_end_time - executor_start_time:.2f} seconds")
+            print(f"  - Total overhead: {phase_end_time - phase_start_time - (code_extraction_end_time - code_extraction_start_time) - (planner_end_time - planner_start_time) - (executor_end_time - executor_start_time):.2f} seconds")
             
             # Return the complete result
             return {
@@ -162,11 +191,22 @@ Your role is to:
                     "html_export": execution_result.get("html", html_content),
                     "style_css": execution_result.get("style_css", style_css),
                     "globals_css": execution_result.get("globals_css", globals_css)
+                },
+                "metadata": {
+                    "execution_time": phase_end_time - phase_start_time,
+                    "timing_breakdown": {
+                        "code_extraction": code_extraction_end_time - code_extraction_start_time,
+                        "planner_phase": planner_end_time - planner_start_time,
+                        "executor_phase": executor_end_time - executor_start_time,
+                        "total_overhead": phase_end_time - phase_start_time - (code_extraction_end_time - code_extraction_start_time) - (planner_end_time - planner_start_time) - (executor_end_time - executor_start_time)
+                    }
                 }
             }
             
         except Exception as e:
-            self.logger.error(f"💥 UI EDITING AGENT: Error processing modification request: {e}")
+            phase_end_time = time.time()
+            print(f"DEBUG: UI Editing Agent - Failed after {phase_end_time - phase_start_time:.2f} seconds")
+            self.logger.error(f"UI EDITING AGENT: Error processing modification request: {e}")
             return {
                     "success": False,
                 "error": f"Processing failed: {str(e)}"
@@ -174,36 +214,73 @@ Your role is to:
     
     def _create_modification_plan(self, user_feedback: str, html_content: str, style_css: str, globals_css: str) -> Dict[str, Any]:
         """Step 1: Create a detailed modification plan using LLM analysis"""
+        import time
+        planner_start_time = time.time()
         try:
-            self.logger.info(f"🎯 PLANNER: Building enhanced planning prompt...")
+            self.logger.info(f"PLANNER: Building enhanced planning prompt...")
+            print(f"DEBUG: PLANNER - Building enhanced planning prompt...")
             
             # Build the enhanced planning prompt that lets LLM do all analysis
+            prompt_build_start_time = time.time()
             prompt = self._build_enhanced_planning_prompt(user_feedback, html_content, style_css, globals_css)
+            prompt_build_end_time = time.time()
+            print(f"DEBUG: PLANNER - Prompt building completed in {prompt_build_end_time - prompt_build_start_time:.2f} seconds")
             
-            self.logger.info(f"🎯 PLANNER: Sending planning request to Claude Haiku...")
-            response = self.call_claude_with_cot(prompt, enable_cot=True)
+            self.logger.info(f"PLANNER: Sending planning request to Claude Haiku...")
+            print(f"DEBUG: PLANNER - Sending planning request to Claude Haiku...")
+            llm_call_start_time = time.time()
+            response = self.call_claude_with_cot(prompt, enable_cot=True, extract_json=True)
+            llm_call_end_time = time.time()
+            print(f"DEBUG: PLANNER - LLM call completed in {llm_call_end_time - llm_call_start_time:.2f} seconds")
             
-            self.logger.info(f"🎯 PLANNER: Received response from Claude Haiku (length: {len(response)})")
+            self.logger.info(f"PLANNER: Received response from Claude Haiku (length: {len(response)})")
             
             # Parse the planning response
-            self.logger.info(f"🎯 PLANNER: Parsing JSON from planning response...")
+            self.logger.info(f"PLANNER: Parsing JSON from planning response...")
+            print(f"DEBUG: PLANNER - Parsing JSON from planning response...")
+            parsing_start_time = time.time()
             plan = self._extract_json_from_response(response, "planning response")
+            parsing_end_time = time.time()
+            print(f"DEBUG: PLANNER - JSON parsing completed in {parsing_end_time - parsing_start_time:.2f} seconds")
             
             if plan:
-                self.logger.info(f"🎯 PLANNER: Successfully parsed modification plan")
+                self.logger.info(f"PLANNER: Successfully parsed modification plan")
+                
+                # Store planning rationale if session_id is available
+                if self.session_id:
+                    try:
+                        from utils.rationale_manager import RationaleManager
+                        rationale_manager = RationaleManager(self.session_id)
+                        rationale_manager.add_ui_editing_planning_rationale(plan, user_feedback)
+                        self.logger.info("Stored UI editing planning rationale")
+                    except Exception as e:
+                        self.logger.error(f"Failed to store UI editing planning rationale: {e}")
+                
+                # Log total planner execution time
+                planner_end_time = time.time()
+                print(f"DEBUG: PLANNER - Total execution time: {planner_end_time - planner_start_time:.2f} seconds")
+                print(f"DEBUG: Breakdown:")
+                print(f"  - Prompt building: {prompt_build_end_time - prompt_build_start_time:.2f} seconds")
+                print(f"  - LLM call: {llm_call_end_time - llm_call_start_time:.2f} seconds")
+                print(f"  - JSON parsing: {parsing_end_time - parsing_start_time:.2f} seconds")
+                print(f"  - Total overhead: {planner_end_time - planner_start_time - (prompt_build_end_time - prompt_build_start_time) - (llm_call_end_time - llm_call_start_time) - (parsing_end_time - parsing_start_time):.2f} seconds")
+                
                 return {
                     "success": True,
                     "plan": plan
                 }
             else:
-                self.logger.error(f"🎯 PLANNER: Failed to parse modification plan from LLM response")
+                self.logger.error(f"PLANNER: Failed to parse modification plan from LLM response")
+                print(f"DEBUG: PLANNER - Failed after {time.time() - planner_start_time:.2f} seconds (JSON parsing failed)")
                 return {
                     "success": False,
                     "error": "Failed to parse modification plan from LLM response"
-            }
+                }
             
         except Exception as e:
-            self.logger.error(f"🎯 PLANNER: Error creating modification plan: {e}")
+            planner_end_time = time.time()
+            print(f"DEBUG: PLANNER - Failed after {planner_end_time - planner_start_time:.2f} seconds")
+            self.logger.error(f"PLANNER: Error creating modification plan: {e}")
             return {
                 "success": False,
                 "error": f"Planning failed: {str(e)}"
@@ -299,10 +376,16 @@ Create valid CSS selectors that:
 - **Effects**: Borders, shadows, gradients, animations
 
 ### **CSS Selector Best Practices**
-- ✅ **Valid Selectors**: `.class-name`, `#id-name`, `tag.class`, `tag#id`
-- ❌ **Invalid Selectors**: `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`
+- **Valid Selectors**: `.class-name`, `#id-name`, `tag.class`, `tag#id`
+- **Invalid Selectors**: `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`
 - **Specificity**: Use specific enough selectors to target intended elements
 - **Maintainability**: Prefer classes over IDs, avoid overly complex selectors
+
+### **CRITICAL OUTPUT REQUIREMENTS**
+- **ALWAYS return the COMPLETE modification plan in valid JSON format**
+- **NEVER use placeholder text, ellipsis, or abbreviated content**
+- **Include ALL steps and details in the plan**
+- **Use exact CSS selectors that will work in real browsers**
 
 ## FEW-SHOT EXAMPLES
 
@@ -440,8 +523,14 @@ Create valid CSS selectors that:
 4. **Generate a precise modification plan** with valid CSS selectors
 5. **Handle ambiguity** by providing clarification options if multiple targets match
 
-## OUTPUT FORMAT
-Return ONLY this JSON structure:
+## CRITICAL OUTPUT FORMAT REQUIREMENTS
+
+**IMPORTANT: You MUST use the THINKING/ANSWER format as instructed by the base agent.**
+
+**THINKING:**
+[Provide your step-by-step reasoning here, analyzing the UI structure, user intent, and target identification process]
+
+**ANSWER:**
 ```json
 {{
   "intent_analysis": {{
@@ -482,6 +571,8 @@ Return ONLY this JSON structure:
 }}
 ```
 
+**CRITICAL: Do NOT use "ANSWER:" anywhere else in your response. Only use it once to introduce the JSON structure above.**
+
 ## CRITICAL REQUIREMENTS
 - **Use ONLY valid CSS selectors**: `.class-name`, `#id-name`, `tag.class`, `tag#id`
 - **NEVER use jQuery selectors**: `:contains()`, `:has()`, `:text()`, `:first`, `:last`, `:eq()`
@@ -489,25 +580,56 @@ Return ONLY this JSON structure:
 - **Handle ambiguity gracefully**: Provide clarification options when needed
 - **Consider all context**: Spatial, visual, semantic, and functional aspects"""
     
-    def _execute_modification_plan(self, modification_plan: Dict[str, Any], html_content: str, style_css: str, globals_css: str) -> Dict[str, Any]:
+    def _execute_modification_plan(self, modification_plan: Dict[str, Any], html_content: str, style_css: str, globals_css: str, user_request: str) -> Dict[str, Any]:
         """Step 2: Execute the modification plan and generate new code"""
+        import time
+        executor_start_time = time.time()
         try:
-            self.logger.info(f"⚡ EXECUTOR: Building execution prompt...")
-            
+            self.logger.info(f"EXECUTOR: Building execution prompt...")
+            print(f"DEBUG: EXECUTOR - Building execution prompt...")
+          
             # Build the execution prompt
-            prompt = self._build_execution_prompt(modification_plan, html_content, style_css, globals_css)
+            prompt_build_start_time = time.time()
+            prompt = self._build_execution_prompt(modification_plan, html_content, style_css, globals_css, user_request)
+            prompt_build_end_time = time.time()
+            print(f"DEBUG: EXECUTOR - Prompt building completed in {prompt_build_end_time - prompt_build_start_time:.2f} seconds")
             
-            self.logger.info(f"⚡ EXECUTOR: Sending execution request to Claude Haiku...")
-            response = self.call_claude_with_cot(prompt, enable_cot=True)
+            llm_call_start_time = time.time()
+            print(f"DEBUG: EXECUTOR - Sending execution request to Claude Haiku...")
+            response = self.call_claude_with_cot(prompt, enable_cot=False, extract_json=True)
+            llm_call_end_time = time.time()
+            print(f"DEBUG: EXECUTOR - LLM call completed in {llm_call_end_time - llm_call_start_time:.2f} seconds")
             
-            self.logger.info(f"⚡ EXECUTOR: Received response from Claude Haiku (length: {len(response)})")
+            self.logger.info(f"EXECUTOR: Received response from Claude Haiku (length: {len(response)})")
             
-            # Parse the execution response
-            self.logger.info(f"⚡ EXECUTOR: Parsing execution response...")
+            # Parse the execution response (no CoT format expected)
+            parsing_start_time = time.time()
+            print(f"DEBUG: EXECUTOR - Parsing execution response...")
             result = self._parse_execution_response(response, html_content, style_css, globals_css)
+            parsing_end_time = time.time()
+            print(f"DEBUG: EXECUTOR - Response parsing completed in {parsing_end_time - parsing_start_time:.2f} seconds")
             
             if result:
-                self.logger.info(f"⚡ EXECUTOR: Successfully parsed execution result")
+                self.logger.info(f"EXECUTOR: Successfully parsed execution result")
+                
+                # Store execution summary in rationale
+                try:
+                    from utils.rationale_manager import RationaleManager
+                    rationale_manager = RationaleManager(self.session_id)
+                    rationale_manager.add_ui_editing_execution_summary(result, user_request)
+                    self.logger.info("Stored UI editing execution rationale")
+                except Exception as e:
+                    self.logger.error(f"Failed to store UI editing execution rationale: {e}")
+                
+                # Log total executor execution time
+                executor_end_time = time.time()
+                print(f"DEBUG: EXECUTOR - Total execution time: {executor_end_time - executor_start_time:.2f} seconds")
+                print(f"DEBUG: Breakdown:")
+                print(f"  - Prompt building: {prompt_build_end_time - prompt_build_start_time:.2f} seconds")
+                print(f"  - LLM call: {llm_call_end_time - llm_call_start_time:.2f} seconds")
+                print(f"  - Response parsing: {parsing_end_time - parsing_start_time:.2f} seconds")
+                print(f"  - Total overhead: {executor_end_time - executor_start_time - (prompt_build_end_time - prompt_build_start_time) - (llm_call_end_time - llm_call_start_time) - (parsing_end_time - parsing_start_time):.2f} seconds")
+                
                 return {
                     "success": True,
                     "html": result.get("html", html_content),
@@ -516,20 +638,23 @@ Return ONLY this JSON structure:
                     "changes_summary": result.get("changes_summary", [])
                 }
             else:
-                self.logger.error(f"⚡ EXECUTOR: Failed to parse execution result from LLM response")
+                self.logger.error(f"EXECUTOR: Failed to parse execution result from LLM response")
+                print(f"DEBUG: EXECUTOR - Failed after {time.time() - executor_start_time:.2f} seconds (response parsing failed)")
                 return {
                     "success": False,
                     "error": "Failed to parse execution result from LLM response"
                 }
                 
         except Exception as e:
-            self.logger.error(f"⚡ EXECUTOR: Error executing modification plan: {e}")
+            executor_end_time = time.time()
+            print(f"DEBUG: EXECUTOR - Failed after {executor_end_time - executor_start_time:.2f} seconds")
+            self.logger.error(f"EXECUTOR: Error executing modification plan: {e}")
             return {
                 "success": False,
                 "error": f"Execution failed: {str(e)}"
             }
     
-    def _build_execution_prompt(self, modification_plan: Dict[str, Any], html_content: str, style_css: str, globals_css: str) -> str:
+    def _build_execution_prompt(self, modification_plan: Dict[str, Any], html_content: str, style_css: str, globals_css: str, user_request: str) -> str:
         """Build the execution prompt"""
         
         plan_json = json.dumps(modification_plan, indent=2)
@@ -537,6 +662,13 @@ Return ONLY this JSON structure:
         return f"""# UI MODIFICATION EXECUTION
 
 You are an expert web developer. Your task is to apply the changes from the modification plan to the original code and return the new, complete code.
+
+ **CRITICAL**: You MUST return the COMPLETE content of files that you modify. For files you don't change, return "No Change".
+
+ **CRITICAL REQUIREMENT**: You MUST return the COMPLETE content of each file, not just the changed parts. If you return incomplete files, your response will be rejected.
+
+## ORIGINAL USER REQUEST
+{user_request}
 
 ## MODIFICATION PLAN
 ```json
@@ -566,6 +698,7 @@ Apply the changes from the modification plan to the original code. You must:
 3. **Return complete code**: Return the complete modified HTML, style.css, and globals.css
 4. **Maintain code quality**: Keep the code clean and well-formatted
 5. **Track changes**: List what changes you made
+6. **Consider user intent**: Use the original user request to ensure modifications align with user expectations
 
 ## EXECUTION GUIDELINES
 
@@ -577,13 +710,22 @@ Apply the changes from the modification plan to the original code. You must:
 **For Text Modifications:**
 - Modify the text content in the HTML
 - Preserve the HTML structure and attributes
+- Ensure the text changes align with the user's original request
 
 **For HTML Modifications:**
 - Modify the HTML structure as specified
 - Maintain proper HTML syntax and formatting
+- Consider the user's intent when making structural changes
 
-## OUTPUT FORMAT
-Return ONLY this JSON structure:
+**User Intent Consideration:**
+- Always refer back to the original user request to ensure modifications meet expectations
+- If the modification plan seems unclear, use the user request for additional context
+- Prioritize changes that directly address the user's stated needs
+
+## CRITICAL OUTPUT FORMAT REQUIREMENTS
+
+**IMPORTANT: Return ONLY the JSON structure below. Do NOT include any explanatory text before or after the JSON.**
+
 ```json
 {{
   "html": "complete modified HTML code",
@@ -597,38 +739,54 @@ Return ONLY this JSON structure:
 }}
 ```
 
-## IMPORTANT RULES
-- **Return complete files**: Include the entire HTML, style.css, and globals.css content
+## CRITICAL RULES - READ CAREFULLY
+
+**ALWAYS RETURN COMPLETE FILES:**
+- If you modify ANY file, return the ENTIRE file content, not just the changed parts
+- If you don't modify a file, return exactly: "No Change"
+- NEVER use placeholders, ellipsis, or abbreviated text
+- NEVER use comments like "/* rest unchanged */" or "// ... existing code ..."
 - **Use valid CSS**: Only valid CSS selectors, no jQuery selectors
-- **Apply all steps**: Execute every step in the modification plan
-- **Maintain formatting**: Keep the code properly formatted and readable
-- **Track changes**: List each change you made in the changes_summary
-- **CRITICAL**: Ensure all CSS selectors are valid and will work in a real browser
-- **CRITICAL**: NEVER use placeholder comments like "/* Rest of the CSS remains unchanged */" or "// ... existing code ..."
-- **CRITICAL**: NEVER use ellipsis (...) or "and so on" in your code
-- **CRITICAL**: If you make ANY changes to a file, return the COMPLETE file content
+**EXAMPLES:**
+- If you change CSS: Return the COMPLETE CSS file with ALL rules
+- If you change HTML: Return the COMPLETE HTML file with ALL elements  
+- If you don't change CSS: Return "No Change"
+- If you don't change HTML: Return "No Change"
 
-**SPECIAL INSTRUCTION FOR NO CHANGES:**
-- If no changes are needed to a file, return exactly: "no change to this file"
-- This is the ONLY acceptable way to indicate no changes needed
-- Do NOT use any other placeholder text or descriptions
+**VALIDATION:**
+- Your response will be rejected if it contains any placeholder text
+- Your response will be rejected if you return incomplete files
+- Your response will be rejected if you use ellipsis (...) or "and so on"
 
-**EXAMPLES OF CORRECT OUTPUT:**
-- If only HTML text changes: Return original CSS files unchanged
-- If only CSS changes: Return original HTML unchanged  
-- If no changes needed to CSS: Return "no change to this file" for style_css and globals_css
-- If no changes needed to HTML: Return "no change to this file" for html
-- If you modify CSS: Return the COMPLETE CSS file with all rules, not just the changed parts
-- If you modify HTML: Return the COMPLETE HTML file with all elements, not just the changed parts
+## WHAT NOT TO DO - EXAMPLES OF WRONG OUTPUT
 
-**FORBIDDEN PHRASES (NEVER USE THESE):**
-- "/* Rest of the CSS remains unchanged */"
-- "// ... existing code ..."
-- "and so on"
-- "..."
-- "/* unchanged */"
-- "/* same as before */"
-- Any other placeholder or abbreviated text"""
+**WRONG - Incomplete CSS:**
+```json
+{{
+  "style_css": "/* Complete style.css with added modifications */\n\n/* [Previous existing CSS remains unchanged] */\n\n.new-rule {{ color: red; }}"
+}}
+```
+
+**WRONG - Placeholder text:**
+```json
+{{
+  "style_css": "/* Rest of the CSS remains unchanged */\n.new-rule {{ color: red; }}"
+}}
+```
+
+**WRONG - Ellipsis:**
+```json
+{{
+  "style_css": "... existing CSS ...\n.new-rule {{ color: red; }}"
+}}
+```
+
+**CORRECT - Complete file:**
+```json
+{{
+  "style_css": "/* Complete CSS file with all original rules plus new rule */\n.original-rule {{ color: blue; }}\n.another-rule {{ font-size: 16px; }}\n.new-rule {{ color: red; }}"
+}}
+```"""
     
     def _parse_execution_response(self, response: str, original_html: str, original_style: str, original_globals: str) -> Optional[Dict[str, Any]]:
         """Parse the execution response and extract the modified code"""
@@ -647,17 +805,18 @@ Return ONLY this JSON structure:
                     self.logger.error(f"Missing required key in execution result: {key}")
                     return None
             
-            # Handle "no change to this file" responses
-            if result["style_css"].lower().strip() == "no change to this file":
-                self.logger.info("Detected 'no change to this file' for style_css, using original CSS")
+            # Handle "No Change" responses by replacing with original content
+            # Check for variations like "No Change", "No Change to this file", etc.
+            if "no change" in result["style_css"].lower().strip():
+                self.logger.info("Detected 'No Change' variation for style_css, using original CSS")
                 result["style_css"] = original_style
                 
-            if result["globals_css"].lower().strip() == "no change to this file":
-                self.logger.info("Detected 'no change to this file' for globals_css, using original CSS")
+            if "no change" in result["globals_css"].lower().strip():
+                self.logger.info("Detected 'No Change' variation for globals_css, using original CSS")
                 result["globals_css"] = original_globals
                 
-            if result["html"].lower().strip() == "no change to this file":
-                self.logger.info("Detected 'no change to this file' for html, using original HTML")
+            if "no change" in result["html"].lower().strip():
+                self.logger.info("Detected 'No Change' variation for html, using original HTML")
                 result["html"] = original_html
             
             # Validate that no forbidden placeholder phrases are used
@@ -683,6 +842,15 @@ Return ONLY this JSON structure:
                 result["style_css"] == original_style and 
                 result["globals_css"] == original_globals):
                 self.logger.warning("Execution result shows no changes were made")
+                return None
+            
+            # Validate that we're not getting truncated files
+            if len(result["style_css"]) < len(original_style) * 0.8:  # Allow 20% reduction for legitimate changes
+                self.logger.error(f"Style CSS appears to be truncated: original {len(original_style)} chars, result {len(result['style_css'])} chars")
+                return None
+                
+            if len(result["html"]) < len(original_html) * 0.8:  # Allow 20% reduction for legitimate changes
+                self.logger.error(f"HTML appears to be truncated: original {len(original_html)} chars, result {len(result['html'])} chars")
                 return None
             
             return result

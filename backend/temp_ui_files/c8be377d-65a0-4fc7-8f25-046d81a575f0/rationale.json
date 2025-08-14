@@ -1,0 +1,37 @@
+{
+  "session_id": "c8be377d-65a0-4fc7-8f25-046d81a575f0",
+  "created_at": "2025-08-14T00:34:05.423253",
+  "last_updated": "2025-08-14T00:34:05.424255",
+  "template_selection": {
+    "recommendations": [
+      {
+        "template_id": "unknown",
+        "template_name": "unknown",
+        "overall_score": 0.0,
+        "detailed_reasoning": "",
+        "strengths": [
+          "Clean, minimalist design",
+          "Clear hero section",
+          "Professional typography",
+          "Focused call-to-action"
+        ],
+        "considerations": [
+          "May require custom interactive elements",
+          "Potential need for additional responsive design tweaks"
+        ],
+        "suitability_level": "high",
+        "timestamp": "2025-08-14T00:34:05.424255"
+      }
+    ],
+    "final_selection": null,
+    "selection_reasoning": ""
+  },
+  "ui_editing": {
+    "planning_rationale": [],
+    "execution_summary": []
+  },
+  "overall_workflow": {
+    "phase_decisions": [],
+    "agent_coordination": []
+  }
+}

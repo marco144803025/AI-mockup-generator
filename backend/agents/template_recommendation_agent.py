@@ -15,6 +15,8 @@ class TemplateRecommendationAgent(BaseAgent):
 3. Providing detailed reasoning for recommendations
 4. Suggesting alternatives when exact matches aren't available
 
+CRITICAL: You MUST use the THINKING/ANSWER format as instructed by the base agent. Provide reasoning in THINKING section and JSON output in ANSWER section.
+
 You focus ONLY on template recommendation and scoring. You do not analyze requirements or generate questions."""
         
         super().__init__("TemplateRecommendation", system_message)
@@ -90,19 +92,39 @@ You focus ONLY on template recommendation and scoring. You do not analyze requir
         
         print(f"DEBUG: Starting LLM scoring with {len(templates)} templates")
         prompt = self._build_scoring_prompt(requirements, templates, context)
-        response = self._call_claude_with_tools(prompt)
-        print(f"DEBUG: LLM response length: {len(response)} characters")
-        print(f"DEBUG: LLM response preview: {response[:200]}...")
         
-        result = self._parse_scoring_response(response, templates)
-        print(f"DEBUG: Parsed result: {len(result)} templates")
-        return result
+        # Try up to 2 times to get a proper JSON response
+        for attempt in range(2):
+            response = self._call_claude_with_tools(prompt)
+            print(f"DEBUG: LLM response attempt {attempt + 1}, length: {len(response)} characters")
+            print(f"DEBUG: LLM response preview: {response[:200]}...")
+            
+            result = self._parse_scoring_response(response, templates)
+            if result and len(result) > 0:
+                print(f"DEBUG: Successfully parsed result: {len(result)} templates")
+                return result
+            
+            if attempt == 0:
+                print("DEBUG: First attempt failed, retrying with stronger JSON enforcement...")
+                # Add stronger JSON enforcement on retry
+                prompt = prompt + "\n\nFINAL WARNING: You MUST respond with ONLY a JSON array. Any other response will cause an error."
+                print("DEBUG: Retrying with enhanced prompt...")
+            else:
+                print("DEBUG: Second attempt also failed, using fallback scoring")
+        
+        print("DEBUG: All attempts failed, using fallback scoring")
+        return self._fallback_scoring(templates)
     
     def _build_scoring_prompt(self, requirements: Dict[str, Any], templates: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None) -> str:
         """Build prompt for LLM-based template scoring"""
         
         # Extract key requirements
-        page_type = requirements.get("page_type", "landing")
+        page_type = requirements.get("page_type")
+        if not page_type:
+            print(f"ERROR: No page_type found in requirements: {requirements}")
+            # Use a more generic default or fail gracefully
+            page_type = "general"
+            print(f"WARNING: Using fallback page_type: '{page_type}'")
         style_prefs = requirements.get("style_preferences", [])
         key_features = requirements.get("key_features", [])
         target_audience = requirements.get("target_audience", "general users")
@@ -141,11 +163,15 @@ EVALUATION CRITERIA:
 2. Style Alignment (25% weight): Does the visual style match user preferences?
 3. Component Coverage (20% weight): Does it include required functional elements?
 4. Brand Consistency (15% weight): Does it align with the target audience?
-5. Technical Quality (10% weight): Is the implementation solid and maintainable?
 
- TASK:
- Score each template and provide detailed reasoning. Return ONLY a JSON array with this structure and NO extra text before or after:
+CRITICAL INSTRUCTION:
+You MUST use the THINKING/ANSWER format as instructed by the base agent.
 
+**THINKING:**
+[Provide your step-by-step reasoning here, analyzing each template against the requirements and explaining your scoring decisions]
+
+**ANSWER:**
+```json
 [
     {{
         "template_id": "string (from template database)",
@@ -155,19 +181,22 @@ EVALUATION CRITERIA:
         "style_alignment": 0.8,
         "component_coverage": 0.7,
         "brand_consistency": 0.85,
-        "technical_quality": 0.8,
         "detailed_reasoning": "Comprehensive explanation of why this template is recommended",
         "strengths": ["List of specific strengths"],
         "considerations": ["List of potential considerations"],
         "suitability_level": "high|medium|low"
     }}
 ]
+```
 
-IMPORTANT:
+RULES:
+- Use ONLY the THINKING/ANSWER format
+- Do NOT use "ANSWER:" anywhere else in your response
 - Score from 0.0 to 1.0 for each criterion
 - Provide detailed reasoning for each recommendation
 - Consider both explicit matches and implicit design principles
 - Sort by overall_score (highest first)
+- Return ONLY the JSON array in the ANSWER section
 """
         
         return prompt
@@ -175,79 +204,8 @@ IMPORTANT:
     def _call_claude_with_tools(self, prompt: str) -> str:
         """Call Claude with tool calling capabilities"""
         try:
-            client = self.claude_client
-            messages = [{"role": "user", "content": prompt}]
-            
-            # Get available tools
-            tools = self.tool_utility.get_tools()
-            
-            # Call Claude
-            response = client.messages.create(
-                model=self.model,
-                max_tokens=8000,
-                messages=messages,
-                tools=tools if tools else None,
-                tool_choice={"type": "auto"} if tools else None
-            )
-            
-            # Debug: Log LLM response
-            print(f"DEBUG: Template Recommendation Agent LLM Response: {response.content[0].text[:500]}...")
-            if len(response.content[0].text) > 500:
-                print(f"DEBUG: Full Template Recommendation Response: {response.content[0].text}")
-            
-            # Handle tool calls if any
-            if response.content and hasattr(response.content[0], 'tool_calls') and response.content[0].tool_calls:
-                tool_results = []
-                for tool_call in response.content[0].tool_calls:
-                    tool_name = tool_call.name
-                    
-                    # Handle different tool call formats
-                    if hasattr(tool_call, 'input'):
-                        # Custom tool format
-                        tool_args = json.loads(tool_call.input)
-                    elif hasattr(tool_call, 'arguments'):
-                        # Function call format
-                        tool_args = json.loads(tool_call.arguments)
-                    else:
-                        # Fallback
-                        tool_args = {}
-                    
-                    # Call the tool
-                    tool_result = self.tool_utility.call_function(tool_name, tool_args)
-                    tool_results.append({
-                        "tool_call_id": getattr(tool_call, 'id', 'unknown'),
-                        "name": tool_name,
-                        "result": tool_result
-                    })
-                
-                # If we have tool results, make another call with the results
-                if tool_results:
-                    tool_response_prompt = f"""
-                    Based on the tool results below, please provide your final template recommendations:
-
-                    TOOL RESULTS:
-                    {json.dumps(tool_results, indent=2)}
-
-                    ORIGINAL PROMPT:
-                    {prompt}
-
-                    Please provide your template recommendations in the requested JSON format.
-                    """
-                    
-                    final_response = client.messages.create(
-                        model=self.model,
-                        max_tokens=8000,
-                        messages=[{"role": "user", "content": tool_response_prompt}]
-                    )
-                    
-                    # Debug: Log final LLM response after tool calls
-                    print(f"DEBUG: Template Recommendation Agent Final Response: {final_response.content[0].text[:500]}...")
-                    if len(final_response.content[0].text) > 500:
-                        print(f"DEBUG: Full Template Recommendation Final Response: {final_response.content[0].text}")
-                    
-                    return final_response.content[0].text
-            
-            return response.content[0].text
+            # Use the base agent's COT method with JSON extraction
+            return self.call_claude_with_cot(prompt, enable_cot=True, extract_json=True)
             
         except Exception as e:
             print(f"ERROR: Error calling Claude with tools: {e}")
@@ -257,6 +215,36 @@ IMPORTANT:
         """Parse the LLM response and convert to the expected format"""
         
         print(f"DEBUG: Parsing response with {len(templates)} templates available")
+        
+        # Quick validation: check if response looks like JSON
+        response_trimmed = response.strip()
+        
+        # Check for various JSON formats
+        is_valid_json = False
+        
+        # Check for array format [...]
+        if response_trimmed.startswith('[') and response_trimmed.endswith(']'):
+            is_valid_json = True
+            print("DEBUG: Response is valid JSON array format")
+        # Check for object format {...} (single template)
+        elif response_trimmed.startswith('{') and response_trimmed.endswith('}'):
+            is_valid_json = True
+            print("DEBUG: Response is valid JSON object format")
+        # Check for markdown code blocks
+        elif "```json" in response:
+            is_valid_json = True
+            print("DEBUG: Found JSON in markdown code block")
+        # Check for THINKING/ANSWER format
+        elif "**ANSWER:**" in response:
+            is_valid_json = True
+            print("DEBUG: Found THINKING/ANSWER format")
+        
+        if not is_valid_json:
+            print("DEBUG: Response doesn't match expected JSON formats")
+            print(f"DEBUG: Response starts with: {response_trimmed[:50]}...")
+            print(f"DEBUG: Response ends with: ...{response_trimmed[-50:]}")
+            return []
+        
         try:
             # Prefer robust base extractor first
             extracted = self._extract_json_from_text(response)
@@ -272,6 +260,7 @@ IMPORTANT:
                 recommendations = json.loads(json_str)
             else:
                 recommendations = extracted
+                print(f"DEBUG: Template Recommendation Agent - Successfully extracted JSON with base extractor")
             print(f"DEBUG: Parsed JSON has {len(recommendations)} recommendations")
             
             scored_templates = []
@@ -300,8 +289,7 @@ IMPORTANT:
                             "category_match": rec.get("category_match", 0.0),
                             "style_alignment": rec.get("style_alignment", 0.0),
                             "component_coverage": rec.get("component_coverage", 0.0),
-                            "brand_consistency": rec.get("brand_consistency", 0.0),
-                            "technical_quality": rec.get("technical_quality", 0.0)
+                            "brand_consistency": rec.get("brand_consistency", 0.0)
                         }
                     })
             
@@ -414,22 +402,42 @@ IMPORTANT:
             return None
     
     def _fallback_scoring(self, templates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Simple fallback scoring if LLM parsing fails"""
+        """Enhanced fallback scoring if LLM parsing fails"""
         scored_templates = []
+        
         for template in templates:
-            # Simple fallback scoring
-            score = 0.5  # Default score
-            if template.get("category") == "landing":
-                score += 0.2
-            if template.get("tags"):
+            score = 0.5  # Base score
+            
+            # Category matching
+            if template.get("category") == "login":
+                score += 0.3  # Higher weight for exact category match
+            
+            # Tag-based scoring
+            tags = template.get("tags", [])
+            if tags:
+                # Score based on relevant tags
+                relevant_tags = ["login", "authentication", "form", "user-friendly", "modern", "minimalist"]
+                tag_matches = sum(1 for tag in tags if any(relevant in tag.lower() for relevant in relevant_tags))
+                score += min(tag_matches * 0.1, 0.3)  # Max 0.3 from tags
+            
+            # Description-based scoring
+            description = template.get("description", "").lower()
+            if any(word in description for word in ["login", "sign", "auth", "form"]):
                 score += 0.1
+            
+            # Template age/quality indicators
+            if template.get("template_id"):
+                score += 0.05  # Small bonus for having an ID
             
             scored_templates.append({
                 "template": template,
-                "score": score,
-                "reasoning": "Fallback scoring applied due to LLM parsing error",
-                "suitability_level": "medium"
+                "score": min(score, 1.0),  # Cap at 1.0
+                "reasoning": f"Fallback scoring applied due to LLM parsing error. Template scored based on category match ({template.get('category', 'unknown')}) and relevant tags.",
+                "suitability_level": "high" if score >= 0.8 else "medium" if score >= 0.6 else "low",
+                "strengths": [f"Category: {template.get('category', 'unknown')}", f"Tags: {', '.join(tags[:3])}"],
+                "considerations": ["Scoring based on fallback algorithm due to LLM parsing failure"]
             })
         
+        # Sort by score (highest first)
         scored_templates.sort(key=lambda x: x["score"], reverse=True)
         return scored_templates 

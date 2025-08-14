@@ -279,6 +279,36 @@ IMPORTANT RULES:
                         response += f"- {change}\n"
                     response += "\nThe changes have been applied to your template. You can continue making modifications or ask me to generate a report when you're satisfied."
             
+            elif "logo_analysis_success" in instructions.lower():
+                logo_analysis = final_data.get("logo_analysis", {})
+                modification_result = final_data.get("modification_result", {})
+                
+                # Extract logo analysis details
+                colors = logo_analysis.get("colors", [])
+                style = logo_analysis.get("style", "")
+                fonts = logo_analysis.get("fonts", [])
+                
+                response = "🎨 Excellent! I've analyzed your logo and applied its design elements to your UI.\n\n"
+                
+                if colors:
+                    response += f"**Colors Applied:** I've extracted and applied the logo's color palette ({', '.join(colors[:3])}) to create a cohesive design.\n\n"
+                
+                if style:
+                    response += f"**Style Applied:** The {style} aesthetic from your logo has been incorporated throughout the interface.\n\n"
+                
+                if fonts:
+                    response += f"**Typography:** I've matched the font style to complement your logo's design.\n\n"
+                
+                response += "**What's Next:**\n"
+                response += "- Your UI now reflects your brand's visual identity\n"
+                response += "- You can continue making other modifications\n"
+                response += "- The design maintains consistency with your logo\n\n"
+                
+                if modification_result and modification_result.get("success"):
+                    response += "All logo-based modifications have been successfully applied!"
+                else:
+                    response += "The logo analysis is complete. You can now make additional UI changes as needed."
+            
             else:
                 response = instructions
             

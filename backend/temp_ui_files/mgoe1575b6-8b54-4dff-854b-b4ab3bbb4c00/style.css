@@ -1,0 +1,1897 @@
+.profile-page-visitor {
+  background-color: #f7f7f8;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  width: 100%;
+}
+
+.profile-page-visitor .div {
+  background-color: #f7f7f8;
+  overflow: hidden;
+  width: 1440px;
+  height: 1186px;
+  position: relative;
+}
+
+.profile-page-visitor .overlap {
+  position: absolute;
+  width: 222px;
+  height: 1186px;
+  top: 0;
+  left: -4px;
+}
+
+.profile-page-visitor .menu {
+  position: absolute;
+  width: 222px;
+  height: 1186px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .overlap-group {
+  position: relative;
+  height: 1186px;
+}
+
+.profile-page-visitor .BG {
+  position: absolute;
+  width: 218px;
+  height: 1186px;
+  top: 0;
+  left: 4px;
+  background-color: #490057;
+}
+
+.profile-page-visitor .menu-name {
+  position: absolute;
+  width: 156px;
+  height: 401px;
+  top: 193px;
+  left: 0;
+}
+
+.profile-page-visitor .settings {
+  position: absolute;
+  width: 101px;
+  height: 24px;
+  top: 377px;
+  left: 43px;
+}
+
+.profile-page-visitor .text-wrapper {
+  position: absolute;
+  top: 1px;
+  left: 38px;
+  opacity: 0.7;
+  font-family: "Nunito", Helvetica;
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .img {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .analytics {
+  position: absolute;
+  width: 108px;
+  height: 24px;
+  top: 323px;
+  left: 43px;
+}
+
+.profile-page-visitor .gallery {
+  position: absolute;
+  width: 94px;
+  height: 24px;
+  top: 269px;
+  left: 43px;
+}
+
+.profile-page-visitor .returns {
+  position: absolute;
+  width: 98px;
+  height: 24px;
+  top: 215px;
+  left: 43px;
+}
+
+.profile-page-visitor .purchase {
+  position: absolute;
+  width: 115px;
+  height: 24px;
+  top: 161px;
+  left: 43px;
+}
+
+.profile-page-visitor .message {
+  position: absolute;
+  width: 113px;
+  height: 24px;
+  top: 107px;
+  left: 43px;
+}
+
+.profile-page-visitor .profile {
+  position: absolute;
+  width: 131px;
+  height: 48px;
+  top: 41px;
+  left: 0;
+}
+
+.profile-page-visitor .overlap-group-2 {
+  position: relative;
+  width: 129px;
+  height: 48px;
+}
+
+.profile-page-visitor .text-wrapper-2 {
+  position: absolute;
+  top: 13px;
+  left: 81px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 600;
+  color: #fbb03b;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .rectangle {
+  position: absolute;
+  width: 82px;
+  height: 48px;
+  top: 0;
+  left: 0;
+  border-radius: 0px 5px 5px 0px;
+  background: linear-gradient(
+    90deg,
+    rgba(251, 176, 59, 1) 54%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  opacity: 0.2;
+}
+
+.profile-page-visitor .person {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  top: 12px;
+  left: 43px;
+  overflow: hidden;
+}
+
+.profile-page-visitor .vector {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 4px;
+  left: 4px;
+}
+
+.profile-page-visitor .vector-2 {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  top: 204px;
+  left: 630px;
+}
+
+.profile-page-visitor .home {
+  position: absolute;
+  width: 82px;
+  height: 22px;
+  top: 0;
+  left: 45px;
+}
+
+.profile-page-visitor .text-wrapper-3 {
+  position: absolute;
+  top: 0;
+  left: 36px;
+  opacity: 0.7;
+  font-family: "Nunito", Helvetica;
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .home-2 {
+  position: absolute;
+  width: 20px;
+  height: 17px;
+  top: 1px;
+  left: 0;
+  opacity: 0.8;
+  background-image: url(https://c.animaapp.com/mdjgdgaeSHuUC7/img/vector-7.svg);
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .logo-and-company {
+  position: absolute;
+  width: 115px;
+  height: 38px;
+  top: 44px;
+  left: 44px;
+}
+
+.profile-page-visitor .subtract-wrapper {
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  top: 0;
+  left: 0;
+  background-image: url(https://c.animaapp.com/mdjgdgaeSHuUC7/img/subtract.svg);
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .subtract {
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .text-wrapper-4 {
+  position: absolute;
+  width: 62px;
+  top: 5px;
+  left: 51px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 24px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .search {
+  position: absolute;
+  width: 980px;
+  height: 62px;
+  top: 20px;
+  left: 250px;
+  background-color: #ffffff;
+  border-radius: 5px;
+}
+
+.profile-page-visitor .text {
+  position: absolute;
+  width: 39px;
+  height: 16px;
+  top: 23px;
+  left: 47px;
+}
+
+.profile-page-visitor .text-wrapper-5 {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0.7;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .icon {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  top: 24px;
+  left: 23px;
+}
+
+.profile-page-visitor .small-profile {
+  position: absolute;
+  width: 204px;
+  height: 60px;
+  top: 18px;
+  left: 1261px;
+}
+
+.profile-page-visitor .overlap-2 {
+  position: absolute;
+  width: 140px;
+  height: 60px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .profile-photo {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  top: 0;
+  left: 80px;
+}
+
+.profile-page-visitor .overlap-group-3 {
+  position: relative;
+  height: 60px;
+}
+
+.profile-page-visitor .rectangle-2 {
+  position: absolute;
+  width: 55px;
+  height: 52px;
+  top: 7px;
+  left: 2px;
+  background-color: #fbb03b;
+  border-radius: 29.5px;
+}
+
+.profile-page-visitor .ellipse {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .overlap-wrapper {
+  position: absolute;
+  width: 86px;
+  height: 30px;
+  top: 20px;
+  left: 0;
+}
+
+.profile-page-visitor .overlap-3 {
+  position: relative;
+  width: 82px;
+  height: 30px;
+}
+
+.profile-page-visitor .text-wrapper-6 {
+  position: absolute;
+  width: 82px;
+  top: 0;
+  left: 0;
+  font-family: "Nunito", Helvetica;
+  font-weight: 700;
+  color: #490057;
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .text-wrapper-7 {
+  position: absolute;
+  width: 44px;
+  top: 15px;
+  left: 1px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 300;
+  color: #490057;
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .logout {
+  top: 24px;
+  left: 183px;
+  opacity: 0.4;
+  position: absolute;
+  width: 21px;
+  height: 20px;
+}
+
+.profile-page-visitor .logout-2 {
+  top: 408px;
+  left: -775px;
+  position: absolute;
+  width: 21px;
+  height: 20px;
+}
+
+.profile-page-visitor .overlap-4 {
+  position: absolute;
+  width: 1151px;
+  height: 403px;
+  top: 104px;
+  left: 250px;
+  border-radius: 10px;
+  background: linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 1) 0%,
+      rgba(255, 255, 255, 1) 100%
+    ),
+    linear-gradient(
+      0deg,
+      rgba(196, 196, 196, 1) 0%,
+      rgba(196, 196, 196, 1) 100%
+    );
+}
+
+.profile-page-visitor .overlap-5 {
+  position: absolute;
+  width: 1151px;
+  height: 370px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .unsplash {
+  position: absolute;
+  width: 1151px;
+  height: 280px;
+  top: 0;
+  left: 0;
+  object-fit: cover;
+}
+
+.profile-page-visitor .profile-name {
+  position: absolute;
+  width: 398px;
+  height: 237px;
+  top: 133px;
+  left: 56px;
+}
+
+.profile-page-visitor .overlap-6 {
+  position: relative;
+  width: 400px;
+  height: 237px;
+}
+
+.profile-page-visitor .title {
+  position: absolute;
+  width: 115px;
+  height: 23px;
+  top: 214px;
+  left: 160px;
+}
+
+.profile-page-visitor .text-wrapper-8 {
+  position: absolute;
+  width: 113px;
+  top: 0;
+  left: 0;
+  opacity: 0.7;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #a303a0;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .name {
+  position: absolute;
+  width: 241px;
+  height: 62px;
+  top: 175px;
+  left: 159px;
+}
+
+.profile-page-visitor .text-wrapper-9 {
+  position: absolute;
+  width: 239px;
+  top: 0;
+  left: 0;
+  font-family: "Nunito", Helvetica;
+  font-weight: 700;
+  color: #a303a0;
+  font-size: 30px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .img-bg {
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  top: 0;
+  left: 0;
+  background-color: #fbb03b;
+  border-radius: 89.91px;
+  background-image: url(https://c.animaapp.com/mdjgdgaeSHuUC7/img/ellipse-58-1.png);
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .follow-button {
+  all: unset;
+  box-sizing: border-box;
+  position: absolute;
+  width: 151px;
+  height: 45px;
+  top: 319px;
+  left: 762px;
+  background-color: #a303a0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-page-visitor .div-wrapper {
+  position: relative;
+  width: 52px;
+  height: 20px;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-page-visitor .text-wrapper-10 {
+  position: static;
+  width: auto;
+  top: auto;
+  left: auto;
+  font-family: "Nunito", Helvetica;
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+  text-align: center;
+}
+
+.profile-page-visitor .message-button {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  top: 318px;
+  left: 706px;
+}
+
+.profile-page-visitor .schedule-button {
+  position: absolute;
+  width: 172px;
+  height: 45px;
+  top: 319px;
+  left: 925px;
+  border-radius: 10px;
+  border: 1px solid;
+  border-color: #a303a0;
+}
+
+.profile-page-visitor .text-2 {
+  position: relative;
+  width: 146px;
+  height: 20px;
+  top: 11px;
+  left: 13px;
+}
+
+.profile-page-visitor .text-wrapper-11 {
+  position: absolute;
+  width: 144px;
+  top: 0;
+  left: 0;
+  font-family: "Nunito", Helvetica;
+  font-weight: 600;
+  color: #a303a0;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .contact-info-wrapper {
+  position: absolute;
+  width: 260px;
+  height: 399px;
+  top: 537px;
+  left: 250px;
+  background-color: #ffffff;
+  border-radius: 10px;
+}
+
+.profile-page-visitor .contact-info {
+  position: relative;
+  width: 236px;
+  height: 307px;
+  top: 39px;
+  left: 22px;
+}
+
+.profile-page-visitor .location {
+  position: absolute;
+  width: 194px;
+  height: 38px;
+  top: 163px;
+  left: 4px;
+}
+
+.profile-page-visitor .text-3 {
+  position: absolute;
+  width: 171px;
+  height: 38px;
+  top: 0;
+  left: 27px;
+}
+
+.profile-page-visitor .element-hog-camp-road {
+  position: absolute;
+  width: 167px;
+  top: 0;
+  left: 0;
+  opacity: 0.7;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .text-wrapper-12 {
+  width: 94px;
+  top: 22px;
+  left: 0;
+  opacity: 0.7;
+  font-size: 16px;
+  white-space: nowrap;
+  position: absolute;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .location-2 {
+  position: absolute;
+  width: 14px;
+  height: 17px;
+  top: 4px;
+  left: 0;
+  background-image: url(https://c.animaapp.com/mdjgdgaeSHuUC7/img/location.svg);
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .overlap-7 {
+  position: absolute;
+  width: 235px;
+  height: 55px;
+  top: 88px;
+  left: 1px;
+}
+
+.profile-page-visitor .line {
+  position: absolute;
+  width: 232px;
+  height: 55px;
+  top: 0;
+  left: 3px;
+}
+
+.profile-page-visitor .line-2 {
+  width: 231px;
+  top: 0;
+  left: 0;
+  position: absolute;
+  height: 1px;
+}
+
+.profile-page-visitor .line-3 {
+  width: 231px;
+  top: 54px;
+  left: 1px;
+  position: absolute;
+  height: 1px;
+}
+
+.profile-page-visitor .phone-number {
+  position: absolute;
+  width: 175px;
+  height: 24px;
+  top: 16px;
+  left: 0;
+}
+
+.profile-page-visitor .phone-number-2 {
+  position: absolute;
+  width: 147px;
+  height: 15px;
+  top: 4px;
+  left: 30px;
+}
+
+.profile-page-visitor .text-wrapper-13 {
+  position: absolute;
+  width: 145px;
+  top: 0;
+  left: 0;
+  opacity: 0.7;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .div-2 {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+.profile-page-visitor .vector-3 {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  top: -230px;
+  left: 396px;
+}
+
+.profile-page-visitor .vector-4 {
+  position: absolute;
+  width: 18px;
+  height: 22px;
+  top: 0;
+  left: 3px;
+}
+
+.profile-page-visitor .line-4 {
+  width: 231px;
+  top: 268px;
+  left: 4px;
+  background-image: url(https://c.animaapp.com/mdjgdgaeSHuUC7/img/line-2.svg);
+  background-size: 100% 100%;
+  position: absolute;
+  height: 1px;
+}
+
+.profile-page-visitor .phone-number-3 {
+  position: absolute;
+  width: 133px;
+  height: 18px;
+  top: 289px;
+  left: 4px;
+}
+
+.profile-page-visitor .phone-number-4 {
+  position: absolute;
+  width: 108px;
+  height: 15px;
+  top: 0;
+  left: 27px;
+}
+
+.profile-page-visitor .text-wrapper-14 {
+  position: absolute;
+  width: 106px;
+  top: 0;
+  left: 0;
+  opacity: 0.7;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .call {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 2px;
+  left: 0;
+  background-image: url(https://c.animaapp.com/mdjgdgaeSHuUC7/img/call.svg);
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .email {
+  position: absolute;
+  width: 223px;
+  height: 24px;
+  top: 48px;
+  left: 0;
+}
+
+.profile-page-visitor .email-2 {
+  position: absolute;
+  width: 194px;
+  height: 15px;
+  top: 2px;
+  left: 31px;
+}
+
+.profile-page-visitor .text-wrapper-15 {
+  position: absolute;
+  width: 192px;
+  top: 0;
+  left: 0;
+  opacity: 0.7;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .vector-5 {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  top: -174px;
+  left: 397px;
+}
+
+.profile-page-visitor .email-3 {
+  position: absolute;
+  width: 224px;
+  height: 18px;
+  top: 231px;
+  left: 4px;
+}
+
+.profile-page-visitor .input {
+  position: absolute;
+  width: 199px;
+  height: 15px;
+  top: 0;
+  left: 27px;
+  border: none;
+  background: none;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+  padding: 0;
+  padding-left: 0;
+}
+
+.profile-page-visitor .message-2 {
+  position: absolute;
+  width: 16px;
+  height: 15px;
+  top: 3px;
+  left: 0;
+  background-image: url(https://c.animaapp.com/mdjgdgaeSHuUC7/img/message.svg);
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .sub-heading {
+  position: absolute;
+  width: 116px;
+  height: 20px;
+  top: 0;
+  left: 4px;
+}
+
+.profile-page-visitor .text-wrapper-16 {
+  position: absolute;
+  width: 114px;
+  top: 0;
+  left: 0;
+  font-family: "Nunito", Helvetica;
+  font-weight: 700;
+  color: #a303a0;
+  font-size: 20px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .you-might-know {
+  position: absolute;
+  width: 262px;
+  height: 234px;
+  top: 537px;
+  left: 1141px;
+}
+
+.profile-page-visitor .overlap-8 {
+  position: relative;
+  width: 260px;
+  height: 234px;
+  background-color: #ffffff;
+  border-radius: 10px;
+}
+
+.profile-page-visitor .people {
+  width: 170px;
+  height: 36px;
+  top: 174px;
+  position: absolute;
+  left: 45px;
+}
+
+.profile-page-visitor .email-4 {
+  position: absolute;
+  width: 123px;
+  height: 14px;
+  top: 22px;
+  left: 49px;
+  border: none;
+  background: none;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: normal;
+  padding: 0;
+  padding-left: 0;
+}
+
+.profile-page-visitor .name-2 {
+  position: absolute;
+  width: 90px;
+  height: 16px;
+  top: 3px;
+  left: 49px;
+}
+
+.profile-page-visitor .text-wrapper-17 {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .ellipse-2 {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .overlap-group-4 {
+  position: relative;
+  height: 34px;
+}
+
+.profile-page-visitor .ellipse-3 {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  top: 0;
+  left: 0;
+  background-color: #25c0e2;
+  border-radius: 17px;
+  opacity: 0.2;
+}
+
+.profile-page-visitor .people-2 {
+  width: 142px;
+  height: 34px;
+  top: 123px;
+  position: absolute;
+  left: 45px;
+}
+
+.profile-page-visitor .email-5 {
+  position: absolute;
+  width: 95px;
+  height: 14px;
+  top: 20px;
+  left: 49px;
+  border: none;
+  background: none;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: normal;
+  padding: 0;
+  padding-left: 0;
+}
+
+.profile-page-visitor .name-3 {
+  position: absolute;
+  width: 73px;
+  height: 16px;
+  top: 1px;
+  left: 49px;
+}
+
+.profile-page-visitor .ellipse-4 {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  top: 0;
+  left: 0;
+  background-color: var(--badge);
+  border-radius: 17px;
+  opacity: 0.2;
+}
+
+.profile-page-visitor .people-3 {
+  width: 163px;
+  height: 34px;
+  top: 69px;
+  position: absolute;
+  left: 45px;
+}
+
+.profile-page-visitor .email-6 {
+  position: absolute;
+  width: 116px;
+  height: 14px;
+  top: 19px;
+  left: 49px;
+  border: none;
+  background: none;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: normal;
+  padding: 0;
+  padding-left: 0;
+}
+
+.profile-page-visitor .name-4 {
+  position: absolute;
+  width: 102px;
+  height: 16px;
+  top: 0;
+  left: 49px;
+}
+
+.profile-page-visitor .image {
+  background-color: #d4d3ff;
+  border-radius: 17px;
+  background-image: url(https://c.animaapp.com/mdjgdgaeSHuUC7/img/ellipse-96-2.png);
+  background-size: 100% 100%;
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .text-wrapper-18 {
+  position: absolute;
+  width: 136px;
+  top: 22px;
+  left: 45px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 700;
+  color: #490057;
+  font-size: 18px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .online {
+  position: absolute;
+  width: 262px;
+  height: 333px;
+  top: 801px;
+  left: 1145px;
+}
+
+.profile-page-visitor .overlap-9 {
+  position: relative;
+  width: 260px;
+  height: 333px;
+  background-color: #ffffff;
+  border-radius: 10px;
+}
+
+.profile-page-visitor .list {
+  position: absolute;
+  width: 207px;
+  height: 34px;
+  top: 268px;
+  left: 30px;
+}
+
+.profile-page-visitor .group {
+  position: relative;
+  width: 213px;
+  height: 34px;
+}
+
+.profile-page-visitor .text-wrapper-19 {
+  width: 43px;
+  top: 3px;
+  left: 164px;
+  white-space: nowrap;
+  position: absolute;
+  opacity: 0.4;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 8px;
+  text-align: right;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .overlap-group-5 {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  top: 1px;
+  left: 0;
+}
+
+.profile-page-visitor .ellipse-5 {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  top: 0;
+  left: 0;
+  background-color: var(--primary);
+  border-radius: 16.82px;
+  opacity: 0.2;
+}
+
+.profile-page-visitor .ellipse-6 {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  top: 28px;
+  left: 24px;
+  background-color: #2cc74a;
+  border-radius: 2.69px;
+  border: 1px solid;
+  border-color: #ffffff;
+}
+
+.profile-page-visitor .text-wrapper-20 {
+  position: absolute;
+  width: 120px;
+  top: 0;
+  left: 40px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .text-wrapper-21 {
+  top: 17px;
+  left: 40px;
+  opacity: 0.6;
+  position: absolute;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .overlap-10 {
+  position: absolute;
+  width: 227px;
+  height: 189px;
+  top: 66px;
+  left: 21px;
+}
+
+.profile-page-visitor .group-wrapper {
+  position: absolute;
+  width: 207px;
+  height: 40px;
+  top: 135px;
+  left: 9px;
+}
+
+.profile-page-visitor .group-2 {
+  position: relative;
+  width: 213px;
+  height: 40px;
+}
+
+.profile-page-visitor .text-wrapper-22 {
+  width: 43px;
+  top: 2px;
+  left: 164px;
+  position: absolute;
+  opacity: 0.4;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 8px;
+  text-align: right;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .ellipse-7 {
+  top: 0;
+  background-color: var(--orange);
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  left: 0;
+  border-radius: 16.82px;
+  opacity: 0.2;
+}
+
+.profile-page-visitor .text-wrapper-23 {
+  position: absolute;
+  width: 86px;
+  top: 0;
+  left: 40px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 600;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .text-wrapper-24 {
+  width: 133px;
+  top: 18px;
+  left: 38px;
+  position: absolute;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .list-2 {
+  position: absolute;
+  width: 207px;
+  height: 39px;
+  top: 67px;
+  left: 9px;
+}
+
+.profile-page-visitor .overlap-group-wrapper {
+  width: 209px;
+  height: 39px;
+}
+
+.profile-page-visitor .overlap-group-6 {
+  position: relative;
+  width: 207px;
+  height: 39px;
+}
+
+.profile-page-visitor .text-wrapper-25 {
+  width: 36px;
+  top: 3px;
+  left: 171px;
+  white-space: nowrap;
+  position: absolute;
+  opacity: 0.4;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 8px;
+  text-align: right;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .ellipse-8 {
+  top: 2px;
+  background-color: var(--badge);
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  left: 0;
+  border-radius: 16.82px;
+  opacity: 0.2;
+}
+
+.profile-page-visitor .ellipse-9 {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  top: 2px;
+  left: 0;
+}
+
+.profile-page-visitor .group-3 {
+  position: absolute;
+  width: 153px;
+  height: 39px;
+  top: 0;
+  left: 24px;
+}
+
+.profile-page-visitor .text-wrapper-26 {
+  position: absolute;
+  width: 103px;
+  top: 0;
+  left: 16px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .ellipse-10 {
+  top: 29px;
+  left: 0;
+  background-color: var(--orange);
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 2.69px;
+  border: 1px solid;
+  border-color: #ffffff;
+}
+
+.profile-page-visitor .text-wrapper-27 {
+  width: 133px;
+  top: 18px;
+  left: 17px;
+  opacity: 0.6;
+  font-size: 12px;
+  position: absolute;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .list-3 {
+  position: absolute;
+  width: 227px;
+  height: 189px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .overlap-11 {
+  position: absolute;
+  width: 213px;
+  height: 40px;
+  top: 0;
+  left: 9px;
+}
+
+.profile-page-visitor .group-4 {
+  position: absolute;
+  width: 213px;
+  height: 40px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .text-wrapper-28 {
+  width: 47px;
+  top: 3px;
+  left: 160px;
+  white-space: nowrap;
+  position: absolute;
+  opacity: 0.4;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 8px;
+  text-align: right;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .text-wrapper-29 {
+  position: absolute;
+  width: 103px;
+  top: 0;
+  left: 40px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .text-wrapper-30 {
+  width: 42px;
+  top: 18px;
+  left: 41px;
+  opacity: 0.6;
+  position: absolute;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .ellipse-11 {
+  top: 28px;
+  left: 26px;
+  background-color: #2cc74a;
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 2.69px;
+  border: 1px solid;
+  border-color: #ffffff;
+}
+
+.profile-page-visitor .line-5 {
+  width: 227px;
+  top: 51px;
+  left: 0;
+  object-fit: cover;
+  position: absolute;
+  height: 1px;
+}
+
+.profile-page-visitor .line-6 {
+  width: 227px;
+  top: 120px;
+  left: 0;
+  object-fit: cover;
+  position: absolute;
+  height: 1px;
+}
+
+.profile-page-visitor .line-7 {
+  width: 227px;
+  top: 188px;
+  left: 0;
+  object-fit: cover;
+  position: absolute;
+  height: 1px;
+}
+
+.profile-page-visitor .text-wrapper-31 {
+  position: absolute;
+  width: 136px;
+  top: 25px;
+  left: 30px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 700;
+  color: #490057;
+  font-size: 18px;
+  letter-spacing: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.profile-page-visitor .overlap-12 {
+  position: absolute;
+  width: 582px;
+  height: 979px;
+  top: 537px;
+  left: 539px;
+}
+
+.profile-page-visitor .follower-posts {
+  position: absolute;
+  width: 582px;
+  height: 979px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .overlap-13 {
+  position: relative;
+  width: 580px;
+  height: 979px;
+}
+
+.profile-page-visitor .rectangle-3 {
+  position: absolute;
+  width: 574px;
+  height: 664px;
+  top: 0;
+  left: 0;
+  background-color: #ffffff;
+  border-radius: 10px;
+}
+
+.profile-page-visitor .small-profile-2 {
+  top: 86px;
+  position: absolute;
+  width: 487px;
+  height: 434px;
+  left: 44px;
+}
+
+.profile-page-visitor .ellipse-12 {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .overlap-group-7 {
+  position: relative;
+  height: 80px;
+}
+
+.profile-page-visitor .rectangle-4 {
+  position: absolute;
+  width: 73px;
+  height: 70px;
+  top: 10px;
+  left: 3px;
+  background-color: #fbb03b;
+  border-radius: 35.1px;
+}
+
+.profile-page-visitor .overlap-14 {
+  position: absolute;
+  width: 127px;
+  height: 43px;
+  top: 23px;
+  left: 85px;
+}
+
+.profile-page-visitor .text-4 {
+  position: absolute;
+  width: 113px;
+  height: 43px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .overlap-15 {
+  position: relative;
+  width: 109px;
+  height: 43px;
+}
+
+.profile-page-visitor .text-wrapper-32 {
+  position: absolute;
+  width: 109px;
+  top: 0;
+  left: 0;
+  font-family: "Nunito", Helvetica;
+  font-weight: 700;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .text-wrapper-33 {
+  position: absolute;
+  width: 59px;
+  top: 23px;
+  left: 0;
+  font-family: "Nunito", Helvetica;
+  font-weight: 300;
+  color: #490057;
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .logout-3 {
+  position: absolute;
+  width: 21px;
+  height: 20px;
+  top: 1px;
+  left: 106px;
+  opacity: 0.4;
+  background-image: url(https://c.animaapp.com/mdjgdgaeSHuUC7/img/logout.svg);
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .charles-deo-new-wrapper {
+  position: absolute;
+  width: 483px;
+  height: 20px;
+  top: 371px;
+  left: 2px;
+}
+
+.profile-page-visitor .charles-deo-new {
+  position: absolute;
+  width: 481px;
+  top: 0;
+  left: 0;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .span {
+  font-weight: 700;
+}
+
+.profile-page-visitor .text-wrapper-34 {
+  font-weight: 300;
+}
+
+.profile-page-visitor .text-5 {
+  position: absolute;
+  width: 153px;
+  height: 20px;
+  top: 410px;
+  left: 34px;
+}
+
+.profile-page-visitor .text-wrapper-35 {
+  position: absolute;
+  width: 47px;
+  top: 0;
+  left: 0;
+  font-family: "Nunito", Helvetica;
+  font-weight: 700;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .text-wrapper-36 {
+  position: absolute;
+  width: 47px;
+  top: 0;
+  left: 102px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 700;
+  color: #490057;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .unsplash-wdjkxfqvhy {
+  position: absolute;
+  width: 481px;
+  height: 256px;
+  top: 94px;
+  left: 3px;
+  object-fit: cover;
+}
+
+.profile-page-visitor .favorite-border {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  top: 406px;
+  left: 1px;
+  overflow: hidden;
+}
+
+.profile-page-visitor .vector-6 {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  top: -579px;
+  left: 85px;
+}
+
+.profile-page-visitor .vector-7 {
+  position: absolute;
+  width: 23px;
+  height: 21px;
+  top: 4px;
+  left: 2px;
+}
+
+.profile-page-visitor .overlap-16 {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  top: -173px;
+  left: 86px;
+}
+
+.profile-page-visitor .chat-bubble-outline {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  top: 0;
+  left: 0;
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .vector-8 {
+  position: absolute;
+  width: 23px;
+  height: 23px;
+  top: 2px;
+  left: 2px;
+}
+
+.profile-page-visitor .more-horiz {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  top: 0;
+  left: 0;
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .vector-9 {
+  position: absolute;
+  width: 16px;
+  height: 4px;
+  top: 10px;
+  left: 4px;
+}
+
+.profile-page-visitor .small-profile-3 {
+  top: 545px;
+  position: absolute;
+  width: 487px;
+  height: 434px;
+  left: 44px;
+}
+
+.profile-page-visitor .unsplash-2 {
+  position: absolute;
+  width: 481px;
+  height: 10px;
+  top: 94px;
+  left: 3px;
+  object-fit: cover;
+}
+
+.profile-page-visitor .vector-wrapper {
+  position: relative;
+  height: 28px;
+  top: -1038px;
+  left: 85px;
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .vector-10 {
+  position: absolute;
+  width: 23px;
+  height: 21px;
+  top: 0;
+  left: 0;
+}
+
+.profile-page-visitor .overlap-17 {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  top: -632px;
+  left: 86px;
+}
+
+.profile-page-visitor .img-wrapper {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  background-size: 100% 100%;
+}
+
+.profile-page-visitor .vector-11 {
+  position: absolute;
+  width: 23px;
+  height: 23px;
+  top: -1038px;
+  left: -16px;
+}
+
+.profile-page-visitor .followers-following {
+  position: absolute;
+  width: 383px;
+  top: 40px;
+  left: 47px;
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #a303a0;
+  font-size: 20px;
+  letter-spacing: 0;
+  line-height: normal;
+}
+
+.profile-page-visitor .text-wrapper-37 {
+  font-family: "Nunito", Helvetica;
+  font-weight: 400;
+  color: #a303a0;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.profile-page-visitor .text-wrapper-38 {
+  font-weight: 800;
+}
+
+.profile-page-visitor .line-8 {
+  position: absolute;
+  width: 574px;
+  height: 1px;
+  top: 84px;
+  left: 0;
+}
+
+.profile-page-visitor .line-9 {
+  width: 534px;
+  top: 537px;
+  left: 46px;
+  position: absolute;
+  height: 1px;
+}
+
+.profile-page-visitor .rectangle-5 {
+  position: absolute;
+  width: 20px;
+  height: 4px;
+  top: 66px;
+  left: 277px;
+  background-color: #fbb03b;
+  border-radius: 5px;
+}
+
+
+:root {
+  --primary-color: #a303a0; /* Main purple color from logo */
+  --secondary-color: #490057; /* Darker purple from logo */
+  --accent-color: #fbb03b; /* Existing yellow/orange accent */
+}
+
+.profile-page-visitor {
+  background-color: #f7f7f8;
+}
+
+/* Update various color references to use the primary color */
+.profile-page-visitor .text-wrapper-9,
+.profile-page-visitor .text-wrapper-8,
+.profile-page-visitor .followers-following,
+.profile-page-visitor .text-wrapper-37 {
+  color: var(--primary-color);
+}
+
+.profile-page-visitor .follow-button {
+  background-color: var(--primary-color);
+}
+
+.profile-page-visitor .schedule-button {
+  border-color: var(--primary-color);
+}
+
+.profile-page-visitor .text-wrapper-11 {
+  color: var(--primary-color);
+}
+
+.profile-page-visitor .text-wrapper-16 {
+  color: var(--primary-color);
+}

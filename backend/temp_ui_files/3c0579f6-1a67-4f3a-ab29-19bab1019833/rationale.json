@@ -1,0 +1,38 @@
+{
+  "session_id": "3c0579f6-1a67-4f3a-ab29-19bab1019833",
+  "created_at": "2025-08-14T02:01:16.961544",
+  "last_updated": "2025-08-14T02:01:16.962544",
+  "template_selection": {
+    "recommendations": [
+      {
+        "template_id": "unknown",
+        "template_name": "unknown",
+        "overall_score": 0.0,
+        "detailed_reasoning": "",
+        "strengths": [
+          "Clean, professional aesthetic",
+          "Clear call-to-action",
+          "Spotlight image integration",
+          "Minimalist design language"
+        ],
+        "considerations": [
+          "Verify social login integration",
+          "Customize for specific web app branding",
+          "Test responsive design"
+        ],
+        "suitability_level": "high",
+        "timestamp": "2025-08-14T02:01:16.962544"
+      }
+    ],
+    "final_selection": null,
+    "selection_reasoning": ""
+  },
+  "ui_editing": {
+    "planning_rationale": [],
+    "execution_summary": []
+  },
+  "overall_workflow": {
+    "phase_decisions": [],
+    "agent_coordination": []
+  }
+}

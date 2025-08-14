@@ -17,7 +17,7 @@ class BaseAgent:
         self.claude_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.db = get_db()
     
-    def call_claude_with_cot(self, prompt: str, image: Optional[str] = None, system_prompt: Optional[str] = None, enable_cot: bool = True) -> str:
+    def call_claude_with_cot(self, prompt: str, image: Optional[str] = None, system_prompt: Optional[str] = None, enable_cot: bool = True, extract_json: bool = False) -> str:
         """Call Claude API with chain-of-thought reasoning"""
         try:
             # Enhance prompt with CoT instructions if enabled
@@ -59,16 +59,28 @@ class BaseAgent:
             response = self.claude_client.messages.create(
                 model=self.model,
                 messages=messages,
-                max_tokens=8000
+                max_tokens=8000  # Set to safe limit for Claude Haiku
             )
             
             # Debug: Log LLM response for all agents inheriting from BaseAgent
             agent_name = self.__class__.__name__
-            print(f"DEBUG: {agent_name} LLM Response: {response.content[0].text[:500]}...")
-            if len(response.content[0].text) > 500:
-                print(f"DEBUG: Full {agent_name} Response: {response.content[0].text}")
+            response_text = response.content[0].text
+            print(f"DEBUG: {agent_name} LLM Response Length: {len(response_text)} chars")
+            print(f"DEBUG: {agent_name} LLM Response Preview: {response_text[:200]}...")
             
-            return response.content[0].text
+            # Only log full response if it's very short (for debugging)
+            if len(response_text) < 1000:
+                print(f"DEBUG: {agent_name} Full Response: {response_text}")
+            else:
+                print(f"DEBUG: {agent_name} Response truncated for logging (too long)")
+            
+            # If JSON extraction is requested, parse the response
+            if extract_json and enable_cot:
+                extracted_json = self._extract_json_from_cot_response(response_text)
+                if extracted_json:
+                    return extracted_json
+            
+            return response_text
             
         except Exception as e:
             print(f"Error calling Claude API: {e}")
@@ -87,10 +99,10 @@ IMPORTANT: Use Chain-of-Thought reasoning. Before providing your final answer, t
 6. **EXPLAIN**: Provide clear reasoning for my decision.
 
 Format your response as:
-**THINKING:**
+THINKING:
 [Your step-by-step reasoning here]
 
-**ANSWER:**
+ANSWER:
 [Your final structured answer here]
 """
         
@@ -119,6 +131,42 @@ Format your response as:
             "answer": answer,
             "full_response": response
         }
+    
+    def _extract_json_from_cot_response(self, response: str) -> Optional[str]:
+        """Extract JSON content from COT response after 'ANSWER:' section"""
+        try:
+            # Look for the ANSWER section
+            if "**ANSWER:**" in response:
+                answer_start = response.find("**ANSWER:**") + len("**ANSWER:**")
+                answer_content = response[answer_start:].strip()
+                
+                # Find JSON content within the answer
+                if "{" in answer_content and "}" in answer_content:
+                    # Find the first complete JSON object
+                    brace_count = 0
+                    json_start = -1
+                    
+                    for i, char in enumerate(answer_content):
+                        if char == "{":
+                            if brace_count == 0:
+                                json_start = i
+                            brace_count += 1
+                        elif char == "}":
+                            brace_count -= 1
+                            if brace_count == 0 and json_start >= 0:
+                                # Found complete JSON object
+                                json_content = answer_content[json_start:i+1]
+                                return json_content.strip()
+                
+                # If no JSON found, return the entire answer content
+                return answer_content
+            
+            # If no ANSWER section found, return the original response
+            return None
+            
+        except Exception as e:
+            # If parsing fails, return None
+            return None
     
     def get_templates_by_category(self, category: str) -> List[Dict[str, Any]]:
         """Get UI templates by category from database"""

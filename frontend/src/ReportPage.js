@@ -10,7 +10,8 @@ function ReportPage() {
     uiPreview: true,
     uiCode: false,
     changesMade: true,
-    creationDate: true
+    creationDate: true,
+    agentRationale: false
   });
   
   const [isGenerating, setIsGenerating] = useState(false);
@@ -51,7 +52,7 @@ function ReportPage() {
     console.log('🧾 Generating custom report with options:', reportOptions, 'session:', sessionId);
     
     try {
-      const response = await withTimeout(fetch(`${BACKEND_BASE_URL}/api/ui-editor/generate-custom-report`, {
+      const response = await withTimeout(fetch(`http://localhost:8000/api/ui-editor/generate-custom-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,7 +96,7 @@ function ReportPage() {
     console.log('⬇️ Downloading report:', reportFile);
     
     try {
-      const response = await withTimeout(fetch(`${BACKEND_BASE_URL}/api/reports/download/${reportFile}`, {
+      const response = await withTimeout(fetch(`http://localhost:8000/api/reports/download/${reportFile}`, {
         method: 'GET',
       }));
       
@@ -139,7 +140,7 @@ function ReportPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                📄 Generate Custom Report
+                Generate Custom Report
               </h1>
               <p className="text-gray-600">
                 Select the content you want to include in your UI mockup report
@@ -236,6 +237,21 @@ function ReportPage() {
               </label>
             </div>
 
+            {/* Agent Rationale */}
+            <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <input
+                type="checkbox"
+                id="agentRationale"
+                checked={reportOptions.agentRationale}
+                onChange={() => handleOptionChange('agentRationale')}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="agentRationale" className="flex-1 cursor-pointer">
+                <div className="font-medium text-gray-900">Agent Decision Rationale</div>
+                <div className="text-sm text-gray-500">Include detailed reasoning behind AI agent decisions for template selection, UI modifications, and workflow choices</div>
+              </label>
+            </div>
+
             {/* Creation Date */}
             <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
               <input
@@ -257,7 +273,7 @@ function ReportPage() {
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-600">
-              {Object.values(reportOptions).filter(Boolean).length} of 6 options selected
+              {Object.values(reportOptions).filter(Boolean).length} of 7 options selected
             </div>
             
             <div className="flex space-x-3">
@@ -299,7 +315,7 @@ function ReportPage() {
           {reportGenerated && (
             <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
               <p className="text-green-700 text-sm">
-                ✅ Report generated successfully! Click "Download Report" to get your PDF.
+                Report generated successfully! Click "Download Report" to get your PDF.
               </p>
             </div>
           )}

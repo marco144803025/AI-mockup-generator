@@ -18,7 +18,6 @@ function EditorPage() {
   // Logo upload state
   const [uploadedLogo, setUploadedLogo] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
-  const [isAnalyzingLogo, setIsAnalyzingLogo] = useState(false);
   const fileInputRef = useRef(null);
   
   // Phase transition state
@@ -154,7 +153,7 @@ function EditorPage() {
       const transitionMessage = {
         id: Date.now(),
         type: 'ai',
-        content: `🎉 Welcome to the UI Editor! You can now make modifications to your ${category || 'template'}. What would you like to change?`,
+        content: `Welcome to the UI Editor! You can now make modifications to your ${category || 'template'}. What would you like to change?`,
         timestamp: new Date().toISOString()
       };
       setChatMessages(prev => [...prev, transitionMessage]);
@@ -322,45 +321,115 @@ function EditorPage() {
     setIsSending(true);
 
     try {
-      // Call the AI-powered UI editor chat endpoint
-      const chatRequest = {
-        message: inputMessage.trim(),
-        session_id: sessionId, // Use the session ID from transition state
-        current_ui_codes: uiCodes
-      };
+      let response;
+      let data;
 
-      const response = await fetch('http://localhost:8000/api/ui-editor/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(chatRequest)
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        // Add AI response to chat
-        const aiMessage = {
-          id: Date.now() + 1,
-          type: 'ai',
-          content: data.response,
-          timestamp: new Date().toISOString()
-        };
-        setChatMessages(prev => [...prev, aiMessage]);
+      // Check if logo is uploaded to determine which endpoint to use
+      if (uploadedLogo) {
+        // Logo analysis endpoint
+        console.log('Logo detected, using logo analysis endpoint');
         
-        // Refresh UI codes if modifications were made
-        if (data.ui_modifications && data.metadata?.intent === "modification_request") {
-          console.log('Modifications detected, refreshing UI codes from session...');
-          // Refresh the UI codes from the session file to get the updated version
-          await fetchUICodes();
+        // Convert file to base64
+        const base64Logo = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const base64 = e.target.result.split(',')[1]; // Remove data:image/...;base64, prefix
+            resolve(base64);
+          };
+          reader.readAsDataURL(uploadedLogo);
+        });
+
+        // Send logo analysis request
+        response = await fetch('http://localhost:8000/api/ui-editor/analyze-logo', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: inputMessage.trim(),
+            logo_image: base64Logo,
+            logo_filename: uploadedLogo.name,
+            session_id: sessionId,
+            current_ui_codes: uiCodes?.current_codes || uiCodes
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        data = await response.json();
+        
+        if (data.success) {
+          // Add the analysis request and response to chat
+          const userMessageWithLogo = {
+            id: Date.now(),
+            type: 'user',
+            content: `📎 [Logo Analysis Request] ${inputMessage.trim()}`,
+            timestamp: new Date().toISOString(),
+            hasLogo: true,
+            logoPreview: logoPreview
+          };
+          
+          const aiMessage = {
+            id: Date.now() + 1,
+            type: 'ai',
+            content: data.response,
+            timestamp: new Date().toISOString(),
+            logoAnalysis: data.logo_analysis
+          };
+          
+          setChatMessages(prev => [...prev, userMessageWithLogo, aiMessage]);
+          
+          // Update UI codes if modifications were applied
+          if (data.ui_modifications) {
+            await applyModifications(data.ui_modifications);
+          }
+        } else {
+          throw new Error(data.error || 'Failed to analyze logo');
         }
       } else {
-        throw new Error(data.response || 'Failed to get AI response');
+        // Regular chat endpoint
+        console.log('No logo detected, using regular chat endpoint');
+        
+        const chatRequest = {
+          message: inputMessage.trim(),
+          session_id: sessionId,
+          current_ui_codes: uiCodes
+        };
+
+        response = await fetch('http://localhost:8000/api/ui-editor/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(chatRequest)
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        data = await response.json();
+        
+        if (data.success) {
+          // Add AI response to chat
+          const aiMessage = {
+            id: Date.now() + 1,
+            type: 'ai',
+            content: data.response,
+            timestamp: new Date().toISOString()
+          };
+          setChatMessages(prev => [...prev, aiMessage]);
+          
+          // Refresh UI codes if modifications were made
+          if (data.ui_modifications && data.metadata?.intent === "modification_request") {
+            console.log('Modifications detected, refreshing UI codes from session...');
+            await fetchUICodes();
+          }
+        } else {
+          throw new Error(data.response || 'Failed to get AI response');
+        }
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -413,7 +482,7 @@ function EditorPage() {
       const errorMessage = {
         id: Date.now(),
         type: 'ai',
-        content: `❌ Error applying changes: ${error.message}`,
+        content: `Error applying changes: ${error.message}`,
         timestamp: new Date().toISOString()
       };
       setChatMessages(prev => [...prev, errorMessage]);
@@ -447,7 +516,7 @@ function EditorPage() {
         const successMessage = {
           id: Date.now(),
           type: 'ai',
-          content: "✅ I've restored the UI template to its original state! All modifications have been reset.",
+          content: "I've restored the UI template to its original state! All modifications have been reset.",
           timestamp: new Date().toISOString()
         };
         setChatMessages(prev => [...prev, successMessage]);
@@ -463,7 +532,7 @@ function EditorPage() {
       const errorMessage = {
         id: Date.now(),
         type: 'ai',
-        content: `❌ Error: ${error.message}`,
+        content: `Error: ${error.message}`,
         timestamp: new Date().toISOString()
       };
       setChatMessages(prev => [...prev, errorMessage]);
@@ -508,86 +577,12 @@ function EditorPage() {
     }
   };
 
-  const analyzeLogoWithPrompt = async () => {
-    if (!uploadedLogo || !inputMessage.trim()) {
-      alert('Please upload a logo and enter a prompt for analysis');
-      return;
-    }
 
-    setIsAnalyzingLogo(true);
-    
-    try {
-      // Convert file to base64
-      const base64Logo = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const base64 = e.target.result.split(',')[1]; // Remove data:image/...;base64, prefix
-          resolve(base64);
-        };
-        reader.readAsDataURL(uploadedLogo);
-      });
-
-      // Send logo analysis request
-      const response = await fetch('/api/ui-editor/analyze-logo', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: inputMessage,
-          logo_image: base64Logo,
-          logo_filename: uploadedLogo.name,
-          session_id: sessionId,
-          current_ui_codes: uiCodes?.current_codes || uiCodes
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        // Add the analysis request and response to chat
-        const userMessage = {
-          id: Date.now(),
-          type: 'user',
-          content: `📎 [Logo Analysis Request] ${inputMessage}`,
-          timestamp: new Date().toISOString(),
-          hasLogo: true,
-          logoPreview: logoPreview
-        };
-        
-        const aiMessage = {
-          id: Date.now() + 1,
-          type: 'ai',
-          content: data.response,
-          timestamp: new Date().toISOString(),
-          logoAnalysis: data.logo_analysis
-        };
-        
-        setChatMessages(prev => [...prev, userMessage, aiMessage]);
-        setInputMessage('');
-        
-        // Update UI codes if modifications were applied
-        if (data.ui_modifications) {
-          await applyModifications(data.ui_modifications);
-        }
-      } else {
-        throw new Error(data.error || 'Failed to analyze logo');
-      }
-    } catch (error) {
-      console.error('Error analyzing logo:', error);
-      alert(`Error analyzing logo: ${error.message}`);
-    } finally {
-      setIsAnalyzingLogo(false);
-    }
-  };
 
   const removeLogo = () => {
     setUploadedLogo(null);
     setLogoPreview(null);
+    setInputMessage(''); // Clear input message when logo is removed
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -649,7 +644,7 @@ function EditorPage() {
                 className="p-1 hover:bg-gray-100 rounded text-gray-600 text-sm"
                 disabled={zoomLevel <= 0.25}
               >
-                🔍−
+                Zoom−
               </button>
               <span className="text-xs text-gray-500 min-w-[50px] text-center">
                 {Math.round(zoomLevel * 100)}%
@@ -659,7 +654,7 @@ function EditorPage() {
                 className="p-1 hover:bg-gray-100 rounded text-gray-600 text-sm"
                 disabled={zoomLevel >= 3}
               >
-                🔍+
+                Zoom+
               </button>
               <button
                 onClick={handleZoomReset}
@@ -910,16 +905,7 @@ function EditorPage() {
               </div>
             )}
             
-            {/* Logo Analysis Button */}
-            {uploadedLogo && (
-              <button
-                onClick={analyzeLogoWithPrompt}
-                disabled={!inputMessage.trim() || isAnalyzingLogo}
-                className="w-full bg-purple-500 text-white px-3 py-2 rounded text-sm hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition mb-3"
-              >
-                {isAnalyzingLogo ? '🔍 Analyzing...' : '🔍 Analyze Logo with Prompt'}
-              </button>
-            )}
+
           </div>
           
           <div className="flex space-x-2">
@@ -929,15 +915,19 @@ function EditorPage() {
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder={uploadedLogo ? "Describe what you want to do with the logo..." : "Type your request here..."}
-              disabled={isSending || isAnalyzingLogo}
+              disabled={isSending}
               className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             />
             <button 
               onClick={handleSendMessage}
-              disabled={!inputMessage.trim() || isSending || isAnalyzingLogo}
-              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!inputMessage.trim() || isSending}
+              className={`px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                uploadedLogo 
+                  ? 'bg-purple-500 text-white hover:bg-purple-600' 
+                  : 'bg-blue-500 text-white hover:bg-blue-600'
+              }`}
             >
-              {isSending ? 'Sending...' : 'Send'}
+                              {isSending ? 'Sending...' : (uploadedLogo ? 'Analyze Logo' : 'Send')}
             </button>
           </div>
         </div>
@@ -1001,7 +991,7 @@ function EditorPage() {
                 className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition"
                 title="Generate custom report"
               >
-                📄 Generate Report
+                Generate Report
               </button>
 
             </div>

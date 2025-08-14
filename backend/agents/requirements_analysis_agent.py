@@ -2,6 +2,7 @@ from .base_agent import BaseAgent
 from typing import Dict, Any, List, Optional
 import json
 import re
+import logging
 from tools.tool_utility import ToolUtility
 from config.keyword_config import KeywordManager
 
@@ -18,6 +19,7 @@ class RequirementsAnalysisAgent(BaseAgent):
 You focus ONLY on requirements analysis. You do not recommend templates or generate questions."""
         
         super().__init__("RequirementsAnalysis", system_message)
+        self.logger = logging.getLogger(__name__)
         self.tool_utility = ToolUtility("requirements_analysis_agent")
         self.keyword_manager = KeywordManager()
     
@@ -64,338 +66,167 @@ You focus ONLY on requirements analysis. You do not recommend templates or gener
             logo_filename = context.get("logo_filename", "uploaded_logo")
             current_ui_codes = context.get("current_ui_codes", {})
             
+            self.logger.info(f"Logo analysis context - filename: {logo_filename}, image_length: {len(logo_image) if logo_image else 0}")
+            
             if not logo_image:
+                self.logger.error("No logo image provided in context")
                 return self.create_standardized_response(
                     success=False,
-                    error="No logo image provided"
+                    data={"error": "No logo image provided"}
+                )
+            
+            # Validate base64 data
+            try:
+                import base64
+                # Try to decode a small portion to validate base64
+                test_decode = base64.b64decode(logo_image[:100] + "==")
+                self.logger.info("Base64 validation successful")
+            except Exception as base64_error:
+                self.logger.error(f"Invalid base64 data: {base64_error}")
+                return self.create_standardized_response(
+                    success=False,
+                    data={"error": f"Invalid image data format: {str(base64_error)}"}
                 )
             
             # Build logo analysis prompt
+            self.logger.info("Building logo analysis prompt")
             prompt = self._build_logo_analysis_prompt(user_message, logo_filename, current_ui_codes)
             
             # Call Claude with vision capabilities
+            self.logger.info("Calling Claude with vision capabilities")
             response = self._call_claude_with_vision(prompt, logo_image)
+            self.logger.info(f"Received vision API response, length: {len(response)}")
             
             # Parse logo analysis results
-            logo_analysis = self._parse_logo_analysis_response(response)
+            logo_analysis = self._parse_logo_analysis_response(response, context)
             
-            # Create design preferences based on logo analysis
-            design_preferences = self._create_design_preferences_from_logo(logo_analysis, user_message)
+            # Extract design preferences
+            design_preferences = self._extract_design_preferences(logo_analysis, context)
             
             return self.create_standardized_response(
                 success=True,
                 data={
                     "logo_analysis": logo_analysis,
-                    "design_preferences": design_preferences,
-                    "user_request": user_message
+                    "design_preferences": design_preferences
                 },
-                metadata={
-                    "logo_filename": logo_filename,
-                    "analysis_type": "logo_design_extraction"
-                }
+                metadata={"logo_filename": logo_filename, "context_used": context}
             )
             
         except Exception as e:
             self.logger.error(f"Error in logo analysis: {e}")
+            import traceback
+            self.logger.error(f"Logo analysis traceback: {traceback.format_exc()}")
             return self.create_standardized_response(
                 success=False,
-                error=f"Failed to analyze logo: {str(e)}"
+                data={"error": f"Logo analysis failed: {str(e)}"}
             )
     
-    def _build_logo_analysis_prompt(self, user_message: str, logo_filename: str, current_ui_codes: Dict[str, Any]) -> str:
-        """Build prompt for logo analysis"""
-        prompt = f"""You are a design expert analyzing a logo to extract design preferences for UI modification.
+    def _build_requirements_prompt(self, user_prompt: str, context: Dict[str, Any], logo_image: Optional[str] = None) -> str:
+        """Build the requirements analysis prompt"""
+        base_prompt = f"""
+You are a Requirements Analysis Agent. Analyze the user's request and extract structured requirements.
 
-LOGO ANALYSIS TASK:
-Analyze the uploaded logo image and extract the following design elements:
+USER REQUEST: {user_prompt}
 
-1. **Color Palette**: Identify the primary, secondary, and accent colors used in the logo
-2. **Style Characteristics**: Determine the design style (modern, classic, minimalist, bold, etc.)
-3. **Typography**: Identify font styles and characteristics if text is present
-4. **Visual Elements**: Note any shapes, patterns, or visual motifs
-5. **Brand Personality**: Infer the brand's personality and values
+CONTEXT:
+- Page Type: {context.get('page_type', 'unknown')}
+- Available Categories: {context.get('available_categories', [])}
+- Available Tags: {context.get('available_tags', [])}
+- Category Templates Count: {len(context.get('category_templates', []))}
+
+TASK: Extract comprehensive requirements for UI mockup creation.
+
+REQUIRED OUTPUT FORMAT (JSON only):
+{{
+  "page_type": "string",
+  "target_audience": "string", 
+  "style_preferences": ["array", "of", "strings"],
+  "key_features": ["array", "of", "strings"],
+  "color_scheme": "string",
+  "layout_preferences": "string",
+  "ui_specifications": {{
+    "required_elements": ["array", "of", "strings"],
+    "interactive_elements": ["array", "of", "strings"],
+    "content_priorities": ["array", "of", "strings"],
+    "accessibility_requirements": ["array", "of", "strings"]
+  }},
+  "technical_requirements": {{
+    "responsive_design": boolean,
+    "browser_compatibility": ["array", "of", "strings"],
+    "performance_requirements": "string"
+  }},
+  "business_context": {{
+    "brand_guidelines": "string",
+    "conversion_goals": "string",
+    "success_metrics": ["array", "of", "strings"]
+  }},
+  "questions_for_clarification": ["array", "of", "strings"],
+  "constraints": ["array", "of", "strings"]
+}}
+
+IMPORTANT: 
+- Respond with ONLY the JSON object above
+- NO explanatory text before or after
+- NO markdown formatting
+- Use the available tools to gather information if needed
+"""
+        
+        if logo_image:
+            base_prompt += "\n\nLOGO ANALYSIS: Analyze the uploaded logo for design preferences and color schemes."
+        
+        return base_prompt
+    
+    def _build_logo_analysis_prompt(self, user_message: str, logo_filename: str, current_ui_codes: Dict[str, str]) -> str:
+        """Build the logo analysis prompt"""
+        return f"""
+You are analyzing a logo image to extract design preferences for UI modification.
 
 USER REQUEST: {user_message}
 
+LOGO FILENAME: {logo_filename}
+
 CURRENT UI CONTEXT:
-The user wants to apply the logo's design preferences to their current UI template.
+- HTML: {len(current_ui_codes.get('html', ''))} characters
+- CSS: {len(current_ui_codes.get('style_css', ''))} characters
 
-ANALYSIS REQUIREMENTS:
-- Be precise and specific about colors (use hex codes when possible)
-- Identify the overall design aesthetic and style
-- Note any unique visual elements that could be incorporated
-- Consider how the logo's design principles can be applied to UI elements
+ANALYZE THE LOGO FOR:
+1. **Color Scheme**: Extract dominant colors, color temperature, brightness
+2. **Design Style**: Modern, minimalist, professional, creative, etc.
+3. **Brand Personality**: What does the logo convey about the brand?
+4. **Visual Elements**: Shapes, typography, composition style
+5. **Accessibility**: Color contrast and readability considerations
 
-Please provide a detailed analysis in the following JSON format:
+PROVIDE ANALYSIS IN THIS JSON FORMAT:
 {{
-    "colors": ["#hex1", "#hex2", "#hex3"],
-    "style": "modern|classic|minimalist|bold|playful|professional",
-    "fonts": ["font_name_1", "font_name_2"],
-    "visual_elements": ["element1", "element2"],
-    "brand_personality": "description",
-    "design_principles": ["principle1", "principle2"],
-    "ui_application_notes": "specific suggestions for applying to UI"
+  "color_analysis": {{
+    "dominant_colors": ["#hex1", "#hex2"],
+    "color_temperature": "warm/cool/neutral",
+    "brightness": "light/medium/dark",
+    "saturation": "high/medium/low"
+  }},
+  "design_style": "string",
+  "brand_personality": "string",
+  "visual_elements": ["array", "of", "strings"],
+  "accessibility_notes": "string",
+  "recommended_ui_changes": [
+    {{
+      "element": "string",
+      "change_type": "color/style/layout",
+      "description": "string",
+      "priority": "high/medium/low"
+    }}
+  ]
 }}
 
-Focus on extracting actionable design information that can be used to modify the UI template."""
-        
-        return prompt
-    
-    def _call_claude_with_vision(self, prompt: str, logo_image: str) -> str:
-        """Call Claude with vision capabilities for logo analysis"""
-        try:
-            # Prepare the message with image
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        },
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": logo_image
-                            }
-                        }
-                    ]
-                }
-            ]
-            
-            # Call Claude with vision-capable model (Haiku per project choice)
-            response = self.claude_client.messages.create(
-                model="claude-3-5-haiku-20241022",
-                max_tokens=4000,
-                messages=messages
-            )
-            
-            return response.content[0].text
-            
-        except Exception as e:
-            self.logger.error(f"Error calling Claude with vision: {e}")
-            raise e
-    
-    def _parse_logo_analysis_response(self, response: str) -> Dict[str, Any]:
-        """Parse the logo analysis response from Claude"""
-        try:
-            # Try to extract JSON from the response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group()
-                analysis = json.loads(json_str)
-                return analysis
-            else:
-                # Fallback: create structured analysis from text
-                return self._create_structured_analysis_from_text(response)
-                
-        except json.JSONDecodeError as e:
-            self.logger.warning(f"Failed to parse JSON from logo analysis: {e}")
-            return self._create_structured_analysis_from_text(response)
-        except Exception as e:
-            self.logger.error(f"Error parsing logo analysis response: {e}")
-            return {
-                "colors": [],
-                "style": "modern",
-                "fonts": [],
-                "visual_elements": [],
-                "brand_personality": "professional",
-                "design_principles": [],
-                "ui_application_notes": "Apply modern design principles"
-            }
-    
-    def _create_structured_analysis_from_text(self, response: str) -> Dict[str, Any]:
-        """Create structured analysis from text response when JSON parsing fails"""
-        analysis = {
-            "colors": [],
-            "style": "modern",
-            "fonts": [],
-            "visual_elements": [],
-            "brand_personality": "professional",
-            "design_principles": [],
-            "ui_application_notes": "Apply modern design principles"
-        }
-        
-        # Extract colors (look for hex codes)
-        color_matches = re.findall(r'#[0-9A-Fa-f]{6}', response)
-        if color_matches:
-            analysis["colors"] = color_matches[:5]  # Limit to 5 colors
-        
-        # Extract style keywords
-        style_keywords = ["modern", "classic", "minimalist", "bold", "playful", "professional", "elegant", "clean"]
-        for keyword in style_keywords:
-            if keyword.lower() in response.lower():
-                analysis["style"] = keyword
-                break
-        
-        # Extract font mentions
-        font_keywords = ["sans-serif", "serif", "helvetica", "arial", "times", "roboto", "open sans"]
-        found_fonts = []
-        for font in font_keywords:
-            if font.lower() in response.lower():
-                found_fonts.append(font)
-        analysis["fonts"] = found_fonts
-        
-        return analysis
-    
-    def _create_design_preferences_from_logo(self, logo_analysis: Dict[str, Any], user_message: str) -> Dict[str, Any]:
-        """Create design preferences based on logo analysis"""
-        preferences = {
-            "color_scheme": {
-                "primary_colors": logo_analysis.get("colors", [])[:3],
-                "accent_colors": logo_analysis.get("colors", [])[3:5] if len(logo_analysis.get("colors", [])) > 3 else []
-            },
-            "style_preferences": {
-                "overall_style": logo_analysis.get("style", "modern"),
-                "brand_personality": logo_analysis.get("brand_personality", "professional")
-            },
-            "typography": {
-                "font_families": logo_analysis.get("fonts", []),
-                "font_style": "sans-serif" if "sans" in str(logo_analysis.get("fonts", [])).lower() else "serif"
-            },
-            "visual_elements": logo_analysis.get("visual_elements", []),
-            "design_principles": logo_analysis.get("design_principles", []),
-            "ui_modification_guidelines": logo_analysis.get("ui_application_notes", "")
-        }
-        
-        return preferences
-    
-    def _get_database_context(self, category: str = None) -> Dict[str, Any]:
-        """Get database context for requirements analysis"""
-        context = {
-            "available_categories": [],
-            "available_tags": [],
-            "category_templates": []
-        }
-        
-        try:
-            # Get available categories
-            categories_result = self.tool_utility.call_function("get_available_categories", {})
-            if categories_result.get("success"):
-                context["available_categories"] = categories_result.get("categories", [])
-            
-            # Get templates for the category
-            if category:
-                templates_result = self.tool_utility.call_function("get_templates_by_category", {"category": category, "limit": 10})
-                if templates_result.get("success"):
-                    templates = templates_result.get("templates", [])
-                    context["category_templates"] = templates
-                    context["available_tags"] = self._extract_tags_from_templates(templates)
-            
-        except Exception as e:
-            print(f"ERROR: Error getting database context: {e}")
-        
-        return context
-    
-    def _extract_tags_from_templates(self, templates: List[Dict[str, Any]]) -> List[str]:
-        """Extract unique tags from templates"""
-        all_tags = set()
-        for template in templates:
-            tags = template.get("tags", [])
-            all_tags.update(tags)
-        return list(all_tags)
-    
-    def _merge_contexts(self, db_context: Dict[str, Any], frontend_context: Dict[str, Any]) -> Dict[str, Any]:
-        """Merge database and frontend contexts"""
-        merged = db_context.copy()
-        
-        # Add frontend context
-        if frontend_context:
-            merged.update(frontend_context)
-        
-        return merged
-    
-    def _build_requirements_prompt(self, user_prompt: str, context: Dict[str, Any], logo_image: Optional[str] = None) -> str:
-        """Build prompt for requirements analysis"""
-        
-        # Extract context information
-        available_categories = context.get("available_categories", [])
-        available_tags = context.get("available_tags", [])
-        category_templates = context.get("category_templates", [])
-        page_type = context.get("page_type", "landing")
-        
-        # Build template information
-        template_info = ""
-        if category_templates:
-            template_info = "AVAILABLE TEMPLATES IN CATEGORY:\n"
-            for i, template in enumerate(category_templates[:5], 1):  # Show first 5 templates
-                name = template.get("name", f"Template {i}")
-                tags = template.get("tags", [])
-                template_info += f"{i}. {name} - Tags: {', '.join(tags) if tags else 'None'}\n"
-        
-        # Build logo context
-        logo_context = ""
-        if logo_image:
-            logo_context = f"""
-LOGO CONTEXT:
-- Logo image provided: {logo_image}
-- Consider logo integration in design requirements
-- Ensure brand consistency with logo colors and style
+IMPORTANT: Respond with ONLY the JSON object above. NO explanatory text.
 """
-        
-        prompt = f"""
-You are an expert UI/UX requirements analyst. Analyze the user's request and extract comprehensive requirements.
-
-USER REQUEST:
-"{user_prompt}"
-
-CONTEXT:
-- Page Type: {page_type}
-- Available Categories: {', '.join(available_categories)}
-- Available Design Tags: {', '.join(available_tags[:20])}  # Show first 20 tags
-- Templates in Category: {len(category_templates)} templates
-
-{template_info}
-
-{logo_context}
-
- TASK:
- Analyze the user's requirements and provide a comprehensive specification. Return ONLY a JSON object with this exact structure and NO extra text before or after:
-
-{{
-    "page_type": "{page_type}",
-    "target_audience": "Description of target users",
-    "style_preferences": ["list", "of", "style", "preferences"],
-    "key_features": ["list", "of", "required", "features"],
-    "color_scheme": "Preferred color scheme or theme",
-    "layout_preferences": "Layout preferences (e.g., single column, grid, etc.)",
-    "ui_specifications": {{
-        "required_elements": ["list", "of", "UI", "elements"],
-        "interactive_elements": ["list", "of", "features"],
-        "content_priorities": ["list", "of", "content", "priorities"],
-        "accessibility_requirements": ["list", "of", "accessibility", "needs"]
-    }},
-    "technical_requirements": {{
-        "responsive_design": true/false,
-        "browser_compatibility": ["list", "of", "browsers"],
-        "performance_requirements": "Performance expectations"
-    }},
-    "business_context": {{
-        "brand_guidelines": "Brand considerations",
-        "conversion_goals": "Business objectives",
-        "success_metrics": ["list", "of", "success", "metrics"]
-    }},
-    "questions_for_clarification": ["list", "of", "questions"],
-    "constraints": ["list", "of", "constraints"]
-}}
-
-IMPORTANT:
-- Be specific and actionable
-- Consider the available templates and tags
-- Focus on what can be implemented
-- Identify any missing information that needs clarification
- """
-        
-        return prompt
     
     def _call_claude_with_tools(self, prompt: str, logo_image: Optional[str] = None) -> str:
         """Call Claude with tool calling capabilities"""
         try:
             client = self.claude_client
             messages = [{"role": "user", "content": prompt}]
-            
+
             # Add logo image if provided
             if logo_image:
                 messages.append({
@@ -405,10 +236,10 @@ IMPORTANT:
                         {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": logo_image}}
                     ]
                 })
-            
+
             # Get available tools
             tools = self.tool_utility.get_tools()
-            
+
             # Call Claude
             response = client.messages.create(
                 model=self.model,
@@ -417,18 +248,24 @@ IMPORTANT:
                 tools=tools if tools else None,
                 tool_choice={"type": "auto"} if tools else None
             )
-            
-            # Debug: Log LLM response
-            print(f"DEBUG: Requirements Analysis Agent LLM Response: {response.content[0].text[:500]}...")
-            if len(response.content[0].text) > 500:
-                print(f"DEBUG: Full Requirements Analysis Response: {response.content[0].text}")
-            
+
+                                # Debug: Log LLM response
+            response_text = response.content[0].text
+            print(f"DEBUG: Requirements Analysis Agent LLM Response Length: {len(response_text)} chars")
+            print(f"DEBUG: Requirements Analysis Agent LLM Response Preview: {response_text[:200]}...")
+                    
+            # Only log full response if it's very short (for debugging)
+            if len(response_text) < 1000:
+                print(f"DEBUG: Requirements Analysis Agent Full Response: {response_text}")
+            else:
+                print(f"DEBUG: Requirements Analysis Agent Response truncated for logging (too long)")
+
             # Handle tool calls if any
             if response.content and hasattr(response.content[0], 'tool_calls') and response.content[0].tool_calls:
                 tool_results = []
                 for tool_call in response.content[0].tool_calls:
                     tool_name = tool_call.name
-                    
+
                     # Handle different tool call formats
                     if hasattr(tool_call, 'input'):
                         # Custom tool format
@@ -439,7 +276,7 @@ IMPORTANT:
                     else:
                         # Fallback
                         tool_args = {}
-                    
+
                     # Call the tool
                     tool_result = self.tool_utility.call_function(tool_name, tool_args)
                     tool_results.append({
@@ -447,7 +284,7 @@ IMPORTANT:
                         "name": tool_name,
                         "result": tool_result
                     })
-                
+
                 # If we have tool results, make another call with the results
                 if tool_results:
                     tool_response_prompt = f"""
@@ -459,7 +296,40 @@ IMPORTANT:
                     ORIGINAL PROMPT:
                     {prompt}
 
-                    Please provide your requirements analysis in the requested JSON format.
+                    IMPORTANT: You MUST respond with ONLY a valid JSON object. Do NOT include any explanatory text, introductions, or conclusions before or after the JSON.
+
+                    REQUIRED FORMAT:
+                    {{
+                      "page_type": "string",
+                      "target_audience": "string", 
+                      "style_preferences": ["array", "of", "strings"],
+                      "key_features": ["array", "of", "strings"],
+                      "color_scheme": "string",
+                      "layout_preferences": "string",
+                      "ui_specifications": {{
+                        "required_elements": ["array", "of", "strings"],
+                        "interactive_elements": ["array", "of", "strings"],
+                        "content_priorities": ["array", "of", "strings"],
+                        "accessibility_requirements": ["array", "of", "strings"]
+                      }},
+                      "technical_requirements": {{
+                        "responsive_design": boolean,
+                        "browser_compatibility": ["array", "of", "strings"],
+                        "performance_requirements": "string"
+                      }},
+                      "business_context": {{
+                        "brand_guidelines": "string",
+                        "conversion_goals": "string",
+                        "success_metrics": ["array", "of", "strings"]
+                      }},
+                      "questions_for_clarification": ["array", "of", "strings"],
+                      "constraints": ["array", "of", "strings"]
+                    }}
+
+                    RULES:
+                    - NO TEXT BEFORE OR AFTER THE JSON OBJECT
+                    - NO EXPLANATIONS OUTSIDE THE JSON
+                    - ONLY VALID JSON
                     """
                     
                     final_response = client.messages.create(
@@ -467,47 +337,55 @@ IMPORTANT:
                         max_tokens=8000,
                         messages=[{"role": "user", "content": tool_response_prompt}]
                     )
-                    
+
                     # Debug: Log final LLM response after tool calls
                     print(f"DEBUG: Requirements Analysis Agent Final Response: {final_response.content[0].text[:500]}...")
                     if len(final_response.content[0].text) > 500:
                         print(f"DEBUG: Full Requirements Analysis Final Response: {final_response.content[0].text}")
-                    
+
                     return final_response.content[0].text
-            
+
             return response.content[0].text
-            
+
         except Exception as e:
             print(f"ERROR: Error calling Claude with tools: {e}")
             return f"Error: {str(e)}"
     
     def _parse_requirements_response(self, response: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Parse the LLM response and return structured requirements"""
+        print(f"DEBUG: Requirements Analysis Agent - Parsing response")
+        print(f"DEBUG: Requirements Analysis Agent - Raw response preview: {response[:200]}...")
+        
         try:
-            # Prefer robust base extractor
-            extracted = self._extract_json_from_text(response)
-            if extracted is not None:
-                specifications = extracted
-            else:
-                # Fallback legacy approach
-                if "{" in response and "}" in response:
-                    start = response.find("{")
-                    end = response.rfind("}") + 1
-                    json_str = response[start:end]
-                    json_str = json_str.replace('\n', ' ').replace('\r', ' ')
-                    try:
-                        specifications = json.loads(json_str)
-                    except json.JSONDecodeError as e:
-                        print(f"ERROR: Failed to parse JSON response: {e}")
-                        print(f"JSON string: {json_str}")
-                        specifications = self._get_default_specifications()
-                else:
+            # Simple JSON extraction - look for JSON object in response
+            if "{" in response and "}" in response:
+                start = response.find("{")
+                end = response.rfind("}") + 1
+                json_str = response[start:end]
+                json_str = json_str.replace('\n', ' ').replace('\r', ' ')
+                print(f"DEBUG: Requirements Analysis Agent - Extracted JSON: {json_str[:200]}...")
+                
+                try:
+                    specifications = json.loads(json_str)
+                    print("DEBUG: Requirements Analysis Agent - JSON parsing successful")
+                except json.JSONDecodeError as e:
+                    print(f"DEBUG: Requirements Analysis Agent - JSON parsing failed: {e}")
                     specifications = self._get_default_specifications()
+            else:
+                print("DEBUG: Requirements Analysis Agent - No JSON structure found, using default specifications")
+                specifications = self._get_default_specifications()
             
-            # Ensure page_type from context is preserved
-            if context.get("page_type"):
+            # CRITICAL FIX: Don't override the LLM's page_type analysis with old context
+            # The LLM has analyzed the user's request and determined the correct page_type
+            print(f"DEBUG: LLM returned page_type: '{specifications.get('page_type', 'None')}'")
+            print(f"DEBUG: Context has page_type: '{context.get('page_type', 'None')}'")
+            
+            if context.get("page_type") and not specifications.get("page_type"):
+                # Only use context page_type if LLM didn't provide one
                 specifications["page_type"] = context["page_type"]
-                print(f"Preserved page_type from context: {context['page_type']}")
+                print(f"Fallback: Using page_type '{context['page_type']}' from context (LLM didn't provide one)")
+            elif specifications.get("page_type"):
+                print(f"Using LLM-analyzed page_type: '{specifications['page_type']}'")
             
             # Add database context to specifications
             specifications["database_context"] = {
@@ -521,18 +399,18 @@ IMPORTANT:
         except json.JSONDecodeError as e:
             print(f"ERROR: Failed to parse JSON response: {e}")
             specifications = self._get_default_specifications()
-            # Ensure page_type from context is preserved even on error
-            if context.get("page_type"):
+            # Only use context page_type on error if we don't have one from LLM
+            if context.get("page_type") and not specifications.get("page_type"):
                 specifications["page_type"] = context["page_type"]
-                print(f"Preserved page_type from context on error: {context['page_type']}")
+                print(f"Error fallback: Using page_type '{context['page_type']}' from context")
             return specifications
         except Exception as e:
             print(f"ERROR: Unexpected error in parse_requirements_response: {e}")
             specifications = self._get_default_specifications()
-            # Ensure page_type from context is preserved even on error
-            if context.get("page_type"):
+            # Only use context page_type on error if we don't have one from LLM
+            if context.get("page_type") and not specifications.get("page_type"):
                 specifications["page_type"] = context["page_type"]
-                print(f"Preserved page_type from context on error: {context['page_type']}")
+                print(f"Error fallback: Using page_type '{context['page_type']}' from context")
             return specifications
     
     def _get_default_specifications(self) -> Dict[str, Any]:
@@ -562,4 +440,75 @@ IMPORTANT:
             },
             "questions_for_clarification": ["What specific features are most important?"],
             "constraints": ["time and budget constraints"]
-        } 
+        }
+    
+    def _parse_logo_analysis_response(self, response: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse the logo analysis response"""
+        try:
+            # Simple JSON extraction
+            if "{" in response and "}" in response:
+                start = response.find("{")
+                end = response.rfind("}") + 1
+                json_str = response[start:end]
+                return json.loads(json_str)
+            else:
+                return {"error": "No JSON found in response"}
+        except Exception as e:
+            self.logger.error(f"Error parsing logo analysis: {e}")
+            return {"error": f"Parsing failed: {str(e)}"}
+    
+    def _extract_design_preferences(self, logo_analysis: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract design preferences from logo analysis"""
+        try:
+            if "error" in logo_analysis:
+                return {"error": logo_analysis["error"]}
+            
+            # Extract key design elements
+            color_analysis = logo_analysis.get("color_analysis", {})
+            design_style = logo_analysis.get("design_style", "modern")
+            brand_personality = logo_analysis.get("brand_personality", "professional")
+            
+            return {
+                "color_scheme": color_analysis.get("dominant_colors", ["#000000"]),
+                "design_style": design_style,
+                "brand_personality": brand_personality,
+                "recommended_changes": logo_analysis.get("recommended_ui_changes", [])
+            }
+        except Exception as e:
+            self.logger.error(f"Error extracting design preferences: {e}")
+            return {"error": f"Extraction failed: {str(e)}"}
+    
+    def _get_database_context(self, page_type: str) -> Dict[str, Any]:
+        """Get database context for the given page type"""
+        try:
+            # Get available categories
+            categories = list(self.db.templates.distinct("category"))
+            
+            # Get templates for the specific page type
+            category_templates = list(self.db.templates.find({"category": page_type}))
+            
+            # Get all available tags
+            all_tags = []
+            for template in self.db.templates.find():
+                if "tags" in template:
+                    all_tags.extend(template["tags"])
+            all_tags = list(set(all_tags))  # Remove duplicates
+            
+            return {
+                "available_categories": categories,
+                "category_templates": category_templates,
+                "available_tags": all_tags
+            }
+        except Exception as e:
+            print(f"Error getting database context: {e}")
+            return {
+                "available_categories": [],
+                "category_templates": [],
+                "available_tags": []
+            }
+    
+    def _merge_contexts(self, db_context: Dict[str, Any], user_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Merge database context with user context"""
+        merged = db_context.copy()
+        merged.update(user_context)
+        return merged

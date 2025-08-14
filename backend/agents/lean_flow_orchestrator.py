@@ -6,6 +6,7 @@ Follows single responsibility principle: Only handles coordination
 import logging
 import uuid
 import re
+import time
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 import json
@@ -22,16 +23,13 @@ from session_manager import session_manager
 
 class LeanFlowOrchestrator:
     """Intelligent orchestrator for the lean UI mockup generation workflow"""
-    
     def __init__(self, session_id: Optional[str] = None):
         self.logger = logging.getLogger(__name__)
-        
-        # Initialize agents
+        # Initialize agents (except editing_agent which needs session_id)
         self.requirements_agent = RequirementsAnalysisAgent()
         self.recommendation_agent = TemplateRecommendationAgent()
         self.question_agent = QuestionGenerationAgent()
         self.user_proxy_agent = UserProxyAgent()
-        self.editing_agent = UIEditingAgent()
         self.report_agent = ReportGenerator()
         
         # Initialize keyword manager
@@ -44,14 +42,29 @@ class LeanFlowOrchestrator:
             session_data = session_manager.get_session(session_id)
             if session_data:
                 self.session_state = session_data
+                print(f"DEBUG ORCHESTRATOR: Loaded existing session {session_id}")
+                print(f"DEBUG ORCHESTRATOR: Session state keys: {list(self.session_state.keys())}")
+                print(f"DEBUG ORCHESTRATOR: Current phase: {self.session_state.get('current_phase', 'NOT_SET')}")
+                print(f"DEBUG ORCHESTRATOR: Session data loaded from manager with {len(session_data.keys())} keys")
             else:
                 # Create new session if not found
                 self.session_id = session_manager.create_session()
                 self.session_state = session_manager.get_session(self.session_id)
+                print(f"DEBUG ORCHESTRATOR: Created new session {self.session_id} (existing not found)")
+                print(f"DEBUG ORCHESTRATOR: New session state created with {len(self.session_state.keys())} keys")
         else:
             # Create new session
             self.session_id = session_manager.create_session()
             self.session_state = session_manager.get_session(self.session_id)
+            print(f"DEBUG ORCHESTRATOR: Created new session {self.session_id} (no session_id provided)")
+        
+        # Ensure current_phase is set
+        if 'current_phase' not in self.session_state:
+            self.session_state['current_phase'] = 'initial'
+            print(f"DEBUG ORCHESTRATOR: Set default current_phase to 'initial'")
+        
+        # Initialize editing_agent after session_id is set
+        self.editing_agent = UIEditingAgent(session_id=self.session_id)
         
         # Phase definitions
         self.phases = ["initial", "requirements", "template_recommendation", "template_selection", "editing", "report_generation"]
@@ -110,7 +123,13 @@ class LeanFlowOrchestrator:
             elif current_phase == "editing":
                 return await self._handle_editing_phase(message, context)
             elif current_phase == "report_generation":
-                return await self._handle_report_generation(message, context)
+            # Report generation is now handled directly by the main API
+                return {
+                    "success": False,
+                    "response": "Report generation is handled through the dedicated report API endpoint.",
+                    "session_id": self.session_id,
+                    "phase": "report_generation"
+                }
             else:
                 # Default to initial intent detection
                 return await self._handle_initial_intent_phase(message, initial_intent, context)
@@ -250,6 +269,9 @@ class LeanFlowOrchestrator:
     async def _handle_requirements_phase(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle requirements analysis phase using intelligent orchestration"""
         
+        phase_start_time = time.time()
+        print(f"DEBUG: Starting requirements phase execution...")
+        
         # Step 1: Analyze what agents are needed
         phase_decision = await self._analyze_phase_requirements(message, context)
         print(f"DEBUG: Phase decision for requirements phase: {phase_decision}")
@@ -260,11 +282,14 @@ class LeanFlowOrchestrator:
         
         # Step 3: Execute required agents in order
         print(f"DEBUG: Required agents for pipeline: {phase_decision['required_agents']}")
+        pipeline_start_time = time.time()
         pipeline_result = self._execute_agent_pipeline(
             phase_decision["required_agents"], 
             message, 
             context or {}
         )
+        pipeline_end_time = time.time()
+        print(f"DEBUG: Agent pipeline completed in {pipeline_end_time - pipeline_start_time:.2f} seconds")
         print(f"DEBUG: Pipeline result success: {pipeline_result['success']}")
         print(f"DEBUG: Pipeline result keys: {pipeline_result.keys()}")
         print(f"DEBUG: Pipeline final_output: {pipeline_result.get('final_output', 'None')}")
@@ -310,6 +335,16 @@ class LeanFlowOrchestrator:
                 self.session_state["recommendations"] = recommendations_result["data"]["primary_result"]
             else:
                 self.session_state["recommendations"] = recommendations_result
+            
+            # Store template recommendation rationale
+            try:
+                from utils.rationale_manager import RationaleManager
+                rationale_manager = RationaleManager(self.session_id)
+                recommendations = self.session_state["recommendations"]
+                rationale_manager.add_template_recommendation_rationale(recommendations)
+                self.logger.info("Stored template recommendation rationale")
+            except Exception as e:
+                self.logger.error(f"Failed to store template recommendation rationale: {e}")
             
             # Check if we have only one template - if so, skip question generation
             recommendations = self.session_state["recommendations"]
@@ -374,6 +409,10 @@ class LeanFlowOrchestrator:
         
         self._add_to_conversation_history(response, "assistant")
         
+        # Log total phase execution time
+        phase_end_time = time.time()
+        print(f"DEBUG: Requirements phase total execution time: {phase_end_time - phase_start_time:.2f} seconds")
+        
         return {
             "success": True,
             "response": response,
@@ -397,6 +436,18 @@ class LeanFlowOrchestrator:
             if selected_template:
                 self.session_state["selected_template"] = selected_template
                 self.session_state["current_phase"] = "template_selection"
+                
+                # Store final template selection rationale
+                try:
+                    from utils.rationale_manager import RationaleManager
+                    rationale_manager = RationaleManager(self.session_id)
+                    rationale_manager.add_template_recommendation_rationale(
+                        self.session_state["recommendations"], 
+                        selected_template
+                    )
+                    self.logger.info("Stored final template selection rationale")
+                except Exception as e:
+                    self.logger.error(f"Failed to store final template selection rationale: {e}")
                 
                 response = self.user_proxy_agent.confirm_template_selection(selected_template, "Template selected successfully")
                 self._add_to_conversation_history(response, "assistant")
@@ -545,7 +596,7 @@ class LeanFlowOrchestrator:
         selected_template = self.session_state.get("selected_template")
         recommendations = self.session_state.get("recommendations", [])
         
-        self.logger.info(f"Selection phase - Message: '{message}', Current selected_template: {selected_template}, Recommendations count: {len(recommendations)}")
+        self.logger.info(f"Selection phase - Message: '{message}', Recommendations count: {len(recommendations)}")
         self.logger.info(f"Available recommendations: {[rec.get('template', {}).get('name', 'Unknown') for rec in recommendations]}")
         
         # Check if user is selecting a template
@@ -554,7 +605,7 @@ class LeanFlowOrchestrator:
             self.logger.info(f"Attempting to parse template selection from message: '{message}'")
             selected_template = await self._parse_template_selection_llm(message, recommendations)
             
-            self.logger.info(f"Template selection result: {selected_template}")
+            self.logger.info(f"Template selection result: {selected_template.get('name', 'Unknown') if selected_template else 'None'}")
             
             if selected_template:
                 self.session_state["selected_template"] = selected_template
@@ -596,8 +647,14 @@ class LeanFlowOrchestrator:
             return await self._handle_editing_phase(message, context)
         
         elif user_intent == "report":
-            # User wants to generate a report
-            return await self._handle_report_generation(message, context)
+            # User wants to generate a report - redirect to dedicated API
+            return {
+                "success": True,
+                "response": "To generate a report, please use the dedicated report generation feature in the UI.",
+                "session_id": self.session_id,
+                "phase": "template_selection",
+                "intent": "report_request"
+            }
         
         elif user_intent == "template_confirmation" or user_intent == "template_selection":
             # User confirmed template selection - trigger Phase 2 transition
@@ -685,13 +742,23 @@ class LeanFlowOrchestrator:
     async def _detect_editing_intent_advanced(self, message: str, selected_template: Dict[str, Any]) -> str:
         """Enhanced intent detection specifically for editing phase"""
         try:
-            # First, try the simple keyword-based detection for completion requests
+            # First, try the simple keyword-based detection for common intents
             message_lower = message.lower()
+            
+            # Completion requests
             if any(phrase in message_lower for phrase in [
                 "generate report", "generate the report", "create report", "show me the final", "i'm done", 
                 "that's perfect", "finished", "complete", "finalize", "generate summary", "create summary"
             ]):
                 return "completion_request"
+            
+            # Modification requests - fallback detection
+            if any(phrase in message_lower for phrase in [
+                "change", "make", "adjust", "modify", "update", "edit", "resize", "wider", "narrower",
+                "move", "add", "remove", "replace", "text", "color", "size", "position", "layout"
+            ]):
+                print(f"DEBUG ORCHESTRATOR: Keyword-based fallback detected modification_request")
+                return "modification_request"
             
             template_name = selected_template.get("name", "Unknown Template")
             
@@ -704,11 +771,12 @@ User message: "{message}"
 Analyze the user's intent and classify it as one of the following:
 
 1. "modification_request" - User wants to make specific changes to the UI:
+   - Text changes: "change the text", "change Home to homepage", "update text", "modify text"
+   - Layout changes: "make wider", "resize", "change position", "adjust width", "prevent wrapping"
    - Color changes: "change the color", "make it blue", "red background"
-   - Layout changes: "move this element", "resize", "change position"
    - Style changes: "make it modern", "change font", "add shadow"
-   - Content changes: "change text", "add button", "remove element"
-   - Specific modifications: "edit", "modify", "update", "change"
+   - Content changes: "add button", "remove element", "edit", "modify", "update"
+   - Specific modifications: Any request that starts with "change", "make", "adjust", "modify", "update"
 
 2. "clarification_request" - User wants to understand what can be changed:
    - "what can I change?", "what options do I have?", "help"
@@ -727,13 +795,29 @@ Analyze the user's intent and classify it as one of the following:
    - Greetings, questions about the system, unclear requests
 
 Return ONLY the intent type (e.g., "modification_request").
+
+**EXAMPLES:**
+- "Change the text Home to homepage" → modification_request
+- "Make the section wider" → modification_request  
+- "Adjust the width so it doesn't wrap" → modification_request
+- "Change the color to blue" → modification_request
+- "What can I change?" → clarification_request
+- "Show me the preview" → preview_request
+- "I'm done" → completion_request
+- "Hello" → general_request
 """
             
             response = self.requirements_agent.call_claude_with_cot(prompt, enable_cot=False)
             intent = response.strip().lower()
             
+            print(f"DEBUG ORCHESTRATOR: Intent detection response: '{response}'")
+            print(f"DEBUG ORCHESTRATOR: Parsed intent: '{intent}'")
+            
             valid_intents = ["modification_request", "clarification_request", "preview_request", "completion_request", "general_request"]
-            return intent if intent in valid_intents else "general_request"
+            final_intent = intent if intent in valid_intents else "general_request"
+            print(f"DEBUG ORCHESTRATOR: Final intent: '{final_intent}'")
+            
+            return final_intent
             
         except Exception as e:
             self.logger.error(f"Error in advanced editing intent detection: {e}")
@@ -1087,12 +1171,21 @@ Return ONLY the intent type (e.g., "modification_request").
             # Transition to report generation phase
             self.session_state["current_phase"] = "report_generation"
             
-            # Actually generate the report
-            report_result = await self._handle_report_generation(message, context)
+            # Report generation is now handled by the dedicated API
+            return {
+                "success": True,
+                "response": "Editing completed! To generate a report, please use the dedicated report generation feature in the UI.",
+                "session_id": self.session_id,
+                "phase": "editing",
+                "intent": "completion_request",
+                "phase_transition": True,
+                "report_generated": False,
+                "note": "Use the report generation feature in the UI"
+            }
             
             if report_result.get("success", False):
                 # Report was generated successfully
-                response = f"✅ Report generated successfully! Your project report is ready for download."
+                response = f"Report generated successfully! Your project report is ready for download."
                 
                 result = {
                     "success": True,
@@ -1109,7 +1202,7 @@ Return ONLY the intent type (e.g., "modification_request").
                 return result
             else:
                 # Report generation failed
-                response = f"❌ Sorry, I encountered an error while generating the report: {report_result.get('response', 'Unknown error')}"
+                response = f"Sorry, I encountered an error while generating the report: {report_result.get('response', 'Unknown error')}"
                 
                 return {
                     "success": False,
@@ -1366,73 +1459,7 @@ Return ONLY the intent type (e.g., "modification_request").
                 "Add or remove elements"
             ]
     
-    async def _handle_report_generation(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Handle report generation"""
-        
-        try:
-            # Prepare project data
-            created_at = self.session_state.get("created_at")
-            if isinstance(created_at, str):
-                try:
-                    created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                except:
-                    created_at = datetime.now()
-            elif not isinstance(created_at, datetime):
-                created_at = datetime.now()
-            
-            # Get current UI state for screenshot
-            current_ui_state = await self._get_current_ui_state(self.session_state.get("selected_template", {}))
-                
-            project_data = {
-                "project_name": f"UI Project {self.session_id[:8]}",
-                "created_date": created_at.isoformat(),
-                "user_requirements": self.session_state.get("requirements", {}),
-                "selected_template": self.session_state.get("selected_template", {}),
-                "conversation_history": self.session_state.get("conversation_history", []),
-                "session_id": self.session_id,
-                "current_ui_state": current_ui_state
-            }
-            
-            # Generate report using focused agent
-            report_filepath = self.report_agent.generate_project_report_advanced(project_data)
-            
-            if report_filepath and report_filepath != "report_generation_failed.pdf":
-                # Report was generated successfully
-                response = f"✅ Report generated successfully! Your project report is ready for download."
-                
-                result = {
-                    "success": True,
-                    "response": response,
-                    "session_id": self.session_id,
-                    "phase": "report_generation",
-                    "report_file": report_filepath,
-                    "metadata": {
-                        "project_name": project_data["project_name"],
-                        "template_name": project_data["selected_template"].get("name", "Unknown"),
-                        "generated_at": datetime.now().isoformat()
-                    }
-                }
-                
-                return result
-            else:
-                # Report generation failed
-                response = f"❌ Sorry, I encountered an error while generating the report."
-                
-                return {
-                    "success": False,
-                    "response": response,
-                    "session_id": self.session_id,
-                    "phase": "report_generation"
-                }
-                
-        except Exception as e:
-            self.logger.error(f"Error in report generation: {e}")
-            return {
-                "success": False,
-                "response": f"❌ Sorry, I encountered an error while generating the report: {str(e)}",
-                "session_id": self.session_id,
-                "phase": "report_generation"
-            }
+
     
     async def _detect_initial_intent(self, message: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Use LLM to detect the initial intent and page type from user message"""
@@ -1641,7 +1668,7 @@ Return ONLY the intent type (e.g., "clarification").
                 template_list.append(f"{i}. {template.get('name', 'Unknown')} - {template.get('description', 'No description')}")
             
             template_info = "\n".join(template_list)
-            self.logger.info(f"Template list for LLM:\n{template_info}")
+            self.logger.info(f"Template list for LLM: {len(template_list)} templates")
             
             prompt = f"""
 You are a template selection parser for a UI mockup system.
@@ -1673,12 +1700,10 @@ Return ONLY the template number (1, 2, 3, etc.) or "unclear" if the selection ca
 """
 
             # Call LLM for parsing
-            self.logger.info(f"Calling LLM with prompt: {prompt}")
+            self.logger.info(f"Calling LLM for template selection parsing")
             response = self.requirements_agent.call_claude_with_cot(prompt, enable_cot=False)
             
-            self.logger.info(f"LLM response for template selection: '{response}'")
-            self.logger.info(f"LLM response type: {type(response)}")
-            self.logger.info(f"LLM response length: {len(response) if response else 0}")
+            self.logger.info(f"LLM response for template selection: '{response[:100]}{'...' if len(response) > 100 else ''}'")
             
             # Parse response
             try:
@@ -1810,7 +1835,7 @@ Determine which agents are needed and in what order based on:
 - Existing session state
 - Whether clarification is needed
 
-**CRITICAL OPTIMIZATION**: If template_recommendation returns only 1 template, skip question_generation and go directly to presenting the single template to the user.
+**CRITICAL OPTIMIZATION**: Always include question_generation in required_agents for the requirements phase. The system will automatically skip question generation during execution if only one template is found.
 
 Return a structured JSON response:
 
@@ -1831,10 +1856,10 @@ EXAMPLES:
 - User says "show me template 1" → Skip requirements_analysis, go directly to template selection
 - User says "I'm not sure" → Use question_generation to get clarification
 - User says "make it more colorful" → Skip requirements_analysis, go to editing phase
-- If template_recommendation finds only 1 template → Skip question_generation, present single template
+- User says "I want a modern login page" → Use requirements_analysis, then template_recommendation, then question_generation (system will auto-skip if only 1 template)
 """
 
-            response = self.requirements_agent.call_claude_with_cot(prompt, enable_cot=True)
+            response = self.requirements_agent.call_claude_with_cot(prompt, enable_cot=True, extract_json=True)
             
             # Parse the structured response
             try:
@@ -1909,16 +1934,35 @@ EXAMPLES:
             
         elif agent_name == "template_recommendation":
             # Minimal context + requirements output
+            # CRITICAL FIX: Prioritize page_type from requirements analysis output over base context
+            page_type = None
+            if isinstance(previous_output, dict) and previous_output.get("page_type"):
+                # Use the page_type from requirements analysis (this is the correct one)
+                page_type = previous_output["page_type"]
+                print(f"DEBUG: _build_agent_context: Using page_type '{page_type}' from requirements analysis output")
+            else:
+                # Only fall back to base context if requirements analysis didn't provide page_type
+                page_type = base_context.get("page_type")
+                if page_type:
+                    print(f"DEBUG: _build_agent_context: Fallback to page_type '{page_type}' from base context")
+            
             context = {
-                "page_type": base_context.get("page_type"),
+                "page_type": page_type,
                 "requirements": previous_output if previous_output else {}
             }
             
         elif agent_name == "question_generation":
             # Template recommendations + requirements
+            # Get page_type from requirements if available
+            requirements = self.session_state.get("requirements", {})
+            page_type = None
+            if isinstance(requirements, dict) and requirements.get("page_type"):
+                page_type = requirements["page_type"]
+            
             context = {
                 "templates": previous_output if previous_output else [],
-                "requirements": self.session_state.get("requirements", {})
+                "requirements": requirements,
+                "page_type": page_type
             }
             
         elif agent_name == "user_proxy":
@@ -1944,15 +1988,27 @@ EXAMPLES:
         
         for agent_name in required_agents:
             try:
+                agent_start_time = time.time()
+                print(f"DEBUG: Starting {agent_name} agent execution...")
+                
                 agent_context = self._build_agent_context(agent_name, current_output, context)
                 
                 if agent_name == "requirements_analysis":
                     try:
+                        start_time = time.time()
                         result = self.requirements_agent.analyze_requirements(message, context=agent_context)
+                        end_time = time.time()
+                        print(f"DEBUG: Requirements Analysis Agent LLM call completed in {end_time - start_time:.2f} seconds")
+                        
                         # Standardize the output
                         result = self.requirements_agent.enhance_agent_output(result, agent_context)
                         current_output = result["data"]["primary_result"]
                         agent_results[agent_name] = result
+                    
+                        # Log total time for this agent
+                        agent_end_time = time.time()
+                        print(f"DEBUG: {agent_name} total execution time: {agent_end_time - agent_start_time:.2f} seconds")
+                        print(f"DEBUG: {agent_name} total execution time: {agent_end_time - agent_start_time:.2f} seconds")
                     except Exception as e:
                         self.logger.error(f"Error in requirements_analysis: {e}")
                         # Create error response
@@ -1973,16 +2029,33 @@ EXAMPLES:
                     try:
                         requirements = self.session_state.get("requirements") or current_output
                         
-                        # Ensure page_type is included in requirements if it's in the context
-                        if agent_context.get("page_type") and isinstance(requirements, dict):
-                            requirements["page_type"] = agent_context["page_type"]
-                            print(f"DEBUG: Added page_type '{agent_context['page_type']}' to requirements")
+                        # CRITICAL FIX: Use page_type from requirements analysis output, not from old context
+                        # The requirements analysis agent has already determined the correct page_type
+                        print(f"DEBUG: Template Recommendation - Requirements from session: {self.session_state.get('requirements', {}).get('page_type', 'None')}")
+                        print(f"DEBUG: Template Recommendation - Current output page_type: {current_output.get('page_type', 'None') if isinstance(current_output, dict) else 'Not a dict'}")
+                        print(f"DEBUG: Template Recommendation - Agent context page_type: {agent_context.get('page_type', 'None')}")
                         
+                        if isinstance(requirements, dict) and requirements.get("page_type"):
+                            # Use the page_type from requirements analysis (this is the correct one)
+                            print(f"DEBUG: Using page_type '{requirements['page_type']}' from requirements analysis")
+                        elif agent_context.get("page_type") and isinstance(requirements, dict):
+                            # Only fall back to context page_type if requirements doesn't have one
+                            requirements["page_type"] = agent_context["page_type"]
+                            print(f"DEBUG: Fallback: Added page_type '{agent_context['page_type']}' from context to requirements")
+                        
+                        start_time = time.time()
                         result = self.recommendation_agent.recommend_templates(requirements, context=agent_context)
+                        end_time = time.time()
+                        print(f"DEBUG: Template Recommendation Agent LLM call completed in {end_time - start_time:.2f} seconds")
+                        
                         # Standardize the output
                         result = self.recommendation_agent.enhance_agent_output(result, agent_context)
                         current_output = result["data"]["primary_result"]
                         agent_results[agent_name] = result
+                    
+                    # Log total time for this agent
+                        agent_end_time = time.time()
+                        print(f"DEBUG: {agent_name} total execution time: {agent_end_time - agent_start_time:.2f} seconds")
                     except Exception as e:
                         self.logger.error(f"Error in template_recommendation: {e}")
                         # Create error response
@@ -2001,6 +2074,21 @@ EXAMPLES:
                     
                 elif agent_name == "question_generation":
                     try:
+                        # Check if we should skip question generation (only one template found)
+                        recommendations = self.session_state.get("recommendations", [])
+                        if isinstance(recommendations, list) and len(recommendations) == 1:
+                            print(f"DEBUG: Skipping question generation - only one template found ({recommendations[0].get('template', {}).get('name', 'Unknown')})")
+                            # Create a placeholder result indicating no questions needed
+                            result = {
+                                "questions": [],
+                                "focus_areas": [],
+                                "template_count": 1,
+                                "reasoning": "Single template found, no questions needed"
+                            }
+                            current_output = result
+                            agent_results[agent_name] = result
+                            continue  # Skip to next agent
+                        
                         # Extract templates from current_output (which is from template_recommendation agent)
                         templates = []
                         if isinstance(current_output, list):
@@ -2015,11 +2103,21 @@ EXAMPLES:
                             print("DEBUG: No templates available for question generation, fetching templates...")
                             requirements = self.session_state.get("requirements", {})
                             
-                            # Ensure page_type is included - get from session state
-                            page_type = self.session_state.get("context", {}).get("page_type")
-                            if page_type and isinstance(requirements, dict):
-                                requirements["page_type"] = page_type
-                                print(f"DEBUG: Using page_type '{page_type}' for template fetching")
+                            # Ensure page_type is included - get from requirements or session state
+                            page_type = None
+                            if isinstance(requirements, dict) and requirements.get("page_type"):
+                                page_type = requirements["page_type"]
+                                print(f"DEBUG: Using page_type '{page_type}' from requirements")
+                            else:
+                                page_type = self.session_state.get("context", {}).get("page_type")
+                                if page_type and isinstance(requirements, dict):
+                                    requirements["page_type"] = page_type
+                                    print(f"DEBUG: Using page_type '{page_type}' from session context")
+                            
+                            if page_type:
+                                print(f"DEBUG: Template fetching with page_type: {page_type}")
+                            else:
+                                print(f"DEBUG: No page_type found, using default category")
                             
                             # Get templates and standardize the output like in normal flow
                             template_list = self.recommendation_agent.recommend_templates(requirements)
@@ -2032,10 +2130,18 @@ EXAMPLES:
                                 print(f"DEBUG: Fetched {len(templates)} templates for question generation")
                         
                         requirements = self.session_state.get("requirements", {})
+                        start_time = time.time()
                         result = self.question_agent.generate_questions(templates, requirements)
+                        end_time = time.time()
+                        print(f"DEBUG: Question Generation Agent LLM call completed in {end_time - start_time:.2f} seconds")
+                        
                         # The result is already a dictionary, not standardized format
                         current_output = result
                         agent_results[agent_name] = result
+                    
+                    # Log total time for this agent
+                        agent_end_time = time.time()
+                        print(f"DEBUG: {agent_name} total execution time: {agent_end_time - agent_start_time:.2f} seconds")
                     except Exception as e:
                         self.logger.error(f"Error in question_generation: {e}")
                         # Create error response
@@ -2070,6 +2176,9 @@ EXAMPLES:
                     )
                     current_output = result  # This should be a string
                     agent_results[agent_name] = result
+                # Log total time for this agent
+                agent_end_time = time.time()
+                print(f"DEBUG: {agent_name} total execution time: {agent_end_time - agent_start_time:.2f} seconds")
                     
             except Exception as e:
                 self.logger.error(f"Error executing agent {agent_name}: {e}")
@@ -2085,19 +2194,40 @@ EXAMPLES:
         if isinstance(current_output, dict):
             # If we have a dictionary, try to convert it to a string representation
             try:
-                if "questions" in current_output and "template_count" in current_output:
-                    # This looks like question generation output - format it nicely
-                    questions = current_output.get("questions", [])
-                    template_count = current_output.get("template_count", 0)
-                    
-                    if questions:
-                        response = f"I found {template_count} templates that match your requirements. To help you choose, let me ask a few questions:\n\n"
-                        for i, question_data in enumerate(questions[:3]):
-                            question = question_data.get("question", "")
-                            response += f"{i+1}. {question}\n"
-                        response += "\nPlease answer any of these questions to help me narrow down the best template for you."
+                # Check if this is question generation output or if questions were skipped
+                if ("questions" in current_output and "template_count" in current_output):
+                    # Check if question_generation was executed or skipped
+                    if "question_generation" in agent_results:
+                        # Question generation was executed - format questions
+                        questions = current_output.get("questions", [])
+                        template_count = current_output.get("template_count", 0)
+                        
+                        if questions:
+                            response = f"I found {template_count} templates that match your requirements. To help you choose, let me ask a few questions:\n\n"
+                            for i, question_data in enumerate(questions[:3]):
+                                question = question_data.get("question", "")
+                                response += f"{i+1}. {question}\n"
+                            response += "\nPlease answer any of these questions to help me narrow down the best template for you."
+                        else:
+                            response = f"I found {template_count} templates that match your requirements. Would you like me to show you the options?"
                     else:
-                        response = f"I found {template_count} templates that match your requirements. Would you like me to show you the options?"
+                        # Question generation was skipped - present single template directly
+                        template_count = current_output.get("template_count", 0)
+                        if template_count == 1:
+                            # Get the single template from session state
+                            recommendations = self.session_state.get("recommendations", [])
+                            if recommendations and len(recommendations) == 1:
+                                template = recommendations[0].get("template", {})
+                                template_name = template.get("name", "Template 1")
+                                template_description = template.get("description", "No description available")
+                                
+                                response = f"I found 1 perfect template that matches your requirements!\n\n"
+                                response += f"**{template_name}** - {template_description}\n\n"
+                                response += "This template is an excellent match for your needs. Would you like me to show you this template or would you prefer to proceed with it?"
+                            else:
+                                response = f"I found {template_count} template that matches your requirements. Let me know how you'd like to proceed."
+                        else:
+                            response = f"I found {template_count} templates that match your requirements. Let me know how you'd like to proceed."
                 elif isinstance(current_output, list) and len(current_output) > 0 and isinstance(current_output[0], dict) and "template" in current_output[0]:
                     # This looks like template recommendations - format them nicely
                     template_count = len(current_output)
@@ -2150,12 +2280,15 @@ EXAMPLES:
         if "user_proxy" not in agent_results and not isinstance(response, str):
             # Try to format the response using user_proxy agent
             try:
+                # Only include questions if question_generation was executed
+                targeted_questions = self.session_state.get("questions") if "question_generation" in agent_results else {"questions": []}
+                
                 formatted_response = self.user_proxy_agent.create_response_from_instructions(
                     "template recommendations",
                     {
                         "requirements": self.session_state.get("requirements"),
                         "templates": self.session_state.get("recommendations"),
-                        "targeted_questions": self.session_state.get("questions"),
+                        "targeted_questions": targeted_questions,
                         "agent_results": agent_results
                     }
                 )
@@ -2205,22 +2338,34 @@ EXAMPLES:
 
     def handle_editing_phase(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
         """Handle Phase 2: UI Editing - coordinate between UI Editing Agent and User Proxy Agent"""
+        phase_start_time = time.time()
         try:
             self.logger.info(f"Handling editing phase request for session {session_id}")
+            print(f"DEBUG: Starting editing phase execution...")
             
             # Create a context with the current UI state
+            context_start_time = time.time()
             context = {
                 "current_ui_codes": current_ui_state,
                 "session_id": session_id
             }
+            context_end_time = time.time()
+            print(f"DEBUG: Context creation completed in {context_end_time - context_start_time:.2f} seconds")
             
             # Use the UI editing agent directly instead of trying to run async code
+            ui_editing_start_time = time.time()
+            print(f"DEBUG: Starting UI editing agent execution...")
             modification_result = self.editing_agent.process_modification_request(user_message, current_ui_state)
+            ui_editing_end_time = time.time()
+            print(f"DEBUG: UI editing agent completed in {ui_editing_end_time - ui_editing_start_time:.2f} seconds")
             
             if not modification_result.get("success", False):
+                print(f"DEBUG: UI editing agent failed, total editing phase time: {time.time() - phase_start_time:.2f} seconds")
                 return self._create_error_response("Failed to process modification request")
             
             # Generate user response using the user proxy agent
+            user_proxy_start_time = time.time()
+            print(f"DEBUG: Starting user proxy agent execution...")
             user_response = self.user_proxy_agent.create_response_from_instructions(
                 "modification_success",
                 {
@@ -2229,6 +2374,17 @@ EXAMPLES:
                     "context": context
                 }
             )
+            user_proxy_end_time = time.time()
+            print(f"DEBUG: User proxy agent completed in {user_proxy_end_time - user_proxy_start_time:.2f} seconds")
+            
+            # Log total editing phase execution time
+            phase_end_time = time.time()
+            print(f"DEBUG: Editing phase total execution time: {phase_end_time - phase_start_time:.2f} seconds")
+            print(f"DEBUG: Breakdown:")
+            print(f"  - Context creation: {context_end_time - context_start_time:.2f} seconds")
+            print(f"  - UI editing agent: {ui_editing_end_time - ui_editing_start_time:.2f} seconds")
+            print(f"  - User proxy agent: {user_proxy_end_time - user_proxy_start_time:.2f} seconds")
+            print(f"  - Total overhead: {phase_end_time - phase_start_time - (context_end_time - context_start_time) - (ui_editing_end_time - ui_editing_start_time) - (user_proxy_end_time - user_proxy_start_time):.2f} seconds")
             
             return {
                 "success": True,
@@ -2238,50 +2394,98 @@ EXAMPLES:
                 "metadata": {
                     "session_id": session_id,
                     "intent": "modification_request",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "execution_time": phase_end_time - phase_start_time,
+                    "timing_breakdown": {
+                        "context_creation": context_end_time - context_start_time,
+                        "ui_editing_agent": ui_editing_end_time - ui_editing_start_time,
+                        "user_proxy_agent": user_proxy_end_time - user_proxy_start_time,
+                        "total_overhead": phase_end_time - phase_start_time - (context_end_time - context_start_time) - (ui_editing_end_time - ui_editing_start_time) - (user_proxy_end_time - user_proxy_start_time)
+                    }
                 }
             }
                 
         except Exception as e:
+            phase_end_time = time.time()
+            print(f"DEBUG: Editing phase failed after {phase_end_time - phase_start_time:.2f} seconds")
             self.logger.error(f"Error in editing phase: {e}")
             return self._create_error_response(f"Error processing your request: {str(e)}")
 
     def handle_logo_analysis(self, user_message: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Handle logo analysis and apply design preferences to UI"""
+        phase_start_time = time.time()
         try:
             self.logger.info(f"Handling logo analysis request for session {context.get('session_id')}")
+            print(f"DEBUG: Starting logo analysis execution...")
             
             # Step 1: Use RequirementsAnalysisAgent to analyze the logo
+            logo_analysis_start_time = time.time()
+            print(f"DEBUG: Starting logo analysis with RequirementsAnalysisAgent...")
             logo_analysis_result = self.requirements_agent.analyze_logo_and_requirements(
                 user_message, 
                 context
             )
+            logo_analysis_end_time = time.time()
+            print(f"DEBUG: Logo analysis with RequirementsAnalysisAgent completed in {logo_analysis_end_time - logo_analysis_start_time:.2f} seconds")
+            
+            # Debug: Log the response structure
+            self.logger.info(f"Logo analysis result structure: {list(logo_analysis_result.keys())}")
+            self.logger.info(f"Logo analysis success: {logo_analysis_result.get('success')}")
+            if 'data' in logo_analysis_result:
+                self.logger.info(f"Logo analysis data keys: {list(logo_analysis_result['data'].keys())}")
             
             if not logo_analysis_result.get("success", False):
+                print(f"DEBUG: Logo analysis failed, total logo analysis time: {time.time() - phase_start_time:.2f} seconds")
                 return self._create_error_response("Failed to analyze logo")
             
             # Step 2: Extract design preferences from logo analysis
-            logo_analysis = logo_analysis_result.get("logo_analysis", {})
-            design_preferences = logo_analysis_result.get("design_preferences", {})
+            data_extraction_start_time = time.time()
+            print(f"DEBUG: Starting data extraction from logo analysis...")
+            # The standardized response has data nested under 'data' key
+            data = logo_analysis_result.get("data", {})
+            logo_analysis = data.get("logo_analysis", {})
+            design_preferences = data.get("design_preferences", {})
+            data_extraction_end_time = time.time()
+            print(f"DEBUG: Data extraction completed in {data_extraction_end_time - data_extraction_start_time:.2f} seconds")
             
             # Step 3: Create modification plan based on logo analysis
+            plan_creation_start_time = time.time()
+            print(f"DEBUG: Starting modification plan creation...")
             modification_plan = self._create_modification_plan_from_logo_analysis(
                 logo_analysis, 
                 design_preferences, 
                 user_message
             )
+            plan_creation_end_time = time.time()
+            print(f"DEBUG: Modification plan creation completed in {plan_creation_end_time - plan_creation_start_time:.2f} seconds")
             
             # Step 4: Apply modifications using UI Editing Agent
+            ui_modification_start_time = time.time()
+            print(f"DEBUG: Starting UI modifications with UI Editing Agent...")
             current_ui_codes = context.get("current_ui_codes", {})
-            modification_result = self.editing_agent.process_modification_request(
-                modification_plan, 
-                current_ui_codes
-            )
+            
+            # Ensure current_ui_codes has the expected structure
+            if not current_ui_codes or not isinstance(current_ui_codes, dict):
+                self.logger.warning("No valid UI codes found, skipping modification")
+                modification_result = {
+                    "success": False,
+                    "error": "No valid UI codes available for modification"
+                }
+            else:
+                modification_result = self.editing_agent.process_modification_request(
+                    modification_plan, 
+                    current_ui_codes
+                )
+            ui_modification_end_time = time.time()
+            print(f"DEBUG: UI modifications completed in {ui_modification_end_time - ui_modification_start_time:.2f} seconds")
             
             if not modification_result.get("success", False):
+                print(f"DEBUG: UI modifications failed, total logo analysis time: {time.time() - phase_start_time:.2f} seconds")
                 return self._create_error_response("Failed to apply logo-based modifications")
             
             # Step 5: Generate user response
+            user_response_start_time = time.time()
+            print(f"DEBUG: Starting user response generation...")
             user_response = self.user_proxy_agent.create_response_from_instructions(
                 "logo_analysis_success",
                 {
@@ -2291,20 +2495,44 @@ EXAMPLES:
                     "context": context
                 }
             )
+            user_response_end_time = time.time()
+            print(f"DEBUG: User response generation completed in {user_response_end_time - user_response_start_time:.2f} seconds")
+            
+            # Log total logo analysis execution time
+            phase_end_time = time.time()
+            print(f"DEBUG: Logo analysis total execution time: {phase_end_time - phase_start_time:.2f} seconds")
+            print(f"DEBUG: Breakdown:")
+            print(f"  - Logo analysis (RequirementsAnalysisAgent): {logo_analysis_end_time - logo_analysis_start_time:.2f} seconds")
+            print(f"  - Data extraction: {data_extraction_end_time - data_extraction_start_time:.2f} seconds")
+            print(f"  - Modification plan creation: {plan_creation_end_time - plan_creation_start_time:.2f} seconds")
+            print(f"  - UI modifications (UI Editing Agent): {ui_modification_end_time - ui_modification_start_time:.2f} seconds")
+            print(f"  - User response generation: {user_response_end_time - user_response_start_time:.2f} seconds")
+            print(f"  - Total overhead: {phase_end_time - phase_start_time - (logo_analysis_end_time - logo_analysis_start_time) - (data_extraction_end_time - data_extraction_start_time) - (plan_creation_end_time - plan_creation_start_time) - (ui_modification_end_time - ui_modification_start_time) - (user_response_end_time - user_response_start_time):.2f} seconds")
             
             return {
                 "success": True,
                 "response": user_response,
                 "logo_analysis": logo_analysis,
-                "ui_modifications": modification_result.get("modifications"),
+                "ui_modifications": modification_result.get("modified_template"),
                 "metadata": {
                     "session_id": context.get("session_id"),
                     "intent": "logo_analysis",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "execution_time": phase_end_time - phase_start_time,
+                    "timing_breakdown": {
+                        "logo_analysis_agent": logo_analysis_end_time - logo_analysis_start_time,
+                        "data_extraction": data_extraction_end_time - data_extraction_start_time,
+                        "modification_plan_creation": plan_creation_end_time - plan_creation_start_time,
+                        "ui_modifications": ui_modification_end_time - ui_modification_start_time,
+                        "user_response_generation": user_response_end_time - user_response_start_time,
+                        "total_overhead": phase_end_time - phase_start_time - (logo_analysis_end_time - logo_analysis_start_time) - (data_extraction_end_time - data_extraction_start_time) - (plan_creation_end_time - plan_creation_start_time) - (ui_modification_end_time - ui_modification_start_time) - (user_response_end_time - user_response_start_time)
+                    }
                 }
             }
                 
         except Exception as e:
+            phase_end_time = time.time()
+            print(f"DEBUG: Logo analysis failed after {phase_end_time - phase_start_time:.2f} seconds")
             self.logger.error(f"Error in logo analysis: {e}")
             return self._create_error_response(f"Error analyzing logo: {str(e)}")
 
@@ -2331,7 +2559,14 @@ EXAMPLES:
         if user_message:
             plan_parts.append(f"User request: {user_message}")
         
-        return " | ".join(plan_parts) if plan_parts else "Apply logo design preferences to the UI"
+        # Create a comprehensive modification plan
+        if plan_parts:
+            plan = " | ".join(plan_parts)
+            # Add specific instructions for UI elements
+            plan += " | Focus on updating colors, fonts, and styling to match the logo's design language"
+            return plan
+        else:
+            return "Apply logo design preferences to the UI by updating colors, fonts, and styling to create visual consistency"
     
     def _create_error_response(self, error_message: str) -> Dict[str, Any]:
         """Create a standardized error response"""
@@ -2617,7 +2852,6 @@ EXAMPLES:
         """Handle the complete transition from Phase 1 to Phase 2"""
         try:
             self.logger.info(f"Starting Phase 1 → Phase 2 transition for template: {selected_template.get('name', 'Unknown')}")
-            self.logger.info(f"Selected template structure: {selected_template}")
             
             # Step 1: Save conversation history to session
             self.session_state["phase1_conversation_history"] = self.session_state.get("conversation_history", [])
@@ -2642,7 +2876,7 @@ EXAMPLES:
             ui_tools = UIPreviewTools()
             template_result = ui_tools.get_template_code(template_id)
             
-            self.logger.info(f"Template result: {template_result}")
+            self.logger.info(f"Template result received - success: {template_result.get('success', False)}")
             
             if not template_result or not template_result.get("success", False):
                 error_msg = template_result.get("error", "Unknown error") if template_result else "No result returned"
@@ -2695,8 +2929,24 @@ EXAMPLES:
             
             if success:
                 self.logger.info(f"[{time.strftime('%H:%M:%S')}] Session created using file manager: {self.session_id}")
-                # Add small delay to ensure files are written
-                time.sleep(0.1)
+                # Add longer delay to ensure files are fully written and accessible
+                time.sleep(0.5)
+                self.logger.info(f"[{time.strftime('%H:%M:%S')}] Files should now be accessible")
+                
+                # Verify that the session is actually accessible
+                retry_count = 0
+                max_retries = 5
+                while retry_count < max_retries:
+                    if file_manager.session_exists(self.session_id):
+                        self.logger.info(f"[{time.strftime('%H:%M:%S')}] Session verified as accessible after {retry_count + 1} attempts")
+                        break
+                    else:
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            self.logger.info(f"[{time.strftime('%H:%M:%S')}] Session not yet accessible, retrying in 0.2s... (attempt {retry_count})")
+                            time.sleep(0.2)
+                        else:
+                            self.logger.warning(f"[{time.strftime('%H:%M:%S')}] Session still not accessible after {max_retries} attempts")
             else:
                 self.logger.error(f"Failed to create session using file manager: {self.session_id}")
                 # Fallback to old JSON format
@@ -2738,7 +2988,7 @@ EXAMPLES:
                 }
             })
             
-            self.logger.info(f"Phase transition response: {transition_response}")
+            self.logger.info(f"Phase transition response created successfully")
             
             final_response = {
                 "success": True,
@@ -2757,7 +3007,7 @@ EXAMPLES:
                 }
             }
             
-            self.logger.info(f"Final phase transition response: {final_response}")
+            self.logger.info(f"Final phase transition response created successfully")
             return final_response
             
         except Exception as e:
@@ -2869,11 +3119,16 @@ EXAMPLES:
         try:
             self.logger.info(f"Processing UI edit request for session {session_id}: {message}")
             print(f"DEBUG ORCHESTRATOR: Processing UI edit request for session {session_id}: {message}")
-            print(f"DEBUG ORCHESTRATOR: Current phase: {self.session_state.get('phase', 'unknown')}")
+            print(f"DEBUG ORCHESTRATOR: Orchestrator session ID: {self.session_id}")
+            print(f"DEBUG ORCHESTRATOR: Request session ID: {session_id}")
+            print(f"DEBUG ORCHESTRATOR: Session ID match: {self.session_id == session_id}")
+            print(f"DEBUG ORCHESTRATOR: Current phase: {self.session_state.get('current_phase', 'unknown')}")
             print(f"DEBUG ORCHESTRATOR: Has selected template: {bool(self.session_state.get('selected_template'))}")
             
-            # Ensure we're in editing phase and have a selected template
-            if self.session_state.get("phase") != "editing" or not self.session_state.get("selected_template"):
+                        # Ensure we're in editing phase and have a selected template
+            if self.session_state.get("current_phase") != "editing" or not self.session_state.get("selected_template"):
+                print(f"DEBUG ORCHESTRATOR: Setting up editing phase - current phase: {self.session_state.get('current_phase', 'NOT_SET')}")
+                
                 # If no current_ui_codes provided, try to load from session file
                 if not current_ui_codes:
                     current_ui_codes = await self._load_ui_state_from_session()
@@ -2882,10 +3137,14 @@ EXAMPLES:
                 # Try to load the session state from existing UI codes
                 if current_ui_codes and current_ui_codes.get("template_info"):
                     # Set up the session state for editing
-                    self.session_state["phase"] = "editing"
+                    self.session_state["current_phase"] = "editing"
                     self.session_state["selected_template"] = current_ui_codes.get("template_info", {})
                     self.session_state["ui_codes"] = current_ui_codes
                     self.logger.info(f"Set up editing session with template: {current_ui_codes.get('template_info', {}).get('name', 'Unknown')}")
+                    
+                    # Update the session in the global manager
+                    session_manager.update_session(self.session_id, self.session_state)
+                    print(f"DEBUG ORCHESTRATOR: Updated session state in global manager")
                 else:
                     return {
                         "success": False,
@@ -2960,177 +3219,9 @@ EXAMPLES:
                 "metadata": {"error": "processing_error"}
             } 
 
-    async def generate_custom_report(self, session_id: str, report_options: Dict[str, bool], current_ui_codes: Optional[Dict[str, Any]] = None, project_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Generate a custom report based on user-selected content options"""
-        try:
-            self.logger.info(f"Generating custom report for session: {session_id}")
-            self.logger.info(f"Report options: {report_options}")
-            
-            # Get current UI state
-            if current_ui_codes:
-                ui_state = current_ui_codes
-            else:
-                ui_state = await self._get_current_ui_state(self.session_state.get("selected_template", {}))
-            
-            # Prepare report data based on selected options
-            report_data = {
-                "session_id": session_id,
-                "generated_at": datetime.now().isoformat(),
-                "report_options": report_options
-            }
-            
-            # Add content based on user selections
-            if report_options.get("uiDescription", True):
-                report_data["ui_description"] = self._generate_ui_description(ui_state, project_info)
-            
-            if report_options.get("uiTags", True):
-                report_data["ui_tags"] = self._generate_ui_tags(ui_state, project_info)
-            
-            if report_options.get("uiPreview", True):
-                report_data["ui_preview"] = ui_state.get("html_export", "")
-                report_data["ui_styles"] = {
-                    "style_css": ui_state.get("style_css", ""),
-                    "globals_css": ui_state.get("globals_css", "")
-                }
-            
-            if report_options.get("uiCode", False):
-                report_data["ui_code"] = {
-                    "html": ui_state.get("html_export", ""),
-                    "style_css": ui_state.get("style_css", ""),
-                    "globals_css": ui_state.get("globals_css", "")
-                }
-            
-            if report_options.get("changesMade", True):
-                report_data["changes_made"] = self._get_changes_history(session_id)
-            
-            if report_options.get("creationDate", True):
-                report_data["creation_date"] = project_info.get("created_at", datetime.now().isoformat()) if project_info else datetime.now().isoformat()
-                report_data["project_info"] = project_info or {}
-            
-            # Generate the PDF report
-            report_result = await self.report_agent.create_custom_pdf_report(report_data)
-            
-            if report_result.get("success"):
-                return {
-                    "success": True,
-                    "report_file": report_result.get("report_file"),
-                    "report_metadata": {
-                        "session_id": session_id,
-                        "generated_at": report_data["generated_at"],
-                        "project_name": project_info.get("template_name", "UI Mockup") if project_info else "UI Mockup",
-                        "template_name": project_info.get("template_name", "Unknown") if project_info else "Unknown",
-                        "options_selected": [k for k, v in report_options.items() if v]
-                    }
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": report_result.get("error", "Failed to generate report")
-                }
-                
-        except Exception as e:
-            self.logger.error(f"Error generating custom report: {e}")
-            return {
-                "success": False,
-                "error": f"Report generation failed: {str(e)}"
-            }
+
     
-    def _generate_ui_description(self, ui_state: Dict[str, Any], project_info: Optional[Dict[str, Any]] = None) -> str:
-        """Generate a description of the UI based on its content and structure"""
-        try:
-            html_content = ui_state.get("html_export", "")
-            
-            # Basic analysis of HTML structure
-            description_parts = []
-            
-            if "header" in html_content.lower() or "nav" in html_content.lower():
-                description_parts.append("Navigation header")
-            
-            if "hero" in html_content.lower() or "banner" in html_content.lower():
-                description_parts.append("Hero section")
-            
-            if "form" in html_content.lower():
-                description_parts.append("Form elements")
-            
-            if "button" in html_content.lower():
-                description_parts.append("Interactive buttons")
-            
-            if "card" in html_content.lower() or "container" in html_content.lower():
-                description_parts.append("Card-based layout")
-            
-            if "footer" in html_content.lower():
-                description_parts.append("Footer section")
-            
-            template_name = project_info.get("template_name", "Custom") if project_info else "Custom"
-            category = project_info.get("category", "UI") if project_info else "UI"
-            
-            if description_parts:
-                description = f"This {category.lower()} UI mockup ({template_name}) features a {', '.join(description_parts).lower()} design with modern styling and responsive layout."
-            else:
-                description = f"This {category.lower()} UI mockup ({template_name}) presents a clean, modern interface with responsive design principles."
-            
-            return description
-            
-        except Exception as e:
-            self.logger.error(f"Error generating UI description: {e}")
-            return "A modern UI mockup with responsive design and clean aesthetics."
+
     
-    def _generate_ui_tags(self, ui_state: Dict[str, Any], project_info: Optional[Dict[str, Any]] = None) -> List[str]:
-        """Generate relevant tags for the UI based on its content and structure"""
-        try:
-            html_content = ui_state.get("html_export", "").lower()
-            tags = []
-            
-            # Template category
-            category = project_info.get("category", "UI") if project_info else "UI"
-            tags.append(category.lower())
-            
-            # Layout tags
-            if "grid" in html_content or "flex" in html_content:
-                tags.append("responsive")
-            
-            if "hero" in html_content or "banner" in html_content:
-                tags.append("hero-section")
-            
-            if "card" in html_content:
-                tags.append("card-based")
-            
-            if "form" in html_content:
-                tags.append("form-based")
-            
-            if "button" in html_content:
-                tags.append("interactive")
-            
-            # Style tags
-            if "modern" in html_content or "clean" in html_content:
-                tags.append("modern")
-            
-            if "minimal" in html_content or "simple" in html_content:
-                tags.append("minimalist")
-            
-            # Add template name as tag
-            template_name = project_info.get("template_name", "custom") if project_info else "custom"
-            tags.append(template_name.lower().replace(" ", "-"))
-            
-            return list(set(tags))  # Remove duplicates
-            
-        except Exception as e:
-            self.logger.error(f"Error generating UI tags: {e}")
-            return ["ui", "mockup", "responsive"]
+
     
-    def _get_changes_history(self, session_id: str) -> List[Dict[str, Any]]:
-        """Get the history of changes made to the UI"""
-        try:
-            # This would ideally come from a proper change tracking system
-            # For now, return a placeholder
-            return [
-                {
-                    "timestamp": datetime.now().isoformat(),
-                    "change_type": "initial_creation",
-                    "description": "UI mockup created from template",
-                    "reasoning": "Template selected based on user requirements and preferences"
-                }
-            ]
-        except Exception as e:
-            self.logger.error(f"Error getting changes history: {e}")
-            return []

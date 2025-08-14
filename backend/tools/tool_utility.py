@@ -22,8 +22,6 @@ class ToolUtility:
         self.tools = get_tools_for_agent(agent_name)
         self.tool_names = get_agent_tool_names(agent_name)
         
-        self.logger.info(f"ToolUtility initialized for {agent_name} with tools: {self.tool_names}")
-    
     def get_tools(self) -> List[Dict[str, Any]]:
         """Get the list of tool schemas for this agent"""
         return self.tools

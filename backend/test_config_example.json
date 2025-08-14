@@ -1,0 +1,136 @@
+{
+  "session_id": "comprehensive_test_session",
+  "template_name": "Advanced Test Template",
+  "template_category": "e-commerce",
+  "template_id": "template_comprehensive_001",
+  
+  "html_content": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>E-commerce Test App</title><link rel=\"stylesheet\" href=\"globals.css\"><link rel=\"stylesheet\" href=\"style.css\"></head><body><div class=\"app\"><header class=\"header\"><h1>Test E-commerce Store</h1><nav><a href=\"#products\">Products</a><a href=\"#cart\">Cart</a></nav></header><main><section class=\"hero\"><h2>Welcome to Our Store</h2><p>This is a comprehensive test for report generation</p></section><section class=\"products\"><div class=\"product\"><h3>Product 1</h3><p>Description of product 1</p><button>Add to Cart</button></div><div class=\"product\"><h3>Product 2</h3><p>Description of product 2</p><button>Add to Cart</button></div></section></main><footer><p>&copy; 2025 Test Store</p></footer></div></body></html>",
+  
+  "css_content": ".app { max-width: 1200px; margin: 0 auto; padding: 20px; } .header { background: #2c3e50; color: white; padding: 1rem; border-radius: 8px; margin-bottom: 2rem; } .header h1 { margin: 0; font-size: 2rem; } .header nav { margin-top: 1rem; } .header nav a { color: white; text-decoration: none; margin-right: 1rem; padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); border-radius: 4px; } .hero { text-align: center; padding: 3rem; background: #ecf0f1; border-radius: 8px; margin-bottom: 2rem; } .products { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; } .product { padding: 1.5rem; border: 1px solid #bdc3c7; border-radius: 8px; text-align: center; } .product button { background: #3498db; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer; } footer { text-align: center; margin-top: 3rem; padding: 1rem; background: #34495e; color: white; border-radius: 8px; }",
+  
+  "globals_css": "* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #2c3e50; background: #f8f9fa; } h1, h2, h3 { margin-bottom: 0.5rem; } p { margin-bottom: 1rem; } button { cursor: pointer; transition: opacity 0.2s; } button:hover { opacity: 0.8; }",
+  
+  "metadata": {
+    "author": "Test Developer",
+    "version": "2.0.0",
+    "description": "Comprehensive test template for e-commerce applications",
+    "tags": ["e-commerce", "responsive", "modern"],
+    "created_by": "Report Generation Tester",
+    "test_environment": "development",
+    "priority": "high"
+  },
+  
+  "history": [
+    {
+      "timestamp": "2025-01-15T10:00:00.000Z",
+      "modification": "Initial template creation",
+      "user": "Test User",
+      "version": "1.0.0"
+    },
+    {
+      "timestamp": "2025-01-15T10:30:00.000Z",
+      "modification": "Added product grid layout",
+      "user": "Test User",
+      "version": "1.1.0"
+    },
+    {
+      "timestamp": "2025-01-15T11:00:00.000Z",
+      "modification": "Enhanced responsive design",
+      "user": "Test User",
+      "version": "1.2.0"
+    },
+    {
+      "timestamp": "2025-01-15T11:30:00.000Z",
+      "modification": "Added cart functionality",
+      "user": "Test User",
+      "version": "2.0.0"
+    }
+  ],
+  
+  "screenshot_path": "temp_previews/default/screenshot_016b96d2.png",
+  
+  "report_options": {
+    "uiDescription": true,
+    "uiTags": true,
+    "uiPreview": true,
+    "uiCode": true,
+    "changesMade": true,
+    "creationDate": true,
+    "logoAnalysis": false
+  },
+  
+  "project_info": {
+    "template_name": "Advanced E-commerce Template",
+    "category": "e-commerce",
+    "description": "A comprehensive e-commerce template designed for modern online stores",
+    "author": "Test Development Team",
+    "version": "2.0.0",
+    "client": "Test Client Inc.",
+    "project_manager": "John Doe",
+    "designer": "Jane Smith",
+    "developer": "Bob Johnson",
+    "reviewer": "Alice Brown",
+    "target_audience": "Online shoppers and e-commerce businesses",
+    "platforms": ["Web", "Mobile", "Tablet"],
+    "technologies": ["HTML5", "CSS3", "JavaScript", "Responsive Design"],
+    "deliverables": ["UI Mockup", "HTML/CSS Code", "Documentation", "Report"],
+    "timeline": "2 weeks",
+    "budget": "$5000"
+  },
+  
+  "expected_sections": [
+    "UI Preview",
+    "UI Code (index.html)",
+    "globals.css",
+    "style.css",
+    "Changes Made",
+    "Creation Date"
+  ],
+  
+  "test_scenarios": [
+    {
+      "name": "Basic Report Generation",
+      "description": "Test basic report generation with all sections enabled",
+      "report_options": {
+        "uiDescription": true,
+        "uiTags": true,
+        "uiPreview": true,
+        "uiCode": true,
+        "changesMade": true,
+        "creationDate": true
+      }
+    },
+    {
+      "name": "Minimal Report",
+      "description": "Test report generation with minimal sections",
+      "report_options": {
+        "uiDescription": false,
+        "uiTags": false,
+        "uiPreview": true,
+        "uiCode": false,
+        "changesMade": false,
+        "creationDate": true
+      }
+    },
+    {
+      "name": "Code-Focused Report",
+      "description": "Test report generation focusing on code sections",
+      "report_options": {
+        "uiDescription": false,
+        "uiTags": false,
+        "uiPreview": false,
+        "uiCode": true,
+        "changesMade": true,
+        "creationDate": true
+      }
+    }
+  ],
+  
+  "validation_rules": {
+    "min_file_size_kb": 5,
+    "required_sections": ["UI Preview", "Creation Date"],
+    "max_code_length": 8000,
+    "expected_metadata_fields": ["author", "version", "description"]
+  }
+}
+

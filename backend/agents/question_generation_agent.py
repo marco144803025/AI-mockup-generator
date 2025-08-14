@@ -67,10 +67,9 @@ CURRENT CONTEXT:
 
 OBJECTIVE:
 Generate strategic questions that will:
-1. **Maximize Differentiation**: Questions that best separate the available templates
-2. **Gather Missing Information**: Focus on aspects not yet covered by current requirements
-3. **Prioritize User Experience**: Questions that reveal user preferences and constraints
-4. **Enable Informed Decisions**: Questions that lead to confident template selection
+1. **Gather Missing Information**: Focus on aspects not yet covered by current requirements
+2. **Prioritize User Experience**: Questions that reveal user preferences and constraints
+3. **Enable Informed Decisions**: Questions that lead to confident template selection
 
 QUESTION GENERATION STRATEGY:
 Consider these dimensions when crafting questions:
@@ -107,27 +106,14 @@ IMPORTANT:
     def _call_claude_with_tools(self, prompt: str) -> str:
         """Call Claude with tool calling capabilities"""
         try:
-            client = self.claude_client
-            messages = [{"role": "user", "content": prompt}]
+            # Use the base agent's COT method with JSON extraction
+            response = self.call_claude_with_cot(prompt, enable_cot=True, extract_json=True)
             
-            # Get available tools
-            tools = self.tool_utility.get_tools()
+            # Debug: Log JSON response for debugging
+            print(f"DEBUG: Question Generation Agent JSON Response Length: {len(response)} chars")
+            print(f"DEBUG: Question Generation Agent JSON Response Preview: {response[:200]}...")
             
-            # Call Claude with tools
-            response = client.messages.create(
-                model=self.model,
-                max_tokens=8000,
-                messages=messages,
-                tools=tools if tools else None,
-                tool_choice={"type": "auto"} if tools else None
-            )
-            
-            # Debug: Log LLM response
-            print(f"DEBUG: Question Generation Agent LLM Response: {response.content[0].text[:500]}...")
-            if len(response.content[0].text) > 500:
-                print(f"DEBUG: Full Question Generation Response: {response.content[0].text}")
-            
-            return response.content[0].text
+            return response
             
         except Exception as e:
             print(f"ERROR: Error calling Claude with tools: {e}")
@@ -136,6 +122,9 @@ IMPORTANT:
     def _parse_question_response(self, response: str, templates: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Parse the LLM response for question generation"""
         
+        print(f"DEBUG: Question Generation Agent - Parsing response with {len(templates)} templates")
+        print(f"DEBUG: Question Generation Agent - Raw response preview: {response[:200]}...")
+        
         try:
             # Prefer robust base extractor
             parsed_response = self._extract_json_from_text(response)
@@ -143,8 +132,10 @@ IMPORTANT:
                 # Fallback regex approach
                 json_match = re.search(r'\{.*\}', response, re.DOTALL)
                 if not json_match:
+                    print("DEBUG: Question Generation Agent - No JSON found, using fallback")
                     return self._fallback_question_generation(templates)
                 json_str = json_match.group()
+                print(f"DEBUG: Question Generation Agent - Extracted JSON: {json_str[:200]}...")
                 parsed_response = json.loads(json_str)
             
             questions = parsed_response.get("questions", [])

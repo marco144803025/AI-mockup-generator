@@ -395,9 +395,9 @@ async def get_session_ui_codes(session_id: str):
         logger.info(f"[{time.strftime('%H:%M:%S')}] Checking if session {session_id} exists in file-based format...")
         logger.info(f"[{time.strftime('%H:%M:%S')}] Current working directory: {os.getcwd()}")
         
-        # Add retry logic for race conditions
-        max_retries = 3
-        retry_delay = 0.1  # 100ms
+        # Add retry logic for race conditions during phase transitions
+        max_retries = 10  # Increased retries for phase transitions
+        retry_delay = 0.2  # 200ms initial delay
         
         for attempt in range(max_retries):
             if file_manager.session_exists(session_id):
@@ -406,7 +406,7 @@ async def get_session_ui_codes(session_id: str):
             elif attempt < max_retries - 1:
                 logger.info(f"[{time.strftime('%H:%M:%S')}] Session not found on attempt {attempt + 1}, retrying in {retry_delay}s...")
                 time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
+                retry_delay = min(retry_delay * 1.5, 1.0)  # Gradual increase, max 1s
             else:
                 logger.warning(f"[{time.strftime('%H:%M:%S')}] Session not found after {max_retries} attempts")
         
@@ -416,7 +416,7 @@ async def get_session_ui_codes(session_id: str):
             session_data = file_manager.load_session(session_id)
             logger.info(f"Session data loaded: {session_data is not None}")
             if session_data:
-                logger.info(f"Session data keys: {list(session_data.keys())}")
+                logger.info(f"Session data loaded with {len(session_data.keys())} keys")
                 logger.info(f"HTML content length: {len(session_data.get('current_codes', {}).get('html_export', ''))}")
             else:
                 logger.warning(f"Session data is None for session {session_id}")
@@ -508,12 +508,67 @@ async def get_session_ui_codes(session_id: str):
         # Return default if no session file exists
         import time
         logger.warning(f"[{time.strftime('%H:%M:%S')}] No session file found for session_id: {session_id}")
+        
+        # Check if this might be a phase transition scenario
+        from agents.lean_flow_orchestrator import LeanFlowOrchestrator
+        try:
+            orchestrator = LeanFlowOrchestrator(session_id=session_id)
+            session_state = orchestrator.session_state
+            current_phase = session_state.get('current_phase', 'unknown')
+            logger.info(f"[{time.strftime('%H:%M:%S')}] Session state phase: {current_phase}")
+            
+            if current_phase in ['template_selection', 'editing']:
+                logger.warning(f"[{time.strftime('%H:%M:%S')}] This appears to be a phase transition scenario - session files may still be being created")
+                logger.warning(f"[{time.strftime('%H:%M:%S')}] Waiting additional time for files to be created...")
+                time.sleep(1.0)  # Wait an additional second
+                
+                # Try one more time after waiting
+                if file_manager.session_exists(session_id):
+                    logger.info(f"[{time.strftime('%H:%M:%S')}] Session found after additional wait - loading now")
+                    session_data = file_manager.load_session(session_id)
+                    if session_data:
+                        # Generate screenshot and return session data
+                        try:
+                            screenshot_service = await get_screenshot_service()
+                            html_content = session_data["current_codes"]["html_export"]
+                            css_content = session_data["current_codes"]["globals_css"] + "\n" + session_data["current_codes"]["style_css"]
+                            result = await screenshot_service.generate_screenshot(html_content, css_content, session_id)
+                            screenshot_base64 = result["base_image"] if result["success"] else ""
+                            logger.info(f"Screenshot generated for delayed session {session_id}")
+                        except Exception as e:
+                            logger.error(f"Error generating screenshot for delayed session {session_id}: {e}")
+                            screenshot_base64 = ""
+                        
+                        return {
+                            "success": True,
+                            "template_id": session_data["template_id"],
+                            "session_id": session_id,
+                            "ui_codes": {
+                                "current_codes": {
+                                    "html_export": session_data["current_codes"]["html_export"],
+                                    "globals_css": session_data["current_codes"]["globals_css"],
+                                    "style_css": session_data["current_codes"]["style_css"]
+                                },
+                                "original_codes": session_data.get("original_codes", {}),
+                                "template_info": session_data.get("template_info", {}),
+                                "metadata": {
+                                    "last_modified": session_data["last_updated"],
+                                    "file_path": f"temp_ui_files/{session_id}/",
+                                    "history_count": len(session_data.get("history", [])),
+                                    "template_info": session_data.get("template_info", {})
+                                }
+                            },
+                            "screenshot_preview": screenshot_base64
+                        }
+        except Exception as e:
+            logger.error(f"[{time.strftime('%H:%M:%S')}] Error checking session state: {e}")
+        
         logger.info(f"[{time.strftime('%H:%M:%S')}] Falling back to default template")
         
         # Additional debug: List all sessions to see what's available
         try:
             all_sessions = file_manager.list_sessions()
-            logger.info(f"[{time.strftime('%H:%M:%S')}] Available sessions: {all_sessions}")
+            logger.info(f"[{time.strftime('%H:%M:%S')}] Available sessions count: {len(all_sessions)}")
         except Exception as e:
             logger.error(f"[{time.strftime('%H:%M:%S')}] Error listing sessions: {e}")
         
@@ -658,28 +713,106 @@ async def analyze_logo(request: LogoAnalysisRequest):
     try:
         logger.info(f"Logo analysis request for session: {request.session_id}")
         
-        # For now, return a placeholder response
-        # TODO: Implement actual logo analysis logic
-        response_message = f"I received your logo '{request.logo_filename}' with request: '{request.message}'. Logo analysis functionality is being implemented."
+        # Import the orchestrator to handle logo analysis
+        from agents.lean_flow_orchestrator import LeanFlowOrchestrator
         
-        return {
-            "success": True,
-            "response": response_message,
-            "ui_modifications": None,
+        # Create orchestrator instance with session ID
+        orchestrator = LeanFlowOrchestrator(session_id=request.session_id)
+        
+        # Prepare context for logo analysis
+        context = {
+            "logo_image": request.logo_image,
+            "logo_filename": request.logo_filename,
             "session_id": request.session_id,
-            "metadata": {"feature": "logo_analysis", "status": "placeholder"}
+            "current_ui_codes": request.current_ui_codes or {}
         }
+        
+        # Handle logo analysis using the orchestrator
+        try:
+            result = orchestrator.handle_logo_analysis(request.message, context)
+            
+            if result.get("success"):
+                return {
+                    "success": True,
+                    "response": result.get("response", "Logo analysis completed successfully"),
+                    "ui_modifications": result.get("ui_modifications"),
+                    "session_id": request.session_id,
+                    "metadata": {
+                        "feature": "logo_analysis", 
+                        "status": "completed",
+                        "logo_filename": request.logo_filename
+                    }
+                }
+            else:
+                return {
+                    "success": False,
+                    "response": result.get("response", "Logo analysis failed"),
+                    "ui_modifications": None,
+                    "session_id": request.session_id,
+                    "metadata": {
+                        "feature": "logo_analysis", 
+                        "status": "failed",
+                        "error": result.get("error")
+                    }
+                }
+        except Exception as orchestrator_error:
+            logger.error(f"Orchestrator error in logo analysis: {orchestrator_error}")
+            import traceback
+            logger.error(f"Orchestrator traceback: {traceback.format_exc()}")
+            
+            return {
+                "success": False,
+                "response": f"Logo analysis failed due to an internal error: {str(orchestrator_error)}",
+                "ui_modifications": None,
+                "session_id": request.session_id,
+                "metadata": {
+                    "feature": "logo_analysis", 
+                    "status": "failed",
+                    "error": str(orchestrator_error)
+                }
+            }
         
     except Exception as e:
         logger.error(f"Error in logo analysis: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error analyzing logo: {str(e)}")
+
+@app.post("/api/ui-editor/upload-logo")
+async def upload_logo(request: LogoAnalysisRequest):
+    """Upload and analyze a logo for a session."""
+    try:
+        logger.info(f"[Logo API] Logo upload request for session: {request.session_id}")
+        
+        from utils.logo_manager import LogoManager
+        logo_manager = LogoManager()
+        
+        result = logo_manager.store_logo(
+            session_id=request.session_id,
+            logo_data=request.logo_image,
+            logo_filename=request.logo_filename
+        )
+        
+        if result['success']:
+            return {
+                "success": True,
+                "message": "Logo uploaded and analyzed successfully",
+                "analysis": result['analysis']
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get('error', 'Logo upload failed'))
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading logo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/ui-editor/generate-custom-report")
 async def generate_custom_report(request: GenerateReportRequest):
     """Generate a custom PDF report based on UI and project data."""
     try:
-        # Lazy import to avoid circulars
-        from agents.report_generation_agent import ReportGenerationAgent
+        # Report generation is now handled by the dedicated ReportGenerator tool
 
         logger.info(f"[Report API] Generate report request for session: {request.session_id}")
 

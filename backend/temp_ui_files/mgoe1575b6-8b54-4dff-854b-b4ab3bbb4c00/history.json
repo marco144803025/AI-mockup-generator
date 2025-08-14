@@ -1,0 +1,20 @@
+{
+  "modifications": [    
+    {
+    "timestamp": "2025-08-03T06:20:30.292511",
+    "modification": "session created"
+  },
+  {
+    "timestamp": "2025-08-03T06:32:05.355122",
+	"user_request": "Change the name Charles Deo to Marco Cheng",
+    "modification": "Changed all instances of 'Charles Deo' to 'Marco Cheng'"
+  },
+      {
+    "timestamp": "2025-08-03T06:32:05.355122",
+	"user_request": "Replace the Logo with what I uploaded",
+    "modification": "Added logo.png to left sidebar"
+  }
+  ],
+  "total_modifications": 2,
+  "last_modification": "2025-08-03T06:32:05.355122"
+}

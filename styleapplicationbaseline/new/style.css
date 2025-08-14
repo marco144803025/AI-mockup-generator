@@ -1,0 +1,46 @@
+/* Add this at the top of the existing style.css */
+:root {
+  --primary-purple: #7D3C98;
+  --primary-red: #E74C3C;
+  --accent-orange: #F39C12;
+}
+
+/* Replace existing color references with the new variables */
+.profile-page-visitor .BG {
+  background-color: var(--primary-purple);
+}
+
+.profile-page-visitor .profile .text-wrapper-2 {
+  color: var(--accent-orange);
+}
+
+.profile-page-visitor .profile .rectangle {
+  background: linear-gradient(
+    90deg,
+    var(--accent-orange) 54%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.profile-page-visitor .follow-button {
+  background-color: var(--primary-purple);
+}
+
+.profile-page-visitor .schedule-button {
+  border-color: var(--primary-purple);
+}
+
+.profile-page-visitor .schedule-button .text-wrapper-11 {
+  color: var(--primary-purple);
+}
+
+.profile-page-visitor .sub-heading .text-wrapper-16,
+.profile-page-visitor .name .text-wrapper-9,
+.profile-page-visitor .title .text-wrapper-8 {
+  color: var(--primary-purple);
+}
+
+.profile-page-visitor .followers-following,
+.profile-page-visitor .followers-following .text-wrapper-37 {
+  color: var(--primary-purple);
+}
