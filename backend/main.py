@@ -23,8 +23,8 @@ from services.screenshot_service import get_screenshot_service
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-# Import the lean flow orchestrator with focused agents
-from agents.lean_flow_orchestrator import LeanFlowOrchestrator
+# Import the flow orchestrator with focused agents
+from agents.flow_orchestrator import FlowOrchestrator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -189,7 +189,7 @@ async def chat(request: ChatMessage):
         session_id = request.session_id or "demo_session"
         
         # Create orchestrator with session ID
-        orchestrator = LeanFlowOrchestrator(session_id=session_id)
+        orchestrator = FlowOrchestrator(session_id=session_id)
         
         # Process the message through the orchestrator
         result = await orchestrator.process_user_message(
@@ -510,9 +510,9 @@ async def get_session_ui_codes(session_id: str):
         logger.warning(f"[{time.strftime('%H:%M:%S')}] No session file found for session_id: {session_id}")
         
         # Check if this might be a phase transition scenario
-        from agents.lean_flow_orchestrator import LeanFlowOrchestrator
+        from agents.flow_orchestrator import FlowOrchestrator
         try:
-            orchestrator = LeanFlowOrchestrator(session_id=session_id)
+            orchestrator = FlowOrchestrator(session_id=session_id)
             session_state = orchestrator.session_state
             current_phase = session_state.get('current_phase', 'unknown')
             logger.info(f"[{time.strftime('%H:%M:%S')}] Session state phase: {current_phase}")
@@ -533,7 +533,7 @@ async def get_session_ui_codes(session_id: str):
                             html_content = session_data["current_codes"]["html_export"]
                             css_content = session_data["current_codes"]["globals_css"] + "\n" + session_data["current_codes"]["style_css"]
                             result = await screenshot_service.generate_screenshot(html_content, css_content, session_id)
-                            screenshot_base64 = result["base_image"] if result["success"] else ""
+                            screenshot_base64 = result["base64_image"] if result["success"] else ""
                             logger.info(f"Screenshot generated for delayed session {session_id}")
                         except Exception as e:
                             logger.error(f"Error generating screenshot for delayed session {session_id}: {e}")
@@ -583,7 +583,7 @@ async def reset_session(session_id: str = None):
     """Reset session state and conversation history"""
     try:
         # Create orchestrator to handle session reset
-        orchestrator = LeanFlowOrchestrator(session_id=session_id)
+        orchestrator = FlowOrchestrator(session_id=session_id)
         result = orchestrator.reset_session()
         
         return {
@@ -682,11 +682,11 @@ async def ui_editor_chat(request: UIEditorChatRequest):
     try:
         logger.info(f"UI Editor chat request for session: {request.session_id}")
         
-        # Pass the request to the agent system (LeanFlowOrchestrator)
+        # Pass the request to the agent system (FlowOrchestrator)
         session_id = request.session_id or "default"
         
         # Create orchestrator with session ID for UI editing context
-        orchestrator = LeanFlowOrchestrator(session_id=session_id)
+        orchestrator = FlowOrchestrator(session_id=session_id)
         
         # Process the UI modification request through the agent system
         result = await orchestrator.process_ui_edit_request(
@@ -714,10 +714,10 @@ async def analyze_logo(request: LogoAnalysisRequest):
         logger.info(f"Logo analysis request for session: {request.session_id}")
         
         # Import the orchestrator to handle logo analysis
-        from agents.lean_flow_orchestrator import LeanFlowOrchestrator
+        from agents.flow_orchestrator import FlowOrchestrator
         
         # Create orchestrator instance with session ID
-        orchestrator = LeanFlowOrchestrator(session_id=request.session_id)
+        orchestrator = FlowOrchestrator(session_id=request.session_id)
         
         # Prepare context for logo analysis
         context = {

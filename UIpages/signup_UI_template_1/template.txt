@@ -1,0 +1,17 @@
+    {
+        "name": "signupp UI Template 1",
+        "html_export": html_export,
+        "globals_css": globals_css,
+        "style_css": style_css,
+        "thumbnail_url": None,  # Add if available
+        "metadata": {"category": "signup",
+        "figma_url":"https://www.figma.com/design/CVaXoeEVGlUjdQqldSoJRv/Desktop-sign-up-and-login-pages-by-EditorM--Community-?node-id=0-1&p=f&t=gkOydMmUZP3flaWl-0",
+        "description": "A clean and modern sign-up page featuring a user registration form, social login options, and a prominent background image for aesthetic appeal.",
+        },
+        "tags": ["sign-up", "registration", "account creation", "form", "modern", "clean", "minimalist", "image-heavy", "natural", "organic", "green tones", "light theme", "user authentication", "social login", "onboarding", "user-friendly"],
+        "created_at": datetime.now(),
+        "updated_at": datetime.now(),
+    },
+
+
+    

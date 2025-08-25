@@ -1,0 +1,18 @@
+{
+  "session_id": "test_session",
+  "created_at": "2025-08-25T23:59:57.460521",
+  "last_updated": "2025-08-25T23:59:57.460521",
+  "template_selection": {
+    "recommendations": [],
+    "final_selection": null,
+    "selection_reasoning": ""
+  },
+  "ui_editing": {
+    "planning_rationale": [],
+    "execution_summary": []
+  },
+  "overall_workflow": {
+    "phase_decisions": [],
+    "agent_coordination": []
+  }
+}

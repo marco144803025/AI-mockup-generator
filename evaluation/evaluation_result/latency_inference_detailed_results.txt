@@ -1,0 +1,196 @@
+============================================================
+LATENCY/INFERENCE TIME TESTING - DETAILED RESULTS
+============================================================
+
+Test Completed: 2025-08-17T01:47:41.793727
+
+PHASE 1: TEMPLATE RECOMMENDATION LATENCY
+==================================================
+
+Intent: requirements_analysis
+------------------------------
+  Trials: 2/2
+  Average: 3.059s
+  Median: 3.059s
+  P95: 3.242s
+  Range: 2.875s - 3.242s
+
+    Trial 1:
+      Prompt: I want to discuss the requirements for my website first
+      Response Time: 3.242s
+      Success: True
+      Status Code: 200
+
+    Trial 2:
+      Prompt: Let me analyze what I need for my project
+      Response Time: 2.875s
+      Success: True
+      Status Code: 200
+
+
+--------------------------------------------------
+
+Intent: template_recommendation
+------------------------------
+  Trials: 2/2
+  Average: 2.125s
+  Median: 2.125s
+  P95: 2.355s
+  Range: 1.896s - 2.355s
+
+    Trial 1:
+      Prompt: Can you recommend templates for my website?
+      Response Time: 1.896s
+      Success: True
+      Status Code: 200
+
+    Trial 2:
+      Prompt: Show me some template options
+      Response Time: 2.355s
+      Success: True
+      Status Code: 200
+
+
+--------------------------------------------------
+
+Intent: template_selection
+------------------------------
+  Trials: 2/2
+  Average: 1.872s
+  Median: 1.872s
+  P95: 2.294s
+  Range: 1.450s - 2.294s
+
+    Trial 1:
+      Prompt: I want to select from existing templates
+      Response Time: 1.450s
+      Success: True
+      Status Code: 200
+
+    Trial 2:
+      Prompt: Show me templates I can choose from
+      Response Time: 2.294s
+      Success: True
+      Status Code: 200
+
+
+--------------------------------------------------
+
+Intent: general
+------------------------------
+  Trials: 2/2
+  Average: 2.434s
+  Median: 2.434s
+  P95: 2.672s
+  Range: 2.196s - 2.672s
+
+    Trial 1:
+      Prompt: Hello, how are you?
+      Response Time: 2.672s
+      Success: True
+      Status Code: 200
+
+    Trial 2:
+      Prompt: What can you help me with?
+      Response Time: 2.196s
+      Success: True
+      Status Code: 200
+
+
+--------------------------------------------------
+
+Intent: create_ui_mockup
+------------------------------
+  Trials: 2/2
+  Average: 29.747s
+  Median: 29.747s
+  P95: 33.918s
+  Range: 25.576s - 33.918s
+
+    Trial 1:
+      Prompt: I want to build a login page mockup
+      Response Time: 33.918s
+      Success: True
+      Status Code: 200
+
+    Trial 2:
+      Prompt: Create a landing page for me
+      Response Time: 25.576s
+      Success: True
+      Status Code: 200
+
+
+--------------------------------------------------
+
+PHASE 2: UI EDITING LATENCY
+==================================================
+
+Scenario: Single Request
+------------------------------
+  Trials: 2/2
+  Average: 21.667s
+  Median: 21.667s
+  P95: 24.125s
+  Range: 19.208s - 24.125s
+
+    Trial 1:
+      Prompt: Change button color to blue
+      Response Time: 19.208s
+      Success: True
+      Status Code: 200
+
+    Trial 2:
+      Prompt: Make the text larger
+      Response Time: 24.125s
+      Success: True
+      Status Code: 200
+
+
+--------------------------------------------------
+
+Scenario: Multi Request
+------------------------------
+  Trials: 2/2
+  Average: 56.327s
+  Median: 56.327s
+  P95: 59.400s
+  Range: 53.254s - 59.400s
+
+    Trial 1:
+      Prompt: Change button color to blue and make it larger
+      Response Time: 59.400s
+      Success: True
+      Status Code: 200
+
+    Trial 2:
+      Prompt: Add more padding and change the font
+      Response Time: 53.254s
+      Success: True
+      Status Code: 200
+
+
+--------------------------------------------------
+
+Scenario: Report Generation
+------------------------------
+  Trials: 2/2
+  Average: 12.143s
+  Median: 12.143s
+  P95: 15.589s
+  Range: 8.696s - 15.589s
+
+    Trial 1:
+      Prompt: Generate a PDF report of my design
+      Response Time: 15.589s
+      Success: True
+      Status Code: 200
+
+    Trial 2:
+      Prompt: Create a report with screenshots
+      Response Time: 8.696s
+      Success: True
+      Status Code: 200
+
+
+--------------------------------------------------
+

@@ -17,6 +17,37 @@ class BaseAgent:
         self.claude_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.db = get_db()
     
+    def _extract_response_text(self, response) -> str:
+        """Extract text from Claude response, handling different content types"""
+        if not response.content:
+            return ""
+        
+        # Look for text content in any of the content blocks
+        for content in response.content:
+            # Handle text content
+            if hasattr(content, 'text') and content.text:
+                return content.text
+        
+        # If no text found, handle tool use blocks
+        content = response.content[0]
+        
+        # Handle tool use blocks
+        if hasattr(content, 'type') and content.type == 'tool_use':
+            # Extract text from tool use block if available
+            if hasattr(content, 'input') and content.input:
+                return str(content.input)
+            elif hasattr(content, 'name'):
+                return f"Tool used: {content.name}"
+            else:
+                return "Tool used"
+        
+        # Handle other content types
+        if hasattr(content, 'type'):
+            return f"Content type: {content.type}"
+        
+        # Fallback
+        return str(content)
+    
     def call_claude_with_cot(self, prompt: str, image: Optional[str] = None, system_prompt: Optional[str] = None, enable_cot: bool = True, extract_json: bool = False) -> str:
         """Call Claude API with chain-of-thought reasoning"""
         try:
@@ -64,7 +95,7 @@ class BaseAgent:
             
             # Debug: Log LLM response for all agents inheriting from BaseAgent
             agent_name = self.__class__.__name__
-            response_text = response.content[0].text
+            response_text = self._extract_response_text(response)
             print(f"DEBUG: {agent_name} LLM Response Length: {len(response_text)} chars")
             print(f"DEBUG: {agent_name} LLM Response Preview: {response_text[:200]}...")
             

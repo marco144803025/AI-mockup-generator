@@ -4,7 +4,7 @@ import json
 import re
 import logging
 from tools.tool_utility import ToolUtility
-from config.keyword_config import KeywordManager
+from config.keyword_manager import KeywordManager
 
 class RequirementsAnalysisAgent(BaseAgent):
     """Focused agent with single responsibility: Analyze user requirements"""
@@ -221,6 +221,37 @@ PROVIDE ANALYSIS IN THIS JSON FORMAT:
 IMPORTANT: Respond with ONLY the JSON object above. NO explanatory text.
 """
     
+    def _extract_response_text(self, response) -> str:
+        """Extract text from Claude response, handling different content types"""
+        if not response.content:
+            return ""
+        
+        # Look for text content in any of the content blocks
+        for content in response.content:
+            # Handle text content
+            if hasattr(content, 'text') and content.text:
+                return content.text
+        
+        # If no text found, handle tool use blocks
+        content = response.content[0]
+        
+        # Handle tool use blocks
+        if hasattr(content, 'type') and content.type == 'tool_use':
+            # Extract text from tool use block if available
+            if hasattr(content, 'input') and content.input:
+                return str(content.input)
+            elif hasattr(content, 'name'):
+                return f"Tool used: {content.name}"
+            else:
+                return "Tool used"
+        
+        # Handle other content types
+        if hasattr(content, 'type'):
+            return f"Content type: {content.type}"
+        
+        # Fallback
+        return str(content)
+    
     def _call_claude_with_tools(self, prompt: str, logo_image: Optional[str] = None) -> str:
         """Call Claude with tool calling capabilities"""
         try:
@@ -249,8 +280,8 @@ IMPORTANT: Respond with ONLY the JSON object above. NO explanatory text.
                 tool_choice={"type": "auto"} if tools else None
             )
 
-                                # Debug: Log LLM response
-            response_text = response.content[0].text
+            # Debug: Log LLM response
+            response_text = self._extract_response_text(response)
             print(f"DEBUG: Requirements Analysis Agent LLM Response Length: {len(response_text)} chars")
             print(f"DEBUG: Requirements Analysis Agent LLM Response Preview: {response_text[:200]}...")
                     
@@ -261,26 +292,24 @@ IMPORTANT: Respond with ONLY the JSON object above. NO explanatory text.
                 print(f"DEBUG: Requirements Analysis Agent Response truncated for logging (too long)")
 
             # Handle tool calls if any
-            if response.content and hasattr(response.content[0], 'tool_calls') and response.content[0].tool_calls:
+            if response.content and hasattr(response.content[0], 'tool_use') and response.content[0].tool_use:
                 tool_results = []
-                for tool_call in response.content[0].tool_calls:
-                    tool_name = tool_call.name
+                for tool_use in response.content[0].tool_use:
+                    tool_name = tool_use.name
 
-                    # Handle different tool call formats
-                    if hasattr(tool_call, 'input'):
-                        # Custom tool format
-                        tool_args = json.loads(tool_call.input)
-                    elif hasattr(tool_call, 'arguments'):
-                        # Function call format
-                        tool_args = json.loads(tool_call.arguments)
+                    # Handle tool use format
+                    if hasattr(tool_use, 'input') and tool_use.input:
+                        try:
+                            tool_args = json.loads(tool_use.input)
+                        except json.JSONDecodeError:
+                            tool_args = {"input": str(tool_use.input)}
                     else:
-                        # Fallback
                         tool_args = {}
 
                     # Call the tool
                     tool_result = self.tool_utility.call_function(tool_name, tool_args)
                     tool_results.append({
-                        "tool_call_id": getattr(tool_call, 'id', 'unknown'),
+                        "tool_use_id": getattr(tool_use, 'id', 'unknown'),
                         "name": tool_name,
                         "result": tool_result
                     })
@@ -339,13 +368,14 @@ IMPORTANT: Respond with ONLY the JSON object above. NO explanatory text.
                     )
 
                     # Debug: Log final LLM response after tool calls
-                    print(f"DEBUG: Requirements Analysis Agent Final Response: {final_response.content[0].text[:500]}...")
-                    if len(final_response.content[0].text) > 500:
-                        print(f"DEBUG: Full Requirements Analysis Final Response: {final_response.content[0].text}")
+                    final_response_text = self._extract_response_text(final_response)
+                    print(f"DEBUG: Requirements Analysis Agent Final Response: {final_response_text[:500]}...")
+                    if len(final_response_text) > 500:
+                        print(f"DEBUG: Full Requirements Analysis Final Response: {final_response_text}")
 
-                    return final_response.content[0].text
+                    return final_response_text
 
-            return response.content[0].text
+            return response_text
 
         except Exception as e:
             print(f"ERROR: Error calling Claude with tools: {e}")

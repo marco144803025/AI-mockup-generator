@@ -1,0 +1,621 @@
+================================================================================
+API RELIABILITY TESTING - DETAILED RESULTS
+================================================================================
+
+Test Summary:
+Total Trials: 30
+Successful Calls: 30
+Failed Calls: 0
+Success Rate: 100.00%
+Failure Rate: 0.00%
+
+Response Time Statistics:
+Average: 19.127s
+Median: 29.026s
+Minimum: 0.958s
+Maximum: 36.515s
+
+================================================================================
+INDIVIDUAL TRIAL RESULTS
+================================================================================
+
+Trial 1:
+  Prompt: I want to create a modern e-commerce landing page
+  Timestamp: 2025-08-17T00:42:33.329384
+  Success: True
+  Response Time: 34.430s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 1 templates that match your requirements. To help you choose, let me ask a few questions:\n\n1. If this template were a person representing your brand, how would you describe their personality and style?\n2. What specific action do you want visitors to take when they first land on this page?\n3. Who are the primary people you're trying to communicate with through this template?\n\nPlease answer any of these questions to help me narrow down the best template for you.",
+  "session_id": "a03306f0-b115-4431-bd2f-80f41b1c8d2a",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 2:
+  Prompt: Can you recommend templates for a portfolio website?
+  Timestamp: 2025-08-17T00:43:08.267945
+  Success: True
+  Response Time: 0.958s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "be1cb394-164d-4afd-a19c-9f19dbc1df5d",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 3:
+  Prompt: I need a login page design
+  Timestamp: 2025-08-17T00:43:09.729917
+  Success: True
+  Response Time: 32.987s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 1 templates that match your requirements. To help you choose, let me ask a few questions:\n\n1. If this landing page could communicate one core message about your business, what would it be?\n2. Who are the primary people you want to attract with this page?\n3. What visual feeling or emotion do you want visitors to experience when they first see this page?\n\nPlease answer any of these questions to help me narrow down the best template for you.",
+  "session_id": "57723abf-77ce-4562-bcac-3020c5bc1a1a",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 4:
+  Prompt: Show me dashboard templates
+  Timestamp: 2025-08-17T00:43:43.228815
+  Success: True
+  Response Time: 2.133s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "84b53aa1-8f1b-4a3b-8372-282959b0c44b",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 5:
+  Prompt: Create a blog layout for me
+  Timestamp: 2025-08-17T00:43:45.861768
+  Success: True
+  Response Time: 25.874s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 1 templates that match your requirements. To help you choose, let me ask a few questions:\n\n1. If your website could make one key impression on visitors, what would it be?\n2. Who are the primary people you want to attract with this landing page?\n3. What visual elements or design styles make you feel most confident about your brand?\n\nPlease answer any of these questions to help me narrow down the best template for you.",
+  "session_id": "b9f47d12-9af0-4f1d-bb8f-e9afcabb79d5",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 6:
+  Prompt: I want a signup page design
+  Timestamp: 2025-08-17T00:44:12.242068
+  Success: True
+  Response Time: 34.094s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 2 templates that match your requirements. To help you choose, let me ask a few questions:\n\n1. If your brand were a person walking into a room, how would you want people to perceive it?\n2. When users first interact with your signup process, what emotional experience do you want them to have?\n3. What visual elements would make your target users feel most comfortable and confident during signup?\n\nPlease answer any of these questions to help me narrow down the best template for you.",
+  "session_id": "55c51408-4c15-4027-b008-3ee876124d38",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 7:
+  Prompt: Recommend templates for a restaurant website
+  Timestamp: 2025-08-17T00:44:46.836266
+  Success: True
+  Response Time: 4.785s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "87be8bea-ee28-475f-8f2e-e7bdfa341604",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 8:
+  Prompt: Show me templates for a tech startup
+  Timestamp: 2025-08-17T00:44:52.126674
+  Success: True
+  Response Time: 2.742s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "a2b4acf3-3ed2-4611-8f37-d8dbe993d2df",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 9:
+  Prompt: I need a contact page design
+  Timestamp: 2025-08-17T00:44:55.371659
+  Success: True
+  Response Time: 33.075s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 4 great templates for you! Here are the top recommendations:\n\n1. Landing 1 - A clean and modern landing page or homepage hero section, designed to introduce a product or service with a bold headline, brief description, and a clear call-to-action button, accompanied by a relevant supporting image. (Match: 80.0%)\n2. Sign-up 1 - A clean and modern sign-up page featuring a user registration form, social login options, and a prominent background image for aesthetic appeal. Same design as signup_UI_template_1 (Match: 60.0%)\n3. Sign-up 2 - A sleek, dark-themed user registration page, offering detailed signup fields and social authentication options, designed to complement a modern web application's aesthetic. Same design with sign_UI_template_2 (Match: 60.0%)\n\nTo proceed, please choose a template by saying its name or number, or ask for more details about any template.",
+  "session_id": "e17ffc10-5864-4737-871a-0f4ad3af7a25",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 10:
+  Prompt: Create a pricing page layout
+  Timestamp: 2025-08-17T00:45:28.962022
+  Success: True
+  Response Time: 35.092s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 4 templates that match your requirements. To help you choose, let me ask a few questions:\n\n1. If your website could tell a story about your brand, what would that story look and feel like?\n2. Who are the primary people you want to connect with through this website?\n3. What's the primary action you want visitors to take when they land on your site?\n\nPlease answer any of these questions to help me narrow down the best template for you.",
+  "session_id": "32d00320-fa22-4080-869b-925f5f45d7ae",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 11:
+  Prompt: Recommend templates for an educational website
+  Timestamp: 2025-08-17T00:46:04.569345
+  Success: True
+  Response Time: 1.927s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "7ca81a4f-ac44-4a0e-92af-31c9c33b4fd2",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 12:
+  Prompt: Show me templates for a fitness app
+  Timestamp: 2025-08-17T00:46:07.000299
+  Success: True
+  Response Time: 2.059s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "f66850e0-5f3c-47ab-8e03-a43e1f55de46",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 13:
+  Prompt: I want a gallery page design
+  Timestamp: 2025-08-17T00:46:09.560250
+  Success: True
+  Response Time: 35.869s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 4 great templates that match your requirements!\n\n1. Landing 1 - A clean and modern landing page or homepage hero section, designed to introduce a product or service with a bold headline, brief description, and a clear call-to-action button, accompanied by a relevant supporting image. (Match: 80.0%)\n2. Sign-up 1 - A clean and modern sign-up page featuring a user registration form, social login options, and a prominent background image for aesthetic appeal. Same design as signup_UI_template_1 (Match: 60.0%)\n3. Sign-up 2 - A sleek, dark-themed user registration page, offering detailed signup fields and social authentication options, designed to complement a modern web application's aesthetic. Same design with sign_UI_template_2 (Match: 60.0%)\n\nTo proceed, please choose a template by saying its name or number, or ask for more details about any template.",
+  "session_id": "75ab2c03-0592-4081-9fb9-d6d7af7f374a",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 14:
+  Prompt: Create a services page layout
+  Timestamp: 2025-08-17T00:46:45.932495
+  Success: True
+  Response Time: 35.588s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 4 great templates for you! Here are the top recommendations:\n\n1. Landing 1 - A clean and modern landing page or homepage hero section, designed to introduce a product or service with a bold headline, brief description, and a clear call-to-action button, accompanied by a relevant supporting image. (Match: 80.0%)\n2. Sign-up 1 - A clean and modern sign-up page featuring a user registration form, social login options, and a prominent background image for aesthetic appeal. Same design as signup_UI_template_1 (Match: 60.0%)\n3. Sign-up 2 - A sleek, dark-themed user registration page, offering detailed signup fields and social authentication options, designed to complement a modern web application's aesthetic. Same design with sign_UI_template_2 (Match: 60.0%)\n\nTo proceed, please choose a template by saying its name or number, or ask for more details about any template.",
+  "session_id": "856cb3de-4908-47e1-ab44-38f2eb5ff86d",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 15:
+  Prompt: Recommend templates for a travel website
+  Timestamp: 2025-08-17T00:47:22.024737
+  Success: True
+  Response Time: 2.624s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "1c3e0048-80ce-40e0-bbe2-83232cbca041",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 16:
+  Prompt: Show me templates for a healthcare site
+  Timestamp: 2025-08-17T00:47:25.154931
+  Success: True
+  Response Time: 2.734s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "2775c06f-b11f-4f2f-9816-9dfde470b2d9",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 17:
+  Prompt: I need an about page design
+  Timestamp: 2025-08-17T00:47:28.394867
+  Success: True
+  Response Time: 34.982s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 1 templates that match your requirements. To help you choose, let me ask a few questions:\n\n1. When visitors first land on your website, what's the single most important action you want them to take?\n2. How would you describe the personality or tone you want your brand to communicate?\n3. Who are the primary people you're trying to reach or impress with this website?\n\nPlease answer any of these questions to help me narrow down the best template for you.",
+  "session_id": "1c466141-5f84-4a29-8c53-b40d4fab9f7d",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 18:
+  Prompt: Create a team page layout
+  Timestamp: 2025-08-17T00:48:03.878170
+  Success: True
+  Response Time: 33.647s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 4 great templates for you! Here are the top recommendations:\n\n1. Landing 1 - A clean and modern landing page or homepage hero section, designed to introduce a product or service with a bold headline, brief description, and a clear call-to-action button, accompanied by a relevant supporting image. (Match: 80.0%)\n2. Sign-up 1 - A clean and modern sign-up page featuring a user registration form, social login options, and a prominent background image for aesthetic appeal. Same design as signup_UI_template_1 (Match: 60.0%)\n3. Sign-up 2 - A sleek, dark-themed user registration page, offering detailed signup fields and social authentication options, designed to complement a modern web application's aesthetic. Same design with sign_UI_template_2 (Match: 60.0%)\n\nTo proceed, please choose a template by saying its name or number, or ask for more details about any template.",
+  "session_id": "e66e684f-4e9e-4ab0-94fc-1b4b54b03a0d",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 19:
+  Prompt: Recommend templates for a real estate site
+  Timestamp: 2025-08-17T00:48:38.040841
+  Success: True
+  Response Time: 2.220s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "a547064c-5ead-4cd4-83ba-621726c77fad",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 20:
+  Prompt: Show me templates for a food delivery app
+  Timestamp: 2025-08-17T00:48:40.765579
+  Success: True
+  Response Time: 2.444s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "85911204-a556-4976-87b2-5647317919c2",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 21:
+  Prompt: I want a product page design
+  Timestamp: 2025-08-17T00:48:43.712151
+  Success: True
+  Response Time: 36.515s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 1 great templates that match your requirements!\n\n1. Landing 1 - A clean and modern landing page or homepage hero section, designed to introduce a product or service with a bold headline, brief description, and a clear call-to-action button, accompanied by a relevant supporting image. (Match: 80.0%)\n\nTo proceed, please choose a template by saying its name or number, or ask for more details about any template.",
+  "session_id": "f555a21e-2a0d-4908-8732-91819edf44c1",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 22:
+  Prompt: Create a checkout page layout
+  Timestamp: 2025-08-17T00:49:20.739002
+  Success: True
+  Response Time: 35.538s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 4 great templates for you! Here are the top recommendations:\n\n1. Landing 1 - A clean and modern landing page or homepage hero section, designed to introduce a product or service with a bold headline, brief description, and a clear call-to-action button, accompanied by a relevant supporting image. (Match: 80.0%)\n2. Sign-up 1 - A clean and modern sign-up page featuring a user registration form, social login options, and a prominent background image for aesthetic appeal. Same design as signup_UI_template_1 (Match: 60.0%)\n3. Sign-up 2 - A sleek, dark-themed user registration page, offering detailed signup fields and social authentication options, designed to complement a modern web application's aesthetic. Same design with sign_UI_template_2 (Match: 60.0%)\n\nTo proceed, please choose a template by saying its name or number, or ask for more details about any template.",
+  "session_id": "70983bf4-3e14-4b34-ae35-1c49cc5b458b",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 23:
+  Prompt: Recommend templates for a gaming website
+  Timestamp: 2025-08-17T00:49:56.784298
+  Success: True
+  Response Time: 2.487s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "bb55fd4f-5b71-4655-9770-82416178b9f1",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 24:
+  Prompt: Show me templates for a fashion site
+  Timestamp: 2025-08-17T00:49:59.775239
+  Success: True
+  Response Time: 2.126s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "b8ba6e97-fc9e-4db2-a2cd-c0783cc379d7",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 25:
+  Prompt: I need a FAQ page design
+  Timestamp: 2025-08-17T00:50:02.404193
+  Success: True
+  Response Time: 33.858s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 4 great templates that match your requirements!\n\n1. Landing 1 - A clean and modern landing page or homepage hero section, designed to introduce a product or service with a bold headline, brief description, and a clear call-to-action button, accompanied by a relevant supporting image. (Match: 80.0%)\n2. Sign-up 1 - A clean and modern sign-up page featuring a user registration form, social login options, and a prominent background image for aesthetic appeal. Same design as signup_UI_template_1 (Match: 60.0%)\n3. Sign-up 2 - A sleek, dark-themed user registration page, offering detailed signup fields and social authentication options, designed to complement a modern web application's aesthetic. Same design with sign_UI_template_2 (Match: 60.0%)\n\nTo proceed, please choose a template by saying its name or number, or ask for more details about any template.",
+  "session_id": "b263944d-d87e-4dd4-8165-ab37e71e2406",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 26:
+  Prompt: Create a testimonials page layout
+  Timestamp: 2025-08-17T00:50:36.766834
+  Success: True
+  Response Time: 32.199s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 1 templates that match your requirements. To help you choose, let me ask a few questions:\n\n1. If this landing page could communicate one core message about your business, what would it be?\n2. Who are the primary people you want to attract with this page?\n3. What specific action do you want visitors to take after viewing this page?\n\nPlease answer any of these questions to help me narrow down the best template for you.",
+  "session_id": "21b423c8-fdef-4bed-9bb2-a5bcab08c34f",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 27:
+  Prompt: Recommend templates for a nonprofit website
+  Timestamp: 2025-08-17T00:51:09.470783
+  Success: True
+  Response Time: 2.132s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "da9b8dc8-0f39-473d-8d86-2db75f0498b0",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 28:
+  Prompt: Show me templates for a podcast site
+  Timestamp: 2025-08-17T00:51:12.116733
+  Success: True
+  Response Time: 2.326s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates.",
+  "session_id": "1f9eaf28-8c22-4f4b-9b6b-ef921f8a02a3",
+  "phase": "template_recommendation",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 29:
+  Prompt: I want a newsletter signup design
+  Timestamp: 2025-08-17T00:51:14.956348
+  Success: True
+  Response Time: 32.177s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 1 templates that match your requirements. To help you choose, let me ask a few questions:\n\n1. If your ideal website could tell a story about your brand in just 10 seconds, what would that story be?\n2. When visitors land on your page, what's the one action you most want them to take?\n3. If you could describe your target audience in three words, what would they be?\n\nPlease answer any of these questions to help me narrow down the best template for you.",
+  "session_id": "89569874-e780-4d16-8d7c-200c2a188dba",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+
+Trial 30:
+  Prompt: Create a footer layout
+  Timestamp: 2025-08-17T00:51:47.643261
+  Success: True
+  Response Time: 34.193s
+  Status Code: 200
+  Response Data: {
+  "success": true,
+  "response": "I found 1 great templates that match your requirements!\n\n1. Landing 1 - A clean and modern landing page or homepage hero section, designed to introduce a product or service with a bold headline, brief description, and a clear call-to-action button, accompanied by a relevant supporting image. (Match: 80.0%)\n\nTo proceed, please choose a template by saying its name or number, or ask for more details about any template.",
+  "session_id": "645ea287-4375-45f9-81fb-a5f180f8999e",
+  "phase": "requirements",
+  "intent": "unknown",
+  "selected_template": null,
+  "session_state": null,
+  "transition_ready": false,
+  "transition_data": null
+}
+
+------------------------------------------------------------
+

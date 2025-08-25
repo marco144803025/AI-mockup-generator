@@ -1,0 +1,45 @@
+============================================================
+API SCHEMA COMPLIANCE TESTING - SUMMARY
+============================================================
+
+Test Completed: 2025-08-17T01:16:07.693079
+
+OVERALL RESULTS
+------------------------------
+Total Trials: 10
+Valid API Responses: 10
+Overall Compliance Rate: 100.0%
+Average Compliance Score: 100.0%
+
+API ENDPOINT-SPECIFIC RESULTS
+------------------------------
+Requirements Analysis:
+  Trials: 2
+  Valid Responses: 2
+  Compliance Rate: 100.0%
+  Average Compliance Score: 100.0%
+
+Template Recommendation:
+  Trials: 2
+  Valid Responses: 2
+  Compliance Rate: 100.0%
+  Average Compliance Score: 100.0%
+
+Ui Editing:
+  Trials: 2
+  Valid Responses: 2
+  Compliance Rate: 100.0%
+  Average Compliance Score: 100.0%
+
+User Proxy:
+  Trials: 2
+  Valid Responses: 2
+  Compliance Rate: 100.0%
+  Average Compliance Score: 100.0%
+
+Question Generation:
+  Trials: 2
+  Valid Responses: 2
+  Compliance Rate: 100.0%
+  Average Compliance Score: 100.0%
+

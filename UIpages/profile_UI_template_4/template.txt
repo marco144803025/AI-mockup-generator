@@ -1,0 +1,17 @@
+    {
+        "name": "Profile UI Template 4",
+        "html_export": html_export,
+        "globals_css": globals_css,
+        "style_css": style_css,
+        "thumbnail_url": None,  # Add if available
+        "metadata": {"category": "profile",
+        "figma_url":"https://www.figma.com/design/f25lfmvpVZdwp7ttnVReec/Profile-page--Community-?node-id=0-1&p=f&t=MElwVQOXP21rKfX7-0",
+        "description": "A social media-style profile page viewed by a visitor, showcasing user information, activity feed, and connections, with a clear sidebar navigation and calls to action.",
+    },
+        "tags": ["profile", "social media", "visitor view", "user profile", "modern", "clean", "interactive", "sidebar navigation", "feed", "posts", "connections", "about section", "call-to-action", "image-heavy", "light theme", "purple accent", "networking", "community", "account management", "user-generated content"],
+        "created_at": datetime.now(),
+        "updated_at": datetime.now(),
+    },
+
+
+    

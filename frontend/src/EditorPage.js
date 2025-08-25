@@ -98,6 +98,9 @@ function EditorPage() {
       setSelectedTemplate(location.state.selectedTemplate);
       setCategory(location.state.category);
       
+      // Reset fetch state to force new fetch for new session
+      setUiCodes(null);
+      
       // Load Phase 1 conversation history
       const phase1History = localStorage.getItem('phase1ChatHistory');
       if (phase1History) {
@@ -217,7 +220,6 @@ function EditorPage() {
       
       if (isFromPhase1 && sessionId) {
         // Load template from session (Phase 1 transition)
-        console.log('Loading template from Phase 1 session:', sessionId);
         response = await fetch(`http://localhost:8000/api/ui-codes/session/${sessionId}`, {
           headers: {
             'Cache-Control': 'no-cache',
@@ -225,19 +227,19 @@ function EditorPage() {
           }
         });
         
-        // If session endpoint fails, try to load the template directly
+        // Only fallback to template endpoint if session endpoint completely fails
         if (!response.ok) {
-          console.log('Session endpoint failed, trying to load template directly');
           const templateId = selectedTemplate?.template_id;
-          if (templateId) {
-            response = await fetch(`http://localhost:8000/api/ui-codes/${templateId}`, {
+                      if (templateId) {
+              response = await fetch(`http://localhost:8000/api/ui-codes/${templateId}`, {
               headers: {
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache'
               }
             });
-          } else {
-            response = await fetch('http://localhost:8000/api/ui-codes/default', {
+                      } else {
+              // Only fallback to default if we have no template ID
+              response = await fetch('http://localhost:8000/api/ui-codes/default', {
               headers: {
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache'
@@ -245,9 +247,16 @@ function EditorPage() {
             });
           }
         }
+      } else if (selectedTemplate?.template_id) {
+        // Load specific template if available
+        response = await fetch(`http://localhost:8000/api/ui-codes/${selectedTemplate.template_id}`, {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
       } else {
         // Load default template (direct access to editor)
-        console.log('Loading default template');
         response = await fetch('http://localhost:8000/api/ui-codes/default', {
           headers: {
             'Cache-Control': 'no-cache',
@@ -261,7 +270,6 @@ function EditorPage() {
       }
       
       const data = await response.json();
-      console.log('UI codes response:', data);
       
       if (data.success) {
         // Combine UI codes with screenshot preview
@@ -275,16 +283,6 @@ function EditorPage() {
         // Store original UI codes for reset functionality (only on first load or when not already stored)
         if (!originalUICodes || Object.keys(originalUICodes).length === 0) {
           setOriginalUICodes(combinedData);
-          console.log('Original UI codes stored for reset functionality');
-        }
-        
-        console.log('UI codes loaded successfully:', combinedData ? 'with data' : 'empty');
-        if (combinedData) {
-          console.log('UI codes structure:', Object.keys(combinedData));
-          console.log('Template name:', combinedData.template_info?.name || combinedData.current_codes?.template_info?.name);
-          console.log('HTML content length:', combinedData.current_codes?.html_export?.length || combinedData.html_export?.length || 0);
-          console.log('HTML export available:', !!combinedData.current_codes?.html_export || !!combinedData.html_export);
-          console.log('Screenshot preview available:', !!combinedData.screenshot_preview);
         }
       } else {
         throw new Error(data.error || 'Failed to fetch UI codes');
@@ -295,13 +293,14 @@ function EditorPage() {
     } finally {
       setLoading(false);
     }
-  }, [isFromPhase1, sessionId, selectedTemplate]);
+  }, [isFromPhase1, sessionId, selectedTemplate, originalUICodes]);
+
+  const refreshUICodes = useCallback(() => {
+    fetchUICodes();
+  }, [fetchUICodes]);
 
   // Fetch UI codes from backend on component mount
   useEffect(() => {
-    // Clear any cached data by forcing a fresh fetch
-    const timestamp = Date.now();
-    console.log('Forcing fresh UI codes fetch at:', timestamp);
     fetchUICodes();
   }, [fetchUICodes]);
 
@@ -425,7 +424,7 @@ function EditorPage() {
           // Refresh UI codes if modifications were made
           if (data.ui_modifications && data.metadata?.intent === "modification_request") {
             console.log('Modifications detected, refreshing UI codes from session...');
-            await fetchUICodes();
+            await refreshUICodes();
           }
         } else {
           throw new Error(data.response || 'Failed to get AI response');
@@ -449,7 +448,7 @@ function EditorPage() {
     try {
       // Prepare modification request
       const modificationData = {
-        template_id: selectedTemplate?.template_id || selectedTemplate?._id || "default",
+        template_id: selectedTemplate?.template_id || "default",
         modification_type: modifications.type || "css_change",
         changes: modifications.changes || {},
         session_id: sessionId // Use the session ID from transition state
@@ -510,7 +509,7 @@ function EditorPage() {
       
       if (data.success) {
         // Refresh UI codes from the reset session
-        await fetchUICodes();
+        await refreshUICodes();
         
         // Add success message to chat
         const successMessage = {
@@ -606,7 +605,7 @@ function EditorPage() {
           <div className="text-center">
             <p className="text-red-600 mb-4">Error loading preview: {error}</p>
             <button 
-              onClick={fetchUICodes}
+              onClick={refreshUICodes}
               className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
             >
               Retry
@@ -714,7 +713,7 @@ function EditorPage() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
             <p className="text-gray-600">Generating screenshot preview...</p>
             <button 
-              onClick={fetchUICodes}
+              onClick={refreshUICodes}
               className="mt-4 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
             >
               Refresh

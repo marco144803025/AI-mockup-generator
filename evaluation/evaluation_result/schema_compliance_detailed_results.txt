@@ -1,0 +1,116 @@
+============================================================
+API SCHEMA COMPLIANCE TESTING - DETAILED RESULTS
+============================================================
+
+Test Completed: 2025-08-17T01:16:07.684568
+
+API Endpoint: Requirements Analysis
+==================================================
+
+Trial 1:
+  Prompt: I want to create a modern landing page
+  Response Time: 69.894s
+  Status Code: 200
+  API Response Valid: True
+  Valid: True
+  Compliance Score: 100.0%
+
+Trial 2:
+  Prompt: I need a login page for my application
+  Response Time: 33.280s
+  Status Code: 200
+  API Response Valid: True
+  Valid: True
+  Compliance Score: 100.0%
+
+
+--------------------------------------------------
+
+API Endpoint: Template Recommendation
+==================================================
+
+Trial 1:
+  Prompt: Recommend templates for a landing page
+  Response Time: 2.111s
+  Status Code: 200
+  API Response Valid: True
+  Valid: True
+  Compliance Score: 100.0%
+
+Trial 2:
+  Prompt: Show me login page templates
+  Response Time: 2.065s
+  Status Code: 200
+  API Response Valid: True
+  Valid: True
+  Compliance Score: 100.0%
+
+
+--------------------------------------------------
+
+API Endpoint: Ui Editing
+==================================================
+
+Trial 1:
+  Prompt: Change the button color to blue
+  Response Time: 20.238s
+  Status Code: 200
+  API Response Valid: True
+  Valid: True
+  Compliance Score: 100.0%
+
+Trial 2:
+  Prompt: Make the text larger
+  Response Time: 29.389s
+  Status Code: 200
+  API Response Valid: True
+  Valid: True
+  Compliance Score: 100.0%
+
+
+--------------------------------------------------
+
+API Endpoint: User Proxy
+==================================================
+
+Trial 1:
+  Prompt: Hello, how can you help me?
+  Response Time: 7.699s
+  Status Code: 200
+  API Response Valid: True
+  Valid: True
+  Compliance Score: 100.0%
+
+Trial 2:
+  Prompt: What should I do next?
+  Response Time: 3.972s
+  Status Code: 200
+  API Response Valid: True
+  Valid: True
+  Compliance Score: 100.0%
+
+
+--------------------------------------------------
+
+API Endpoint: Question Generation
+==================================================
+
+Trial 1:
+  Prompt: I'm not sure what I want
+  Response Time: 3.222s
+  Status Code: 200
+  API Response Valid: True
+  Valid: True
+  Compliance Score: 100.0%
+
+Trial 2:
+  Prompt: Can you ask me some questions?
+  Response Time: 2.757s
+  Status Code: 200
+  API Response Valid: True
+  Valid: True
+  Compliance Score: 100.0%
+
+
+--------------------------------------------------
+

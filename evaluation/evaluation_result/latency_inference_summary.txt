@@ -1,0 +1,33 @@
+============================================================
+LATENCY/INFERENCE TIME TESTING - SUMMARY
+============================================================
+
+Test Completed: 2025-08-17T01:47:41.793727
+
+PHASE 1: TEMPLATE RECOMMENDATION
+----------------------------------------
+Total Trials: 10
+Average Response Time: 7.847s
+Median Response Time: 2.513s
+P95 Response Time: 33.918s
+Response Time Range: 1.450s - 33.918s
+
+Intent-Specific Performance:
+  Requirements Analysis: 3.059s avg, 3.059s median
+  Template Recommendation: 2.125s avg, 2.125s median
+  Template Selection: 1.872s avg, 1.872s median
+  General: 2.434s avg, 2.434s median
+  Create Ui Mockup: 29.747s avg, 29.747s median
+
+PHASE 2: UI EDITING
+----------------------------------------
+Total Trials: 6
+Average Response Time: 30.045s
+Median Response Time: 21.667s
+P95 Response Time: 59.400s
+Response Time Range: 8.696s - 59.400s
+
+Scenario-Specific Performance:
+  Single Request: 21.667s avg, 21.667s median
+  Multi Request: 56.327s avg, 56.327s median
+  Report Generation: 12.143s avg, 12.143s median

@@ -207,3 +207,6 @@ For issues or questions about the logo functionality:
 4. Ensure proper file permissions
 
 
+
+
+

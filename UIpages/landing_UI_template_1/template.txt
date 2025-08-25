@@ -1,0 +1,13 @@
+    {
+        "name": "Profile UI Template 3",
+        "html_export": html_export,
+        "globals_css": globals_css,
+        "style_css": style_css,
+        "thumbnail_url": None,  # Add if available
+        "metadata": {"category": "landing",
+        "figma_url":"https://www.figma.com/design/rUnC7rIRdjxzaH3RsTCdXW/Company-Profile-UI-Design--Community-?node-id=0-1&p=f&t=ZfqRwOwPCHMOTrss-0",
+        "description":"A clean and modern landing page or homepage hero section, designed to introduce a product or service with a bold headline, brief description, and a clear call-to-action button, accompanied by a relevant supporting image.",},
+        "tags": ["landing page", "homepage", "modern", "clean", "minimalist", "corporate", "professional", "product showcase", "service showcase", "hero section", "call-to-action", "typography-focused", "image-heavy", "light theme", "flat design", "simple navigation", "business", "tech", "agency", "informational"],
+        "created_at": datetime.now(),
+        "updated_at": datetime.now(),
+    },

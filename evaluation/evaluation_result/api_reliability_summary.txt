@@ -1,0 +1,22 @@
+============================================================
+API RELIABILITY TESTING - SUMMARY
+============================================================
+
+Test Completed: 2025-08-17T00:52:22.344703
+Total Trials: 30
+
+Results:
+  ✅ Successful Calls: 30
+  ❌ Failed Calls: 0
+  📊 Success Rate: 100.0%
+  📊 Failure Rate: 0.0%
+
+Response Time Performance:
+  ⏱️  Average: 19.127s
+  ⏱️  Median: 29.026s
+  ⏱️  Range: 0.958s - 36.515s
+
+Test Configuration:
+  🌐 Base URL: http://localhost:8000
+  🔗 Endpoint: /api/chat
+  📝 Test Prompts: 30

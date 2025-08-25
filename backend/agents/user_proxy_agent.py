@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Optional
 import json
 import re
 from tools.tool_utility import ToolUtility
-from config.keyword_config import KeywordManager
+from config.keyword_manager import KeywordManager
 
 class UserProxyAgent(BaseAgent):
     """User Proxy Agent - Handles user interactions and formats responses"""
@@ -340,6 +340,10 @@ IMPORTANT RULES:
                 return self._create_requirements_complete_response(instructions)
             elif response_type == "present_single_template":
                 return self._create_present_single_template_response(instructions)
+            elif response_type == "template_info_request":
+                return self._create_template_info_response(instructions)
+            elif response_type == "llm_general_question":
+                return self._create_llm_general_question_response(instructions)
             else:
                 return self._create_default_response(instructions)
                 
@@ -517,3 +521,48 @@ IMPORTANT RULES:
         except Exception as e:
             self.logger.error(f"Error creating present single template response: {e}")
             return "I found one template that matches your requirements. Would you like to proceed with this template?"
+
+    def _create_template_info_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response for template information requests"""
+        try:
+            template_info = instructions.get("template_info", {})
+            user_message = instructions.get("user_message", "")
+            
+            # Extract template details
+            template_name = template_info.get('name', 'Unknown')
+            template_category = template_info.get('category', 'Unknown')
+            template_description = template_info.get('description', 'No description available')
+            
+            # Create a specific response based on the question
+            user_message_lower = user_message.lower()
+            
+            if "category" in user_message_lower:
+                response = f"The template '{template_name}' belongs to the '{template_category}' category."
+            elif "template" in user_message_lower:
+                response = f"Current template: {template_name}\nCategory: {template_category}\nDescription: {template_description}"
+            else:
+                response = f"Template: {template_name}\nCategory: {template_category}\nDescription: {template_description}"
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error creating template info response: {e}")
+            return "I'm having trouble retrieving the template information right now. Could you please try again?"
+
+    def _create_llm_general_question_response(self, instructions: Dict[str, Any]) -> str:
+        """Create response for LLM-generated general question responses"""
+        try:
+            llm_response = instructions.get("llm_response", "")
+            user_message = instructions.get("user_message", "")
+            
+            if llm_response:
+                return llm_response
+            else:
+                return f"I understand you're asking: '{user_message}'. Let me help you with that!"
+            
+        except Exception as e:
+            self.logger.error(f"Error creating LLM general question response: {e}")
+            return "I'm here to help you with your questions. What would you like to know?"
+
+
+

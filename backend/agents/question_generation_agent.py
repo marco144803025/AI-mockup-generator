@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Optional
 import json
 import re
 from tools.tool_utility import ToolUtility
-from config.keyword_config import KeywordManager
+from config.keyword_manager import KeywordManager
 
 class QuestionGenerationAgent(BaseAgent):
     """Focused agent with single responsibility: Generate clarifying questions"""
