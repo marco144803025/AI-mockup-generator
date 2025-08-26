@@ -45,10 +45,24 @@ Your role is to:
         return json_str
     
     def _extract_json_from_response(self, response: str, context: str = "response") -> Optional[Dict[str, Any]]:
-        """Robust JSON extraction from LLM responses"""
+        """Extract JSON from LLM response using consolidated base method"""
         try:
             self.logger.debug(f"JSON EXTRACTION: Extracting JSON from {context}: {response[:200]}...")
             
+            # Use the base agent's consolidated method
+            result = super()._extract_json_from_response(response, return_type="dict", context=context)
+            if result:
+                return result
+            
+            # Fallback to legacy extraction if base method fails
+            return self._legacy_json_extraction(response, context)
+        except Exception as e:
+            self.logger.error(f"JSON EXTRACTION: Error extracting JSON from {context}: {e}")
+            return None
+    
+    def _legacy_json_extraction(self, response: str, context: str) -> Optional[Dict[str, Any]]:
+        """Legacy JSON extraction method as fallback"""
+        try:
             # Strategy 1: Find JSON block with markers
             if "```json" in response:
                 start = response.find("```json") + 7
@@ -91,25 +105,34 @@ Your role is to:
                 try:
                     return json.loads(json_str)
                 except json.JSONDecodeError as e:
-                    self.logger.warning(f" JSON EXTRACTION: Failed to parse JSON in {context}: {e}")
+                    self.logger.warning(f"JSON EXTRACTION: Failed to parse JSON in {context}: {e}")
                     return None
             
-            self.logger.warning(f" JSON EXTRACTION: No JSON found in {context}")
+            self.logger.warning(f"JSON EXTRACTION: No JSON found in {context}")
             return None
             
         except Exception as e:
-            self.logger.error(f" JSON EXTRACTION: Error extracting JSON from {context}: {e}")
+            self.logger.error(f"JSON EXTRACTION: Error extracting JSON from {context}: {e}")
             return None
     
     # Note: All HTML analysis is now done by the LLM in the enhanced prompt
     # No need for hardcoded BeautifulSoup analysis methods
     
-    def process_modification_request(self, user_feedback: str, current_template: Dict[str, Any]) -> Dict[str, Any]:
+    def process_modification_request(self, user_feedback: str, current_template: Dict[str, Any], session_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Process a UI modification request using two-step LLM approach"""
         import time
         phase_start_time = time.time()
         try:
-            self.logger.info(f"🔄 UI EDITING AGENT: Starting modification request: {user_feedback}")
+            # Check if we're in Phase 2 (editing phase)
+            if session_state:
+                current_phase = session_state.get("current_phase")
+                phase_transition_completed = session_state.get("phase_transition_completed", False)
+                if current_phase == "editing" and phase_transition_completed:
+                    self.logger.info(f"UI EDITING AGENT: Operating in Phase 2 (editing phase)")
+                else:
+                    self.logger.info(f"UI EDITING AGENT: Phase status - current: {current_phase}, transition: {phase_transition_completed}")
+            
+            self.logger.info(f"UI EDITING AGENT: Starting modification request: {user_feedback}")
             print(f"DEBUG: UI Editing Agent - Starting modification request...")
             
             # Extract current UI code
@@ -222,7 +245,7 @@ Your role is to:
             
             # Build the enhanced planning prompt that lets LLM do all analysis
             prompt_build_start_time = time.time()
-            prompt = self._build_enhanced_planning_prompt(user_feedback, html_content, style_css, globals_css)
+            prompt = self._build_planning_prompt(user_feedback, html_content, style_css, globals_css)
             prompt_build_end_time = time.time()
             print(f"DEBUG: PLANNER - Prompt building completed in {prompt_build_end_time - prompt_build_start_time:.2f} seconds")
             
@@ -286,7 +309,7 @@ Your role is to:
                 "error": f"Planning failed: {str(e)}"
             }
     
-    def _build_enhanced_planning_prompt(self, user_feedback: str, html_content: str, style_css: str, globals_css: str) -> str:
+    def _build_planning_prompt(self, user_feedback: str, html_content: str, style_css: str, globals_css: str) -> str:
         """Build an enhanced prompt that lets the LLM do comprehensive analysis"""
         
         return f"""# COMPREHENSIVE UI MODIFICATION ANALYSIS & PLANNING

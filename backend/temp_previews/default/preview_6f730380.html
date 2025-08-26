@@ -1,0 +1,128 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, initial-scale=1.0">
+    <title>UI Preview</title>
+    <style>
+        /* Reset and full-page styles */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: auto;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        
+        /* User styles */
+        
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        min-height: 100vh;
+                        padding: 20px;
+                    }
+                    
+
+                    .container {
+                        max-width: 1200px;
+                        margin: 0 auto;
+                    }
+                    
+                    .header {
+                        text-align: center;
+                        color: white;
+                        margin-bottom: 40px;
+                    }
+                    
+                    .header h1 {
+                        font-size: 3rem;
+                        margin-bottom: 10px;
+                        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                    }
+                    
+                    .header p {
+                        font-size: 1.2rem;
+                        opacity: 0.9;
+                    }
+                    
+                    .main {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                        gap: 30px;
+                    }
+                    
+                    .card {
+                        background: white;
+                        padding: 30px;
+                        border-radius: 15px;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                        text-align: center;
+                        transition: transform 0.3s ease;
+                    }
+                    
+                    .card:hover {
+                        transform: translateY(-5px);
+                    }
+                    
+                    .card h2 {
+                        color: #333;
+                        margin-bottom: 15px;
+                        font-size: 1.8rem;
+                    }
+                    
+                    .card p {
+                        color: #666;
+                        margin-bottom: 20px;
+                        line-height: 1.6;
+                    }
+                    
+                    .btn {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+  border: none;
+                        padding: 12px 30px;
+                        border-radius: 25px;
+                        font-size: 1rem;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    }
+                    
+                    .btn:hover {
+                        transform: scale(1.05);
+                        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                    }
+                    
+    </style>
+</head>
+<body>
+    
+                    <div class="container">
+                        <header class="header">
+                            <h1>Welcome to Our Platform</h1>
+                            <p>This is a test template with screenshot preview</p>
+                        </header>
+                        <main class="main">
+                            <div class="card">
+                                <h2>Feature 1</h2>
+                                <p>Amazing feature description goes here</p>
+                                <button class="btn">Learn More</button>
+                            </div>
+                            <div class="card">
+                                <h2>Feature 2</h2>
+                                <p>Another amazing feature description</p>
+                                <button class="btn">Get Started</button>
+                            </div>
+                        </main>
+                    </div>
+                    
+</body>
+</html>

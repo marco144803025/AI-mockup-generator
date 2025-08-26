@@ -50,6 +50,19 @@ You focus ONLY on requirements analysis. You do not recommend templates or gener
         # Parse and return results
         specifications = self._parse_requirements_response(response, merged_context)
         
+        # Record rationale for requirements analysis
+        try:
+            from utils.rationale_manager import RationaleManager
+            # Get session_id from context if available
+            session_id = context.get("session_id") if context else None
+            if session_id:
+                rationale_manager = RationaleManager(session_id)
+                analysis_summary = f"Analyzed requirements for page type: {detected_page_type}"
+                rationale_manager.add_requirements_rationale(specifications, analysis_summary)
+                self.logger.info("Stored requirements analysis rationale")
+        except Exception as e:
+            self.logger.error(f"Failed to store requirements rationale: {e}")
+        
         return self.create_standardized_response(
             success=True,
             data=specifications,

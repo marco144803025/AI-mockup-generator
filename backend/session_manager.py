@@ -52,6 +52,19 @@ class SessionManager:
         session = self.get_session(session_id)
         return session.get("selected_template") if session else None
     
+    def get_phase_status(self, session_id: str) -> Dict[str, Any]:
+        """Get current phase status for frontend awareness"""
+        session = self.get_session(session_id)
+        if not session:
+            return {"error": "Session not found"}
+        
+        return {
+            "current_phase": session.get("current_phase"),
+            "phase_transition_completed": session.get("phase_transition_completed", False),
+            "can_edit": session.get("current_phase") == "editing" and 
+                       session.get("phase_transition_completed", False)
+        }
+    
     def delete_session(self, session_id: str) -> bool:
         """Delete a session"""
         if session_id in self.sessions:

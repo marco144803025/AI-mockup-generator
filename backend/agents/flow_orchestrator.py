@@ -25,20 +25,16 @@ class FlowOrchestrator:
     """Intelligent orchestrator for the UI mockup generation workflow"""
     def __init__(self, session_id: Optional[str] = None):
         self.logger = logging.getLogger(__name__)
-        # Initialize agents (except editing_agent which needs session_id)
         self.requirements_agent = RequirementsAnalysisAgent()
         self.recommendation_agent = TemplateRecommendationAgent()
         self.question_agent = QuestionGenerationAgent()
         self.user_proxy_agent = UserProxyAgent()
         self.report_agent = ReportGenerator()
         
-        # Initialize keyword manager
         self.keyword_manager = KeywordManager()
         
-        # Session management
         if session_id:
             self.session_id = session_id
-            # Load existing session
             session_data = session_manager.get_session(session_id)
             if session_data:
                 self.session_state = session_data
@@ -47,26 +43,21 @@ class FlowOrchestrator:
                 print(f"DEBUG ORCHESTRATOR: Current phase: {self.session_state.get('current_phase', 'NOT_SET')}")
                 print(f"DEBUG ORCHESTRATOR: Session data loaded from manager with {len(session_data.keys())} keys")
             else:
-                # Create new session if not found
                 self.session_id = session_manager.create_session()
                 self.session_state = session_manager.get_session(self.session_id)
                 print(f"DEBUG ORCHESTRATOR: Created new session {self.session_id} (existing not found)")
                 print(f"DEBUG ORCHESTRATOR: New session state created with {len(self.session_state.keys())} keys")
         else:
-            # Create new session
             self.session_id = session_manager.create_session()
             self.session_state = session_manager.get_session(self.session_id)
             print(f"DEBUG ORCHESTRATOR: Created new session {self.session_id} (no session_id provided)")
         
-        # Ensure current_phase is set
         if 'current_phase' not in self.session_state:
             self.session_state['current_phase'] = 'initial'
             print(f"DEBUG ORCHESTRATOR: Set default current_phase to 'initial'")
         
-        # Initialize editing_agent after session_id is set
         self.editing_agent = UIEditingAgent(session_id=self.session_id)
         
-        # Phase definitions
         self.phases = ["initial", "requirements", "template_recommendation", "template_selection", "editing", "report_generation"]
     
     def _extract_response_text(self, response) -> str:
@@ -74,18 +65,13 @@ class FlowOrchestrator:
         if not response.content:
             return ""
         
-        # Look for text content in any of the content blocks
         for content in response.content:
-            # Handle text content
             if hasattr(content, 'text') and content.text:
                 return content.text
         
-        # If no text found, handle tool use blocks
         content = response.content[0]
         
-        # Handle tool use blocks
         if hasattr(content, 'type') and content.type == 'tool_use':
-            # Extract text from tool use block if available
             if hasattr(content, 'input') and content.input:
                 return str(content.input)
             elif hasattr(content, 'name'):
@@ -93,11 +79,9 @@ class FlowOrchestrator:
             else:
                 return "Tool used"
         
-        # Handle other content types
         if hasattr(content, 'type'):
             return f"Content type: {content.type}"
         
-        # Fallback
         return str(content)
     
     def _add_to_conversation_history(self, message: str, role: str):
@@ -107,32 +91,25 @@ class FlowOrchestrator:
             "content": message,
             "timestamp": datetime.now().isoformat()
         })
-        # Update session in global manager
         session_manager.update_session(self.session_id, self.session_state)
     
     async def process_user_message(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Main entry point: Coordinate workflow between focused agents"""
         
         try:
-            # Add user message to history
             self._add_to_conversation_history(message, "user")
             
-            # Step 1: Check if this is a UI modification request regardless of current phase
             if await self._is_ui_modification_request(message):
                 self.logger.info("Detected UI modification request, forcing editing phase")
-                # If we have a selected template or UI codes, switch to editing phase
                 if self.session_state.get("selected_template") or context and context.get("ui_codes"):
                     self.session_state["current_phase"] = "editing"
                     if context and context.get("ui_codes"):
-                        # Set up editing context from UI codes
                         self.session_state["selected_template"] = context["ui_codes"].get("template_info", {})
                         self.session_state["ui_codes"] = context["ui_codes"]
                     return await self._handle_editing_phase(message, context)
             
-            # Step 2: Determine current phase and execute appropriate workflow
             current_phase = self.session_state["current_phase"]
             
-            # Only detect initial intent if we're in initial or unknown phase
             initial_intent = None
             if current_phase in ["initial", "unknown"]:
                 initial_intent = await self._detect_initial_intent(message, context)
@@ -154,7 +131,6 @@ class FlowOrchestrator:
             elif current_phase == "editing":
                 return await self._handle_editing_phase(message, context)
             elif current_phase == "report_generation":
-            # Report generation is now handled directly by the main API
                 return {
                     "success": False,
                     "response": "Report generation is handled through the dedicated report API endpoint.",
@@ -162,7 +138,6 @@ class FlowOrchestrator:
                     "phase": "report_generation"
                 }
             else:
-                # Default to initial intent detection
                 return await self._handle_initial_intent_phase(message, initial_intent, context)
                 
         except Exception as e:
@@ -180,7 +155,6 @@ class FlowOrchestrator:
         This allows users to make modifications even if they haven't gone through the full workflow.
         """
         try:
-            # First, check for completion/report generation requests that should NOT be treated as modifications
             completion_patterns = [
                 r'generate.*report', r'create.*report', r'show.*final', r'i.*done',
                 r'that.*perfect', r'finished', r'complete', r'finalize', r'generate.*summary', r'create.*summary'
@@ -189,30 +163,24 @@ class FlowOrchestrator:
             import re
             message_lower = message.lower()
             
-            # Check for completion requests first
             for pattern in completion_patterns:
                 if re.search(pattern, message_lower):
                     self.logger.debug(f"Completion request detected with pattern: {pattern}, NOT treating as UI modification")
                     return False
             
             modification_patterns = [
-                # Color changes
                 r'change.*color', r'make.*color', r'background.*color', r'text.*color',
                 r'color.*to', r'make.*blue', r'make.*green', r'make.*red',
                 
-                # Size and dimension changes  
                 r'increase.*height', r'decrease.*height', r'make.*bigger', r'make.*smaller',
                 r'increase.*width', r'decrease.*width', r'make.*larger', r'make.*taller',
                 r'resize', r'size',
                 
-                # Style changes
                 r'add.*padding', r'remove.*padding', r'add.*margin', r'change.*font',
-                r'make.*bold', r'make.*italic', r'change.*style',
+                r'make.*bold', r'make.*italic', r'make.*style',
                 
-                # Layout changes  
                 r'move.*', r'position.*', r'align.*', r'center.*',
                 
-                # General modification verbs (more specific to avoid false positives)
                 r'change.*(color|size|font|style|layout|position)', r'modify.*', r'update.*', r'edit.*', r'adjust.*',
                 r'fix.*', r'improve.*', r'alter.*'
             ]
@@ -233,53 +201,42 @@ class FlowOrchestrator:
         
         print(f"DEBUG: Entering _handle_initial_intent_phase with intent: {initial_intent}")
         
-        # Update session state with detected intent
         self.session_state["initial_intent"] = initial_intent
         
         if initial_intent == "create_ui_mockup":
-            # User wants to create a UI mockup - automatically transition to requirements analysis
             detected_page_type = self.session_state.get("detected_page_type")
             
-            # Build context with detected page type
             enhanced_context = context or {}
             if detected_page_type:
                 enhanced_context["page_type"] = detected_page_type
                 enhanced_context["selected_category"] = detected_page_type
             
-            # Transition to requirements analysis phase
             self.session_state["current_phase"] = "requirements"
             
-            # Call requirements analysis directly
             print(f"DEBUG: Transitioning to requirements phase with enhanced_context: {enhanced_context}")
             return await self._handle_requirements_phase(message, enhanced_context)
             
         elif initial_intent == "requirements_analysis":
-            # User explicitly wants requirements analysis
             self.session_state["current_phase"] = "requirements"
             response = "Great! Let's start with requirements analysis. Please tell me what kind of UI mockup you want to create and any specific requirements you have."
             
         elif initial_intent == "template_recommendation":
-            # User wants template recommendations
             self.session_state["current_phase"] = "template_recommendation"
             response = "I'll help you with template recommendations. First, let me understand your requirements to suggest the best templates."
             
         elif initial_intent == "template_selection":
-            # User wants to select templates
             self.session_state["current_phase"] = "template_selection"
             response = "I'll help you select a template. Let me first understand your requirements to show you the most suitable options."
             
         elif initial_intent == "editing":
-            # User wants to edit templates
             self.session_state["current_phase"] = "editing"
             response = "I'll help you edit a template. Please tell me which template you want to edit and what changes you'd like to make."
             
         elif initial_intent == "report":
-            # User wants to generate a report
             self.session_state["current_phase"] = "report_generation"
             response = "I'll help you generate a report. Let me gather the project information and create a comprehensive report for you."
             
         else:
-            # General conversation or unclear intent
             response = "Hello! I'm here to help you create UI mockups. You can:\n" \
                       "- Say 'I want to build a [page type] UI mockup' to get started\n" \
                       "- Ask for template recommendations\n" \
@@ -303,15 +260,12 @@ class FlowOrchestrator:
         phase_start_time = time.time()
         print(f"DEBUG: Starting requirements phase execution...")
         
-        # Step 1: Analyze what agents are needed
         phase_decision = await self._analyze_phase_requirements(message, context)
         print(f"DEBUG: Phase decision for requirements phase: {phase_decision}")
         
-        # Step 2: Update session state with context updates
         if phase_decision.get("context_updates"):
             self.session_state.update(phase_decision["context_updates"])
         
-        # Step 3: Execute required agents in order
         print(f"DEBUG: Required agents for pipeline: {phase_decision['required_agents']}")
         pipeline_start_time = time.time()
         pipeline_result = self._execute_agent_pipeline(
@@ -326,7 +280,6 @@ class FlowOrchestrator:
         print(f"DEBUG: Pipeline final_output: {pipeline_result.get('final_output', 'None')}")
         
         if not pipeline_result["success"]:
-            # Handle error - ask for clarification
             response = self.user_proxy_agent.create_response_from_instructions(
                 "clarification_needed",
                 {
@@ -348,11 +301,9 @@ class FlowOrchestrator:
                 "requires_clarification": True
             }
         
-        # Step 4: Update session state with agent results
         agent_results = pipeline_result["agent_results"]
         
         if "requirements_analysis" in agent_results:
-            # Extract primary_result from standardized response
             requirements_result = agent_results["requirements_analysis"]
             if isinstance(requirements_result, dict) and "data" in requirements_result:
                 self.session_state["requirements"] = requirements_result["data"]["primary_result"]
@@ -360,35 +311,39 @@ class FlowOrchestrator:
                 self.session_state["requirements"] = requirements_result
         
         if "template_recommendation" in agent_results:
-            # Extract primary_result from standardized response
             recommendations_result = agent_results["template_recommendation"]
             if isinstance(recommendations_result, dict) and "data" in recommendations_result:
                 self.session_state["recommendations"] = recommendations_result["data"]["primary_result"]
             else:
                 self.session_state["recommendations"] = recommendations_result
             
-            # Store template recommendation rationale
-            try:
-                from utils.rationale_manager import RationaleManager
-                rationale_manager = RationaleManager(self.session_id)
-                recommendations = self.session_state["recommendations"]
-                rationale_manager.add_template_recommendation_rationale(recommendations)
-                self.logger.info("Stored template recommendation rationale")
-            except Exception as e:
-                self.logger.error(f"Failed to store template recommendation rationale: {e}")
+                    # Store template recommendation rationale
+        try:
+            from utils.rationale_manager import RationaleManager
+            rationale_manager = RationaleManager(self.session_id)
+            recommendations = self.session_state["recommendations"]
+            rationale_manager.add_template_recommendation_rationale(recommendations)
             
-            # Check if we have only one template - if so, skip question generation
+            # Record workflow decision
+            rationale_manager.add_workflow_decision(
+                phase="template_recommendation",
+                decision="Generated template recommendations",
+                reasoning=f"Generated {len(recommendations)} template recommendations based on requirements analysis",
+                context={"recommendation_count": len(recommendations)}
+            )
+            
+            self.logger.info("Stored template recommendation rationale and workflow decision")
+        except Exception as e:
+            self.logger.error(f"Failed to store template recommendation rationale: {e}")
+            
             recommendations = self.session_state["recommendations"]
             if isinstance(recommendations, list) and len(recommendations) == 1:
                 self.logger.info(f"Only one template found ({recommendations[0].get('template', {}).get('name', 'Unknown')}), skipping question generation")
-                # Remove question_generation from agent_results if it exists
                 if "question_generation" in agent_results:
                     del agent_results["question_generation"]
-                # Update session state to indicate no questions needed
                 self.session_state["questions"] = {"questions": [], "reasoning": "Single template found, no questions needed"}
         
         if "question_generation" in agent_results:
-            # Extract primary_result from standardized response
             questions_result = agent_results["question_generation"]
             if isinstance(questions_result, dict) and "data" in questions_result:
                 self.session_state["questions"] = questions_result["data"]["primary_result"]
@@ -400,7 +355,7 @@ class FlowOrchestrator:
         
         # Use UserProxyAgent to create a proper response
         if isinstance(final_output, dict):
-            # Check if we have only one template and should present it directly
+            # Check if single template should be presented
             recommendations = self.session_state.get("recommendations", [])
             if isinstance(recommendations, list) and len(recommendations) == 1:
                 # Present the single template directly
@@ -422,7 +377,7 @@ class FlowOrchestrator:
                     }
                 )
             else:
-                # Use requirements analysis result to create a proper response
+                # Use requirements analysis result
                 response = self.user_proxy_agent.create_response_from_instructions(
                     "requirements_analysis_complete",
                     {
@@ -434,7 +389,6 @@ class FlowOrchestrator:
             # Fallback for non-dict output
             response = str(final_output) if final_output else "I've processed your request. Let me know how you'd like to proceed."
         
-        # Step 6: Update phase based on decision
         next_phase = phase_decision.get("next_phase", "template_recommendation")
         self.session_state["current_phase"] = next_phase
         
@@ -458,17 +412,14 @@ class FlowOrchestrator:
     async def _handle_recommendation_phase(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle template recommendation phase"""
         
-        # Use LLM to detect user intent
         user_intent = await self._detect_user_intent(message, "template_recommendation", context)
         
         if user_intent == "template_selection":
-            # User is selecting a template - use LLM to parse which one
             selected_template = await self._parse_template_selection_llm(message, self.session_state["recommendations"])
             if selected_template:
                 self.session_state["selected_template"] = selected_template
                 self.session_state["current_phase"] = "template_selection"
                 
-                # Store final template selection rationale
                 try:
                     from utils.rationale_manager import RationaleManager
                     rationale_manager = RationaleManager(self.session_id)
@@ -491,7 +442,6 @@ class FlowOrchestrator:
                     "selected_template": selected_template
                 }
             else:
-                # Template parsing failed - use UserProxyAgent
                 response = self.user_proxy_agent.create_response_from_instructions(
                     "template_selection_error",
                     {
@@ -512,31 +462,25 @@ class FlowOrchestrator:
                 }
         
         elif user_intent == "question_answer":
-            # User is answering questions about preferences - filter templates based on their answers
             current_recommendations = self.session_state.get("recommendations", [])
             current_requirements = self.session_state.get("requirements", {})
             
-            # Update requirements with user's answers
             updated_requirements = self.requirements_agent.analyze_requirements(
                 f"Additional requirements: {message}", 
-                context={"existing_requirements": current_requirements}
+                context={"existing_requirements": current_requirements, "session_id": self.session_id}
             )
             
-            # Filter templates based on updated requirements
             filtered_recommendations = self.recommendation_agent.recommend_templates(
                 updated_requirements, 
-                context={"existing_templates": current_recommendations}
+                context={"existing_templates": current_recommendations, "session_id": self.session_id}
             )
             
-            # Generate new questions for the filtered templates
             new_questions = self.question_agent.generate_questions(filtered_recommendations, updated_requirements)
             
-            # Update session state
             self.session_state["requirements"] = updated_requirements
             self.session_state["recommendations"] = filtered_recommendations
             self.session_state["questions"] = new_questions
             
-            # If we have a clear winner (1 template) or no more questions needed, present the results
             if len(filtered_recommendations) == 1 or not new_questions.get("questions"):
                 response = self.user_proxy_agent.create_response_from_instructions(
                     "present_filtered_recommendations",
@@ -588,9 +532,15 @@ class FlowOrchestrator:
                 "intent": "not_understand"
             }
         
-        # User is asking for clarification, modification, or general conversation
+        # User asking for clarification/modification
         # Regenerate recommendations with updated context
         requirements = self.session_state["requirements"]
+        
+        # Ensure context includes session_id
+        if context is None:
+            context = {}
+        context["session_id"] = self.session_id
+        
         updated_requirements = self.requirements_agent.analyze_requirements(message, context=context)
         
         recommendations = self.recommendation_agent.recommend_templates(updated_requirements, context=context)
@@ -644,13 +594,13 @@ class FlowOrchestrator:
                 session_manager.set_selected_template(self.session_id, selected_template)
                 self.logger.info(f"Template selected: {selected_template.get('name', 'Unknown')}")
                 
-                # Immediately trigger Phase 2 transition when template is first selected
+                # Trigger Phase 2 transition
                 self.logger.info("Triggering immediate phase transition...")
                 return await self._handle_phase_transition(selected_template)
             else:
                 self.logger.warning(f"Failed to parse template selection from message: '{message}'")
         
-        # If no template is selected, try to select one from recommendations
+        # Try to select from recommendations
         if not selected_template and recommendations:
             # Auto-select the first/best template
             selected_template = recommendations[0]
@@ -659,16 +609,16 @@ class FlowOrchestrator:
             session_manager.set_selected_template(self.session_id, selected_template)
             self.logger.info(f"Auto-selected template: {selected_template.get('name', 'Unknown')}")
             
-            # Immediately trigger Phase 2 transition when template is auto-selected
+            # Trigger Phase 2 transition
             return await self._handle_phase_transition(selected_template)
         
-        # If still no template, go back to recommendation phase
+        # Go back to recommendation phase
         if not selected_template:
             self.logger.warning("No template selected, going back to recommendation phase")
             self.session_state["current_phase"] = "template_recommendation"
             return await self._handle_recommendation_phase(message, context)
         
-        # If we already have a selected template, handle additional user input
+        # Handle additional user input
         # Use LLM to detect user intent
         user_intent = await self._detect_user_intent(message, "template_selection", context)
         
@@ -678,7 +628,7 @@ class FlowOrchestrator:
             return await self._handle_editing_phase(message, context)
         
         elif user_intent == "report":
-            # User wants to generate a report - redirect to dedicated API
+            # Redirect to report API
             return {
                 "success": True,
                 "response": "To generate a report, please use the dedicated report generation feature in the UI.",
@@ -688,7 +638,7 @@ class FlowOrchestrator:
             }
         
         elif user_intent == "template_confirmation" or user_intent == "template_selection":
-            # User confirmed template selection - trigger Phase 2 transition
+            # Trigger Phase 2 transition
             return await self._handle_phase_transition(selected_template)
         
         elif user_intent == "not_understand":
@@ -753,28 +703,59 @@ class FlowOrchestrator:
         pending_clarification = self.session_state.get("pending_clarification")
         if pending_clarification:
             print(f"DEBUG ORCHESTRATOR: Found pending clarification, handling user response")
-            return await self._handle_editing_clarification_user_response(message, selected_template, context)
+            return await self._handle_clarification_user_response(message, selected_template, context)
         
-        # Step 2: Enhanced intent detection for editing phase
+        # Enhanced intent detection
         editing_intent = await self._detect_editing_intent_advanced(message, selected_template)
         
-        # Step 3: Route based on intent
         if editing_intent == "modification_request":
-            return await self._handle_editing_modification_request(message, selected_template, context)
+            return await self._handle_modification_request(message, selected_template, context)
         elif editing_intent == "clarification_request":
-            return await self._handle_editing_clarification_request(message, selected_template, context)
+            return await self._handle_clarification_request(message, selected_template, context)
         elif editing_intent == "completion_request":
-            return await self._handle_editing_completion_request(message, selected_template, context)
+            return await self._handle_completion_request(message, selected_template, context)
         elif editing_intent == "preview_request":
-            return await self._handle_editing_preview_request(message, selected_template, context)
+            return await self._handle_preview_request(message, selected_template, context)
         else:
-            return await self._handle_editing_general_request(message, selected_template, context)
+            return await self._handle_general_request(message, selected_template, context)
     
-    async def _detect_editing_intent_advanced(self, message: str, selected_template: Dict[str, Any]) -> str:
+    def _extract_intent_from_response(self, response: str, valid_intents: List[str]) -> str:
+        """
+        Robustly extract intent from LLM response, handling multi-line responses with reasoning.
+        
+        Args:
+            response: Raw LLM response
+            valid_intents: List of valid intent strings to match against
+            
+        Returns:
+            Extracted intent string or "general_request" if no valid intent found
+        """
+        if not response:
+            return "general_request"
+            
+        # Clean the response
+        cleaned_response = response.strip().lower()
+        
+        # First try exact match
+        if cleaned_response in valid_intents:
+            return cleaned_response
+            
+        # Try first line
+        first_line = cleaned_response.split('\n')[0].strip()
+        if first_line in valid_intents:
+            return first_line
+            
+        # Search for intent anywhere
+        for intent in valid_intents:
+            if intent in cleaned_response:
+                return intent
+                
+        # No valid intent found
+        return "general_request"
+
+    def _detect_editing_intent_advanced(self, message: str, template_name: str) -> str:
         """Enhanced intent detection specifically for editing phase using LLM"""
         try:
-            template_name = selected_template.get("name", "Unknown Template")
-            
             prompt = f"""
 You are an advanced intent detection system for the UI editing phase.
 
@@ -821,42 +802,36 @@ Return ONLY the intent type (e.g., "modification_request").
 """
             
             response = self.requirements_agent.call_claude_with_cot(prompt, enable_cot=False)
-            intent = response.strip().lower()
+            intent = self._extract_intent_from_response(response, ["modification_request", "clarification_request", "preview_request", "completion_request", "general_request"])
             
             print(f"DEBUG ORCHESTRATOR: Intent detection response: '{response}'")
             print(f"DEBUG ORCHESTRATOR: Parsed intent: '{intent}'")
             
-            valid_intents = ["modification_request", "clarification_request", "preview_request", "completion_request", "general_request"]
-            final_intent = intent if intent in valid_intents else "general_request"
-            print(f"DEBUG ORCHESTRATOR: Final intent: '{final_intent}'")
-            
-            return final_intent
+            return intent
             
         except Exception as e:
             self.logger.error(f"Error in advanced editing intent detection: {e}")
             return "general_request"
     
-    async def _handle_editing_modification_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _handle_modification_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle specific modification requests with enhanced coordination"""
         try:
-            print(f"DEBUG ORCHESTRATOR: _handle_editing_modification_request called with message: {message}")
+            print(f"DEBUG ORCHESTRATOR: _handle_modification_request called with message: {message}")
             
-            # Step 1: Get current UI state
             current_ui_state = await self._get_current_ui_state(selected_template)
             print(f"DEBUG ORCHESTRATOR: Current UI state loaded, HTML length: {len(current_ui_state.get('html_export', ''))}")
             print(f"DEBUG ORCHESTRATOR: Current UI state CSS length: {len(current_ui_state.get('style_css', ''))}")
             print(f"DEBUG ORCHESTRATOR: Current UI state keys: {list(current_ui_state.keys())}")
             
-            # Step 2: Use UI editing agent to analyze and apply modifications
+            # Use UI editing agent
             print(f"DEBUG ORCHESTRATOR: Calling UI editing agent...")
-            modification_result = self.editing_agent.process_modification_request(message, current_ui_state)
+            modification_result = self.editing_agent.process_modification_request(message, current_ui_state, self.session_state)
             print(f"DEBUG ORCHESTRATOR: UI editing agent returned: {bool(modification_result)}")
             if modification_result:
                 print(f"DEBUG ORCHESTRATOR: Modification success: {modification_result.get('success', False)}")
                 print(f"DEBUG ORCHESTRATOR: Has modified_template: {bool(modification_result.get('modified_template'))}")
                 print(f"DEBUG ORCHESTRATOR: Clarification needed: {modification_result.get('clarification_needed', False)}")
             
-            # Step 3: Check for clarification needed state
             if modification_result.get("clarification_needed", False):
                 print(f"DEBUG ORCHESTRATOR: Clarification needed detected, handling clarification request")
                 return await self._handle_editing_clarification_response(modification_result, selected_template, context)
@@ -872,11 +847,10 @@ Return ONLY the intent type (e.g., "modification_request").
                     }
                 )
             else:
-                # Step 4: Update session state with modifications
                 modified_template = modification_result.get("modified_template", selected_template)
                 self.session_state["modified_template"] = modified_template
                 
-                # Step 4.5: Prepare complete template data for saving
+                # Prepare template data for saving
                 complete_template_data = {
                     "html_export": modified_template.get("html_export", ""),
                     "style_css": modified_template.get("style_css", ""),
@@ -894,10 +868,9 @@ Return ONLY the intent type (e.g., "modification_request").
                 print(f"DEBUG ORCHESTRATOR: Prepared template data for saving - HTML length: {len(complete_template_data.get('html_export', ''))}")
                 print(f"DEBUG ORCHESTRATOR: Template data keys: {list(complete_template_data.keys())}")
                 
-                # Save the modified template back to the temp_ui_files JSON file
-                await self._save_modified_template_to_file(complete_template_data)
+                # Save modified template
+                await self._save_template_to_file(complete_template_data)
                 
-                # Step 5: Generate user response
                 response = self.user_proxy_agent.create_response_from_instructions(
                     "modification_success",
                     {
@@ -936,7 +909,7 @@ Return ONLY the intent type (e.g., "modification_request").
             clarification_options = modification_result.get("clarification_options", [])
             error_message = modification_result.get("error", "Multiple possible targets found")
             
-            # Store clarification context in session for later processing
+            # Store clarification context
             self.session_state["pending_clarification"] = {
                 "original_request": modification_result.get("user_feedback", ""),
                 "clarification_options": clarification_options,
@@ -974,7 +947,7 @@ Return ONLY the intent type (e.g., "modification_request").
                 "phase": "editing"
             }
     
-    async def _handle_editing_clarification_user_response(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _handle_clarification_user_response(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle user response to clarification request"""
         try:
             print(f"DEBUG ORCHESTRATOR: Handling user clarification response: {message}")
@@ -1022,7 +995,7 @@ Return ONLY the intent type (e.g., "modification_request").
             current_ui_state = await self._get_current_ui_state(selected_template)
             
             # Use UI editing agent with the refined request
-            modification_result = self.editing_agent.process_modification_request(refined_request, current_ui_state)
+            modification_result = self.editing_agent.process_modification_request(refined_request, current_ui_state, self.session_state)
             
             if modification_result.get("clarification_needed", False):
                 # Still needs clarification, handle again
@@ -1043,8 +1016,8 @@ Return ONLY the intent type (e.g., "modification_request").
                 modified_template = modification_result.get("modified_template", selected_template)
                 self.session_state["modified_template"] = modified_template
                 
-                # Save the modified template back to the temp_ui_files JSON file
-                await self._save_modified_template_to_file(modified_template)
+                # Save modified template
+                await self._save_template_to_file(modified_template)
                 
                 # Generate success response
                 response = self.user_proxy_agent.create_response_from_instructions(
@@ -1110,11 +1083,11 @@ Return ONLY the intent type (e.g., "modification_request").
             self.logger.error(f"Error parsing user clarification choice: {e}")
             return None
     
-    async def _handle_editing_clarification_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _handle_clarification_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle clarification requests about what can be modified"""
         try:
-            # Generate editing suggestions based on current template
-            suggestions = self._generate_editing_suggestions_advanced(selected_template)
+            # Generate editing suggestions
+            suggestions = self._generate_editing_suggestions(selected_template)
             
             response = self.user_proxy_agent.create_response_from_instructions(
                 "editing_clarification",
@@ -1144,7 +1117,7 @@ Return ONLY the intent type (e.g., "modification_request").
                 "phase": "editing"
             }
     
-    async def _handle_editing_preview_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _handle_preview_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle preview requests to show current state"""
         try:
             # Generate UI preview
@@ -1178,13 +1151,13 @@ Return ONLY the intent type (e.g., "modification_request").
                 "phase": "editing"
             }
     
-    async def _handle_editing_completion_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _handle_completion_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle completion requests to finish editing"""
         try:
             # Transition to report generation phase
             self.session_state["current_phase"] = "report_generation"
             
-            # Report generation is now handled by the dedicated API
+            # Report generation handled by API
             return {
                 "success": True,
                 "response": "Editing completed! To generate a report, please use the dedicated report generation feature in the UI.",
@@ -1235,16 +1208,16 @@ Return ONLY the intent type (e.g., "modification_request").
                 "phase": "editing"
             }
     
-    async def _handle_editing_general_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _handle_general_request(self, message: str, selected_template: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle general requests during editing phase using LLM for intelligent responses"""
         try:
-            # For general questions, use the LLM to generate a helpful response
+            # Use LLM for general questions
             try:
                 # Get current UI state for context
                 current_ui_state = await self._get_current_ui_state(selected_template)
                 
                 # Generate LLM response
-                response = self._generate_llm_response_for_general_question(message, self.session_id, current_ui_state)
+                response = self._generate_general_response(message, self.session_id, current_ui_state)
                 
                 self._add_to_conversation_history(response, "assistant")
                 
@@ -1296,7 +1269,7 @@ Return ONLY the intent type (e.g., "modification_request").
         try:
             print(f"DEBUG ORCHESTRATOR: Getting current UI state for session {self.session_id}")
             
-            # Step 1: Always try to load from session files first (this contains the current state)
+            # Load from session files
             print(f"DEBUG ORCHESTRATOR: Step 1 - Loading from session files for session: {self.session_id}")
             session_ui_state = await self._load_ui_state_from_session()
             if session_ui_state and session_ui_state.get("html_export"):
@@ -1314,7 +1287,7 @@ Return ONLY the intent type (e.g., "modification_request").
             else:
                 print(f"DEBUG ORCHESTRATOR: No session UI state loaded, falling back to MongoDB template")
             
-            # Step 2: Fallback to MongoDB template if no session file exists
+            # Fallback to MongoDB template
             print(f"DEBUG ORCHESTRATOR: No session file found, using MongoDB template")
             ui_state = {
                 "template_id": selected_template.get("_id"),
@@ -1336,7 +1309,7 @@ Return ONLY the intent type (e.g., "modification_request").
             else:
                 print(f"DEBUG TEMPLATE: 'Welcome back!' NOT found in template HTML")
             
-            # Apply any pending modifications to the complete template
+            # Apply pending modifications
             modifications = self.session_state.get("modifications", {})
             if modifications:
                 ui_state["pending_modifications"] = modifications
@@ -1356,7 +1329,7 @@ Return ONLY the intent type (e.g., "modification_request").
             from utils.file_manager import UICodeFileManager
             import os
             
-            # Initialize file manager with absolute path to match main.py
+            # Initialize file manager
             base_dir = os.path.join(os.getcwd(), "temp_ui_files")
             file_manager = UICodeFileManager(base_dir=base_dir)
             
@@ -1400,7 +1373,7 @@ Return ONLY the intent type (e.g., "modification_request").
             
             temp_dir = Path("temp_ui_files")
             
-            # Try multiple session file patterns, prioritizing test_session
+            # Try multiple session file patterns
             session_patterns = [
                 f"ui_codes_{self.session_id}.json",
                 "ui_codes_test_session.json",  # Fallback for debugging
@@ -1411,7 +1384,7 @@ Return ONLY the intent type (e.g., "modification_request").
                 session_file = temp_dir / pattern
                 if session_file.exists():
                     try:
-                        # Migrate from old JSON format to new file-based format
+                        # Migrate from old JSON format
                         success = file_manager.migrate_from_json(self.session_id, str(session_file))
                         if success:
                             # Retry loading the migrated session
@@ -1437,7 +1410,7 @@ Return ONLY the intent type (e.g., "modification_request").
             self.logger.error(f"Error loading UI state from session: {e}")
             return None
     
-    def _generate_editing_suggestions_advanced(self, selected_template: Dict[str, Any]) -> List[str]:
+    def _generate_editing_suggestions(self, selected_template: Dict[str, Any]) -> List[str]:
         """Generate advanced editing suggestions based on template analysis"""
         try:
             suggestions = []
@@ -1667,7 +1640,7 @@ Return ONLY the intent type (e.g., "clarification").
             response = self.requirements_agent.call_claude_with_cot(prompt, enable_cot=False)
             
             # Parse response
-            intent = response.strip().lower()
+            intent = self._extract_intent_from_response(response, ["question_answer", "template_selection", "clarification", "modification", "confirmation", "not_understand", "general"])
             
             # Validate intent based on phase
             if current_phase == "template_recommendation":
@@ -1748,7 +1721,7 @@ Return ONLY the template number (1, 2, 3, etc.) or "unclear" if the selection ca
                 selection = response.strip().lower()
                 self.logger.info(f"Parsed selection: '{selection}'")
                 
-                # Check if selection is unclear (use simple string check instead of hardcoded list)
+                # Check if selection is unclear
                 if selection == "unclear" or selection == "unclear_responses":
                     self.logger.info(f"LLM could not parse template selection from: '{message}'")
                     return None
@@ -1818,7 +1791,7 @@ Return ONLY the template number (1, 2, 3, etc.) or "unclear" if the selection ca
                 # If we get here, the selection was unclear
                 self.logger.info(f"Could not match template selection '{selection}' to any available template")
                 
-                # Fallback: If there's only one template and the message isn't clearly rejecting it, select it
+                # Fallback: Select single template if not rejected
                 if len(recommendations) == 1:
                     # Check if the message contains clear rejection words
                     rejection_words = ["no", "not", "different", "other", "none", "don't", "doesn't", "wrong"]
@@ -1972,7 +1945,7 @@ EXAMPLES:
             
         elif agent_name == "template_recommendation":
             # Minimal context + requirements output
-            # CRITICAL FIX: Prioritize page_type from requirements analysis output over base context
+            # CRITICAL: Prioritize page_type from requirements analysis
             page_type = None
             if isinstance(previous_output, dict) and previous_output.get("page_type"):
                 # Use the page_type from requirements analysis (this is the correct one)
@@ -2067,7 +2040,7 @@ EXAMPLES:
                     try:
                         requirements = self.session_state.get("requirements") or current_output
                         
-                        # CRITICAL FIX: Use page_type from requirements analysis output, not from old context
+                        # CRITICAL: Use page_type from requirements analysis
                         # The requirements analysis agent has already determined the correct page_type
                         print(f"DEBUG: Template Recommendation - Requirements from session: {self.session_state.get('requirements', {}).get('page_type', 'None')}")
                         print(f"DEBUG: Template Recommendation - Current output page_type: {current_output.get('page_type', 'None') if isinstance(current_output, dict) else 'Not a dict'}")
@@ -2115,11 +2088,11 @@ EXAMPLES:
                     
                 elif agent_name == "question_generation":
                     try:
-                        # Check if we should skip question generation (only one template found)
+                        # Skip question generation if only one template
                         recommendations = self.session_state.get("recommendations", [])
                         if isinstance(recommendations, list) and len(recommendations) == 1:
                             print(f"DEBUG: Skipping question generation - only one template found ({recommendations[0].get('template', {}).get('name', 'Unknown')})")
-                            # Create a placeholder result indicating no questions needed
+                            # Create placeholder result
                             result = {
                                 "questions": [],
                                 "focus_areas": [],
@@ -2130,7 +2103,7 @@ EXAMPLES:
                             agent_results[agent_name] = result
                             continue  # Skip to next agent
                         
-                        # Extract templates from current_output (which is from template_recommendation agent)
+                        # Extract templates from agent output
                         templates = []
                         if isinstance(current_output, list):
                             templates = current_output
@@ -2152,7 +2125,7 @@ EXAMPLES:
                                 page_type = requirements["page_type"]
                                 print(f"DEBUG: Using page_type '{page_type}' from requirements")
                             else:
-                                # Try to get page_type from session state requirements if not in current requirements
+                                # Try to get page_type from session state requirements
                                 session_requirements = self.session_state.get("requirements", {})
                                 if isinstance(session_requirements, dict) and session_requirements.get("page_type"):
                                     page_type = session_requirements["page_type"]
@@ -2356,17 +2329,7 @@ EXAMPLES:
             "final_output": response
         }
     
-    def get_session_status(self) -> Dict[str, Any]:
-        """Get current session status"""
-        return {
-            "session_id": self.session_id,
-            "current_phase": self.session_state["current_phase"],
-            "conversation_history_length": len(self.session_state["conversation_history"]),
-            "has_requirements": self.session_state["requirements"] is not None,
-            "has_recommendations": self.session_state["recommendations"] is not None,
-            "has_selected_template": self.session_state["selected_template"] is not None,
-            "created_at": self.session_state["created_at"].isoformat()
-        }
+
     
     def reset_session(self) -> Dict[str, Any]:
         """Reset the session"""
@@ -2387,82 +2350,7 @@ EXAMPLES:
             "success": True,
             "message": "Session reset successfully",
             "session_id": self.session_id
-        } 
-
-    def handle_editing_phase(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
-        """Handle Phase 2: UI Editing - coordinate between UI Editing Agent and User Proxy Agent"""
-        phase_start_time = time.time()
-        try:
-            self.logger.info(f"Handling editing phase request for session {session_id}")
-            print(f"DEBUG: Starting editing phase execution...")
-            
-            # Create a context with the current UI state
-            context_start_time = time.time()
-            context = {
-                "current_ui_codes": current_ui_state,
-                "session_id": session_id
-            }
-            context_end_time = time.time()
-            print(f"DEBUG: Context creation completed in {context_end_time - context_start_time:.2f} seconds")
-            
-            # Use the UI editing agent directly instead of trying to run async code
-            ui_editing_start_time = time.time()
-            print(f"DEBUG: Starting UI editing agent execution...")
-            modification_result = self.editing_agent.process_modification_request(user_message, current_ui_state)
-            ui_editing_end_time = time.time()
-            print(f"DEBUG: UI editing agent completed in {ui_editing_end_time - ui_editing_start_time:.2f} seconds")
-            
-            if not modification_result.get("success", False):
-                print(f"DEBUG: UI editing agent failed, total editing phase time: {time.time() - phase_start_time:.2f} seconds")
-                return self._create_error_response("Failed to process modification request")
-            
-            # Generate user response using the user proxy agent
-            user_proxy_start_time = time.time()
-            print(f"DEBUG: Starting user proxy agent execution...")
-            user_response = self.user_proxy_agent.create_response_from_instructions(
-                "modification_success",
-                {
-                    "modification_result": modification_result,
-                    "user_message": user_message,
-                    "context": context
-                }
-            )
-            user_proxy_end_time = time.time()
-            print(f"DEBUG: User proxy agent completed in {user_proxy_end_time - user_proxy_start_time:.2f} seconds")
-            
-            # Log total editing phase execution time
-            phase_end_time = time.time()
-            print(f"DEBUG: Editing phase total execution time: {phase_end_time - phase_start_time:.2f} seconds")
-            print(f"DEBUG: Breakdown:")
-            print(f"  - Context creation: {context_end_time - context_start_time:.2f} seconds")
-            print(f"  - UI editing agent: {ui_editing_end_time - ui_editing_start_time:.2f} seconds")
-            print(f"  - User proxy agent: {user_proxy_end_time - user_proxy_start_time:.2f} seconds")
-            print(f"  - Total overhead: {phase_end_time - phase_start_time - (context_end_time - context_start_time) - (ui_editing_end_time - ui_editing_start_time) - (user_proxy_end_time - user_proxy_start_time):.2f} seconds")
-            
-            return {
-                "success": True,
-                "response": user_response,
-                "modifications": modification_result.get("modifications"),
-                "modified_template": modification_result.get("modified_template"),
-                "metadata": {
-                    "session_id": session_id,
-                    "intent": "modification_request",
-                    "timestamp": datetime.now().isoformat(),
-                    "execution_time": phase_end_time - phase_start_time,
-                    "timing_breakdown": {
-                        "context_creation": context_end_time - context_start_time,
-                        "ui_editing_agent": ui_editing_end_time - ui_editing_start_time,
-                        "user_proxy_agent": user_proxy_end_time - user_proxy_start_time,
-                        "total_overhead": phase_end_time - phase_start_time - (context_end_time - context_start_time) - (ui_editing_end_time - ui_editing_start_time) - (user_proxy_end_time - user_proxy_start_time)
-                    }
-                }
-            }
-                
-        except Exception as e:
-            phase_end_time = time.time()
-            print(f"DEBUG: Editing phase failed after {phase_end_time - phase_start_time:.2f} seconds")
-            self.logger.error(f"Error in editing phase: {e}")
-            return self._create_error_response(f"Error processing your request: {str(e)}")
+        }
 
     def handle_logo_analysis(self, user_message: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Handle logo analysis and apply design preferences to UI"""
@@ -2471,7 +2359,6 @@ EXAMPLES:
             self.logger.info(f"Handling logo analysis request for session {context.get('session_id')}")
             print(f"DEBUG: Starting logo analysis execution...")
             
-            # Step 1: Use RequirementsAnalysisAgent to analyze the logo
             logo_analysis_start_time = time.time()
             print(f"DEBUG: Starting logo analysis with RequirementsAnalysisAgent...")
             logo_analysis_result = self.requirements_agent.analyze_logo_and_requirements(
@@ -2491,7 +2378,6 @@ EXAMPLES:
                 print(f"DEBUG: Logo analysis failed, total logo analysis time: {time.time() - phase_start_time:.2f} seconds")
                 return self._create_error_response("Failed to analyze logo")
             
-            # Step 2: Extract design preferences from logo analysis
             data_extraction_start_time = time.time()
             print(f"DEBUG: Starting data extraction from logo analysis...")
             # The standardized response has data nested under 'data' key
@@ -2501,10 +2387,9 @@ EXAMPLES:
             data_extraction_end_time = time.time()
             print(f"DEBUG: Data extraction completed in {data_extraction_end_time - data_extraction_start_time:.2f} seconds")
             
-            # Step 3: Create modification plan based on logo analysis
             plan_creation_start_time = time.time()
             print(f"DEBUG: Starting modification plan creation...")
-            modification_plan = self._create_modification_plan_from_logo_analysis(
+            modification_plan = self._create_logo_modification_plan(
                 logo_analysis, 
                 design_preferences, 
                 user_message
@@ -2512,7 +2397,6 @@ EXAMPLES:
             plan_creation_end_time = time.time()
             print(f"DEBUG: Modification plan creation completed in {plan_creation_end_time - plan_creation_start_time:.2f} seconds")
             
-            # Step 4: Apply modifications using UI Editing Agent
             ui_modification_start_time = time.time()
             print(f"DEBUG: Starting UI modifications with UI Editing Agent...")
             current_ui_codes = context.get("current_ui_codes", {})
@@ -2527,7 +2411,8 @@ EXAMPLES:
             else:
                 modification_result = self.editing_agent.process_modification_request(
                     modification_plan, 
-                    current_ui_codes
+                    current_ui_codes,
+                    self.session_state
                 )
             ui_modification_end_time = time.time()
             print(f"DEBUG: UI modifications completed in {ui_modification_end_time - ui_modification_start_time:.2f} seconds")
@@ -2536,7 +2421,6 @@ EXAMPLES:
                 print(f"DEBUG: UI modifications failed, total logo analysis time: {time.time() - phase_start_time:.2f} seconds")
                 return self._create_error_response("Failed to apply logo-based modifications")
             
-            # Step 5: Generate user response
             user_response_start_time = time.time()
             print(f"DEBUG: Starting user response generation...")
             user_response = self.user_proxy_agent.create_response_from_instructions(
@@ -2589,7 +2473,7 @@ EXAMPLES:
             self.logger.error(f"Error in logo analysis: {e}")
             return self._create_error_response(f"Error analyzing logo: {str(e)}")
 
-    def _create_modification_plan_from_logo_analysis(self, logo_analysis: Dict[str, Any], design_preferences: Dict[str, Any], user_message: str) -> str:
+    def _create_logo_modification_plan(self, logo_analysis: Dict[str, Any], design_preferences: Dict[str, Any], user_message: str) -> str:
         """Create a modification plan based on logo analysis results"""
         plan_parts = []
         
@@ -2632,267 +2516,17 @@ EXAMPLES:
             }
         }
     
-    def _detect_editing_intent(self, user_message: str) -> str:
-        """Detect the intent of the user's editing request"""
-        try:
-            message_lower = user_message.lower()
-            
-            # Completion indicators
-            if any(phrase in message_lower for phrase in [
-                "i'm done", "that's perfect", "finished", "complete", "good enough",
-                "generate report", "show me the final", "create report"
-            ]):
-                return "completion_request"
-            
-            # Clarification indicators
-            if any(phrase in message_lower for phrase in [
-                "what can i change", "what options", "help", "what's possible",
-                "show me options", "what else", "suggestions"
-            ]):
-                return "clarification_request"
-            
-            # General conversation indicators (should be checked before modification)
-            if any(phrase in message_lower for phrase in [
-                "hello", "hi", "hey", "how are you", "thank", "thanks",
-                "how does this work", "what is this", "explain"
-            ]):
-                return "general_request"
-            
-            # Modification indicators (more specific)
-            if any(phrase in message_lower for phrase in [
-                "change", "modify", "update", "make", "set", "adjust", "edit",
-                "color", "size", "font", "background", "button", "text"
-            ]):
-                return "modification_request"
-            
-            # Default to general request for unclear messages
-            return "general_request"
-            
-        except Exception as e:
-            self.logger.error(f"Error detecting editing intent: {e}")
-            return "general_request"  # Safe default
+
     
-    def _handle_modification_request(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
-        """Handle UI modification requests"""
-        try:
-            self.logger.info("Processing modification request")
-            
-            # Step 3: UI Editing Agent performs the modification
-            ui_editing_result = self._process_ui_modification(user_message, current_ui_state)
-            
-            if not ui_editing_result["success"]:
-                return self._create_error_response(ui_editing_result["error"])
-            
-            # Step 4: Orchestrator instructs User Proxy
-            user_proxy_instruction = {
-                "type": "modification_success",
-                "modification_result": ui_editing_result,
-                "user_message": user_message,
-                "context": {
-                    "session_id": session_id,
-                    "previous_changes": self._get_previous_changes(session_id)
-                }
-            }
-            
-            # Step 5: User Proxy Agent responds to user
-            user_response = self._generate_user_response(user_proxy_instruction)
-            
-            # Extract modifications for the response
-            modifications = ui_editing_result.get("modifications")
-            
-            return {
-                "success": True,
-                "response": user_response,
-                "modifications": modifications,  # Ensure modifications are included
-                "metadata": {
-                    "session_id": session_id,
-                    "intent": "modification_request",
-                    "change_summary": ui_editing_result.get("change_summary", "Changes analyzed successfully")
-                }
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Error handling modification request: {e}")
-            return self._create_error_response(f"Error processing modification: {str(e)}")
+
     
-    def _process_ui_modification(self, user_message: str, current_ui_state: Dict[str, Any]) -> Dict[str, Any]:
-        """Process UI modification using NEW Two-Step UI Editing Agent"""
-        try:
-            self.logger.info(f"Processing UI modification with two-step agent: {user_message}")
-            
-            # Use the new two-step process_modification_request method
-            modification_result = self.editing_agent.process_modification_request(user_message, current_ui_state)
-            
-            if not modification_result.get("success", False):
-                return {
-                    "success": False,
-                    "error": modification_result.get("error", "Failed to process modification request")
-                }
-            
-            # Extract the changes summary for response
-            changes_summary = modification_result.get("changes_summary", [])
-            change_summary = changes_summary[0] if changes_summary else "Changes applied successfully"
-            
-            return {
-                "success": True,
-                "modifications": modification_result.get("modified_template"),
-                "change_summary": change_summary,
-                "modification_result": modification_result  # Include full result for detailed responses
-            }
-                
-        except Exception as e:
-            self.logger.error(f"Error processing UI modification: {e}")
-            return {
-                "success": False,
-                "error": f"Error processing modification: {str(e)}"
-            }
+
     
-    def _handle_clarification_request(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
-        """Handle clarification requests"""
-        try:
-            # Create User Proxy Agent instance
-            from agents.user_proxy_agent import UserProxyAgent
-            user_proxy = UserProxyAgent()
-            
-            # Generate helpful suggestions
-            suggestions = self._generate_editing_suggestions(current_ui_state)
-            
-            instruction = {
-                "type": "clarification_response",
-                "user_message": user_message,
-                "suggestions": suggestions,
-                "context": {"session_id": session_id}
-            }
-            
-            response = user_proxy.create_response_from_instructions(instruction)
-            
-            return {
-                "success": True,
-                "response": response,
-                "metadata": {
-                    "session_id": session_id,
-                    "intent": "clarification_request",
-                    "suggestions": suggestions
-                }
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Error handling clarification request: {e}")
-            return self._create_error_response(f"Error providing suggestions: {str(e)}")
+
     
-    def _handle_completion_request(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
-        """Handle completion requests"""
-        try:
-            # Create User Proxy Agent instance
-            from agents.user_proxy_agent import UserProxyAgent
-            user_proxy = UserProxyAgent()
-            
-            instruction = {
-                "type": "completion_response",
-                "user_message": user_message,
-                "context": {
-                    "session_id": session_id,
-                    "final_ui_state": current_ui_state
-                }
-            }
-            
-            response = user_proxy.create_response_from_instructions(instruction)
-            
-            return {
-                "success": True,
-                "response": response,
-                "metadata": {
-                    "session_id": session_id,
-                    "intent": "completion_request",
-                    "final_ui_state": current_ui_state
-                }
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Error handling completion request: {e}")
-            return self._create_error_response(f"Error processing completion: {str(e)}")
+
     
-    def _handle_general_request(self, user_message: str, current_ui_state: Dict[str, Any], session_id: str) -> Dict[str, Any]:
-        """Handle general requests that don't fit other categories"""
-        try:
-            # Check if this is a template-related question
-            user_message_lower = user_message.lower()
-            if any(keyword in user_message_lower for keyword in ["category", "template", "what is", "what's"]):
-                # Try to get template information from session state or current UI state
-                template_info = None
-                
-                # Check session state first
-                if hasattr(self, 'session_state') and self.session_state.get('selected_template'):
-                    template_info = self.session_state['selected_template']
-                elif current_ui_state and current_ui_state.get('template_info'):
-                    template_info = current_ui_state['template_info']
-                
-                if template_info:
-                    # Use the User Proxy Agent to create a proper response
-                    from agents.user_proxy_agent import UserProxyAgent
-                    user_proxy = UserProxyAgent()
-                    
-                    instruction = {
-                        "type": "template_info_request",
-                        "user_message": user_message,
-                        "template_info": template_info,
-                        "context": {"session_id": session_id}
-                    }
-                    
-                    response = user_proxy.create_response_from_instructions(instruction)
-                    
-                    return {
-                        "success": True,
-                        "response": response,
-                        "metadata": {
-                            "session_id": session_id,
-                            "intent": "template_info_request",
-                            "template_info": template_info
-                        }
-                    }
-            
-            # For general questions, use the LLM to generate a helpful response
-            try:
-                response = self._generate_llm_response_for_general_question(user_message, session_id, current_ui_state)
-                
-                return {
-                    "success": True,
-                    "response": response,
-                    "metadata": {
-                        "session_id": session_id,
-                        "intent": "general_request",
-                        "response_type": "llm_generated"
-                    }
-                }
-                
-            except Exception as llm_error:
-                self.logger.warning(f"LLM response generation failed, falling back to User Proxy Agent: {llm_error}")
-                
-                # Fallback to User Proxy Agent if LLM fails
-                from agents.user_proxy_agent import UserProxyAgent
-                user_proxy = UserProxyAgent()
-                
-                instruction = {
-                    "type": "general_response",
-                    "user_message": user_message,
-                    "context": {"session_id": session_id}
-                }
-                
-                response = user_proxy.create_response_from_instructions(instruction)
-                
-                return {
-                    "success": True,
-                    "response": response,
-                    "metadata": {
-                        "session_id": session_id,
-                        "intent": "general_request",
-                        "response_type": "fallback"
-                    }
-                }
-            
-        except Exception as e:
-            self.logger.error(f"Error handling general request: {e}")
-            return self._create_error_response(f"Error processing request: {str(e)}")
+
     
     def _generate_user_response(self, instruction: Dict[str, Any]) -> str:
         """Generate user response using User Proxy Agent"""
@@ -2906,7 +2540,7 @@ EXAMPLES:
             self.logger.error(f"Error generating user response: {e}")
             return "I've processed your request. Check the preview to see the changes!"
 
-    def _generate_llm_response_for_general_question(self, user_message: str, session_id: str, current_ui_state: Dict[str, Any] = None) -> str:
+    def _generate_general_response(self, user_message: str, session_id: str, current_ui_state: Dict[str, Any] = None) -> str:
         """Generate LLM response for general questions using Claude API"""
         try:
             import os
@@ -3034,14 +2668,11 @@ Current user question: {user_message}"""
             # Step 1: Save conversation history to session
             self.session_state["phase1_conversation_history"] = self.session_state.get("conversation_history", [])
             
-            # Step 2: Extract the actual template data from the recommendation structure
-            # The selected_template might be a recommendation wrapper with template data inside
             actual_template = selected_template
             if "template" in selected_template:
                 actual_template = selected_template["template"]
                 self.logger.info(f"Extracted actual template from recommendation wrapper: {actual_template.get('name', 'Unknown')}")
             
-            # Step 3: Create JSON file for the selected template
             template_id = actual_template.get('template_id') or actual_template.get('_id')
             if not template_id:
                 self.logger.error(f"No template ID found in selected template: {actual_template}")
@@ -3049,7 +2680,6 @@ Current user question: {user_message}"""
             
             self.logger.info(f"Template ID for transition: {template_id}")
             
-            # Step 4: Call the template-to-json endpoint to create the JSON file
             from tools.ui_preview_tools import UIPreviewTools
             ui_tools = UIPreviewTools()
             template_result = ui_tools.get_template_code(template_id)
@@ -3060,7 +2690,6 @@ Current user question: {user_message}"""
                 error_msg = template_result.get("error", "Unknown error") if template_result else "No result returned"
                 raise ValueError(f"Failed to fetch template code for ID: {template_id}. Error: {error_msg}")
             
-            # Step 5: Create the JSON structure for Phase 2
             ui_codes_data = {
                 "template_id": template_id,
                 "session_id": self.session_id,
@@ -3084,7 +2713,6 @@ Current user question: {user_message}"""
                 }
             }
             
-            # Step 6: Save using file manager (new format)
             from utils.file_manager import UICodeFileManager
             import os
             
@@ -3149,6 +2777,20 @@ Current user question: {user_message}"""
             self.session_state["ui_codes_file"] = f"temp_ui_files/{self.session_id}/"
             self.session_state["phase_transition_completed"] = True
             
+            # Record workflow decision for phase transition
+            try:
+                from utils.rationale_manager import RationaleManager
+                rationale_manager = RationaleManager(self.session_id)
+                rationale_manager.add_workflow_decision(
+                    phase="phase_transition",
+                    decision="Transitioned from Phase 1 to Phase 2",
+                    reasoning="User selected template and requested editing, transitioning to UI editing phase",
+                    context={"from_phase": "template_selection", "to_phase": "editing", "selected_template": selected_template.get("name", "Unknown")}
+                )
+                self.logger.info("Stored phase transition workflow decision")
+            except Exception as e:
+                self.logger.error(f"Failed to store phase transition decision: {e}")
+            
             # Update global session manager
             session_manager.update_session(self.session_id, self.session_state)
             
@@ -3197,34 +2839,9 @@ Current user question: {user_message}"""
                 "phase": "template_selection"
             }
     
-    def _create_complete_html(self, template_result: Dict[str, Any]) -> str:
-        """Create complete HTML with embedded CSS"""
-        html_export = template_result.get("html_export", "")
-        globals_css = template_result.get("globals_css", "")
-        style_css = template_result.get("style_css", "")
-        
-        # Combine all CSS
-        combined_css = f"{globals_css}\n{style_css}"
-        
-        # Create complete HTML
-        complete_html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UI Template</title>
-    <style>
-{combined_css}
-    </style>
-</head>
-<body>
-{html_export}
-</body>
-</html>"""
-        
-        return complete_html
+
     
-    async def _save_modified_template_to_file(self, modified_template: Dict[str, Any]) -> None:
+    async def _save_template_to_file(self, modified_template: Dict[str, Any]) -> None:
         """Save the modified template using file manager"""
         try:
             from utils.file_manager import UICodeFileManager
@@ -3233,7 +2850,7 @@ Current user question: {user_message}"""
             print(f"DEBUG SAVE: Starting save process for session {self.session_id}")
             print(f"DEBUG SAVE: Modified template keys: {list(modified_template.keys())}")
             
-            # Initialize file manager with absolute path to match main.py
+            # Initialize file manager
             base_dir = os.path.join(os.getcwd(), "temp_ui_files")
             file_manager = UICodeFileManager(base_dir=base_dir)
             
@@ -3331,37 +2948,35 @@ Current user question: {user_message}"""
                         "metadata": {"error": "no_template_selected"}
                     }
             
-            # Step 1: Detect the intent first
-            editing_intent = await self._detect_editing_intent_advanced(message, self.session_state["selected_template"])
+            editing_intent = self._detect_editing_intent_advanced(message, self.session_state["selected_template"])
             print(f"DEBUG ORCHESTRATOR: UI Editor intent detected: {editing_intent}")
             
-            # Step 2: Route based on intent
             if editing_intent == "modification_request":
-                result = await self._handle_editing_modification_request(
+                result = await self._handle_modification_request(
                     message=message,
                     selected_template=self.session_state["selected_template"],
                     context={"ui_codes": current_ui_codes}
                 )
             elif editing_intent == "clarification_request":
-                result = await self._handle_editing_clarification_request(
+                result = await self._handle_clarification_request(
                     message=message,
                     selected_template=self.session_state["selected_template"],
                     context={"ui_codes": current_ui_codes}
                 )
             elif editing_intent == "completion_request":
-                result = await self._handle_editing_completion_request(
+                result = await self._handle_completion_request(
                     message=message,
                     selected_template=self.session_state["selected_template"],
                     context={"ui_codes": current_ui_codes}
                 )
             elif editing_intent == "preview_request":
-                result = await self._handle_editing_preview_request(
+                result = await self._handle_preview_request(
                     message=message,
                     selected_template=self.session_state["selected_template"],
                     context={"ui_codes": current_ui_codes}
                 )
             else:
-                result = await self._handle_editing_general_request(
+                result = await self._handle_general_request(
                     message=message,
                     selected_template=self.session_state["selected_template"],
                     context={"ui_codes": current_ui_codes}

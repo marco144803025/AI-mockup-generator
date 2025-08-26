@@ -19,20 +19,16 @@ from db import get_db
 from datetime import datetime
 from services.screenshot_service import get_screenshot_service
 
-# Set Windows event loop policy for Playwright compatibility
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-# Import the flow orchestrator with focused agents
 from agents.flow_orchestrator import FlowOrchestrator
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -41,15 +37,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Note: Do not create a global orchestrator instance to avoid cross-request state leakage
-
-# Claude API configuration
 CLAUDE_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 if not CLAUDE_API_KEY:
     print("Warning: ANTHROPIC_API_KEY not found. LLM features will be limited.")
     CLAUDE_API_KEY = "placeholder_key"
 
-# Pydantic models
 class ChatMessage(BaseModel):
     message: str
     session_id: Optional[str] = None
@@ -96,8 +88,6 @@ class LogoAnalysisRequest(BaseModel):
     logo_filename: str
     session_id: str
     current_ui_codes: Optional[Dict[str, Any]] = None
-
-# API Routes (must come before catch-all routes)
 
 @app.get("/")
 def read_root():
@@ -647,7 +637,7 @@ async def reset_session_to_original(session_id: str):
         raise HTTPException(status_code=500, detail=f"Error resetting session to original: {str(e)}")
 
 @app.post("/api/ui-preview/generate-screenshot")
-async def generate_ui_preview_screenshot(request: ScreenshotRequest):
+async def generate_preview_screenshot(request: ScreenshotRequest):
     """Generate a screenshot preview of the UI template"""
     try:
         screenshot_service = await get_screenshot_service()
@@ -850,6 +840,27 @@ async def generate_custom_report(request: GenerateReportRequest):
         raise
     except Exception as e:
         logger.error(f"Error generating custom report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/session/{session_id}/phase-status")
+async def get_phase_status(session_id: str):
+    """Get current phase status for frontend"""
+    try:
+        from session_manager import session_manager
+        
+        phase_status = session_manager.get_phase_status(session_id)
+        if "error" in phase_status:
+            raise HTTPException(status_code=404, detail=phase_status["error"])
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "phase_status": phase_status
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting phase status for session {session_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/reports/download/{filename}")

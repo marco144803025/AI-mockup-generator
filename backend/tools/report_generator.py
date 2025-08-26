@@ -29,7 +29,8 @@ class ReportGenerator:
         if not session_data:
             raise RuntimeError(f"Session files not found for {session_id}")
 
-        screenshot_path = self._find_latest_screenshot(session_id)
+        # Force screenshot refresh to ensure latest preview is used
+        screenshot_path = self._ensure_latest_screenshot(session_id)
         if not screenshot_path:
             logger.warning(f"[Report] No screenshot found for session {session_id}; proceeding without preview")
 
@@ -48,6 +49,44 @@ class ReportGenerator:
         fm = UICodeFileManager(base_dir=base_dir)
         return fm.load_session(session_id)
 
+    def _ensure_latest_screenshot(self, session_id: str) -> Optional[str]:
+        """Ensure the latest screenshot is available, generating if necessary"""
+        try:
+            # First try to find existing screenshots
+            screenshot_path = self._find_latest_screenshot(session_id)
+            
+            # If no screenshot exists, try to generate one
+            if not screenshot_path:
+                logger.info(f"[Report] No screenshot found for session {session_id}, attempting to generate one...")
+                screenshot_path = self._generate_screenshot_for_session(session_id)
+            
+            return screenshot_path
+            
+        except Exception as e:
+            logger.error(f"Error ensuring latest screenshot for {session_id}: {e}")
+            return None
+    
+    def _generate_screenshot_for_session(self, session_id: str) -> Optional[str]:
+        """Generate a screenshot for the session if possible"""
+        try:
+            from services.screenshot_service import get_screenshot_service
+            
+            # Get screenshot service
+            screenshot_service = get_screenshot_service()
+            
+            # Try to generate screenshot
+            result = screenshot_service.generate_screenshot_for_session(session_id)
+            
+            if result and result.get("success"):
+                # Find the newly generated screenshot
+                return self._find_latest_screenshot(session_id)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error generating screenshot for session {session_id}: {e}")
+            return None
+    
     def _find_latest_screenshot(self, session_id: str) -> Optional[str]:
         try:
             previews_root = os.path.join(os.getcwd(), "temp_previews")
@@ -330,8 +369,13 @@ class ReportGenerator:
                             story.append(Paragraph("Template Recommendations:", normal))
                             for i, rec in enumerate(recommendations[:5]):  # Show top 5
                                 if isinstance(rec, dict):
-                                    story.append(Paragraph(f"• {rec.get('template_name', 'Unknown')} (Score: {rec.get('overall_score', 0):.2f})", normal))
-                                    reasoning = rec.get('detailed_reasoning', '')
+                                    # Handle nested template structure
+                                    template_data = rec.get('template', rec)
+                                    template_name = template_data.get('name', 'Unknown')
+                                    score = rec.get('score', 0)
+                                    reasoning = rec.get('reasoning', '')
+                                    
+                                    story.append(Paragraph(f"• {template_name} (Score: {score:.2f})", normal))
                                     if reasoning:
                                         story.append(Paragraph(f"  Reasoning: {reasoning[:200]}{'...' if len(reasoning) > 200 else ''}", normal))
                                     story.append(Spacer(1, 3))
@@ -340,7 +384,10 @@ class ReportGenerator:
                             final_selection = template_rationale.get('final_selection')
                             if final_selection and isinstance(final_selection, dict):
                                 story.append(Paragraph("Final Selection:", normal))
-                                story.append(Paragraph(f"• {final_selection.get('template_name', 'Unknown')}", normal))
+                                # Handle nested template structure
+                                template_data = final_selection.get('template', final_selection)
+                                template_name = template_data.get('name', 'Unknown')
+                                story.append(Paragraph(f"• {template_name}", normal))
                                 selection_reasoning = final_selection.get('selection_reasoning', '')
                                 if selection_reasoning:
                                     story.append(Paragraph(f"  Selection Reason: {selection_reasoning}", normal))
@@ -358,7 +405,7 @@ class ReportGenerator:
                             for i, planning in enumerate(planning_rationale[:3]):  # Show last 3
                                 if isinstance(planning, dict):
                                     user_request = planning.get('user_request', 'Unknown')
-                                    story.append(Paragraph(f"Request {i+1}: {user_request[:100]}{'...' if len(user_request) > 100 else ''}", normal))
+                                    story.append(Paragraph(f"Request {i+1}: {user_request}", normal))
                                     
                                     intent = planning.get('intent_analysis', {})
                                     if intent and isinstance(intent, dict):
@@ -368,18 +415,49 @@ class ReportGenerator:
                                     if target_identification and isinstance(target_identification, dict):
                                         primary_target = target_identification.get('primary_target', {})
                                         if primary_target and isinstance(primary_target, dict):
-                                            story.append(Paragraph(f"  Target: {primary_target.get('text_content', 'Unknown')[:80]}{'...' if len(primary_target.get('text_content', '')) > 80 else ''}", normal))
-                                            story.append(Paragraph(f"  Reasoning: {primary_target.get('reasoning', 'Unknown')[:150]}{'...' if len(primary_target.get('reasoning', '')) > 150 else ''}", normal))
+                                            story.append(Paragraph(f"  Target: {primary_target.get('text_content', 'Unknown')}", normal))
+                                            story.append(Paragraph(f"  Reasoning: {primary_target.get('reasoning', 'Unknown')}", normal))
                                     
                                     story.append(Spacer(1, 3))
                             
                             story.append(Spacer(1, 6))
                     
+                    # Requirements Analysis Rationale
+                    requirements_rationale = rationale_data.get('requirements_analysis', [])
+                    if requirements_rationale and isinstance(requirements_rationale, list):
+                        story.append(Paragraph("Requirements Analysis Process:", styles['Heading3']))
+                        story.append(Spacer(1, 3))
+                        
+                        for i, req in enumerate(requirements_rationale[:3]):  # Show last 3
+                            if isinstance(req, dict):
+                                analysis_summary = req.get('analysis_summary', 'Unknown')
+                                story.append(Paragraph(f"Analysis {i+1}: {analysis_summary}", normal))
+                                story.append(Spacer(1, 3))
+                        
+                        story.append(Spacer(1, 6))
+                    
+                    # Question Generation Rationale
+                    question_rationale = rationale_data.get('question_generation', [])
+                    if question_rationale and isinstance(question_rationale, list):
+                        story.append(Paragraph("Question Generation Process:", styles['Heading3']))
+                        story.append(Spacer(1, 3))
+                        
+                        for i, q in enumerate(question_rationale[:3]):  # Show last 3
+                            if isinstance(q, dict):
+                                reasoning = q.get('reasoning', 'Unknown')
+                                question_count = len(q.get('questions', []))
+                                story.append(Paragraph(f"Question Set {i+1}: Generated {question_count} questions", normal))
+                                story.append(Paragraph(f"  Strategy: {reasoning}", normal))
+                                story.append(Spacer(1, 3))
+                        
+                        story.append(Spacer(1, 6))
+                    
                     # Workflow Decisions
                     workflow_rationale = rationale_data.get('overall_workflow', {})
-                    if workflow_rationale and isinstance(workflow_rationale, dict) and workflow_rationale.get('phase_decisions'):
-                        phase_decisions = workflow_rationale['phase_decisions']
-                        if isinstance(phase_decisions, list):
+                    if workflow_rationale and isinstance(workflow_rationale, dict):
+                        # Phase Decisions
+                        phase_decisions = workflow_rationale.get('phase_decisions', [])
+                        if phase_decisions and isinstance(phase_decisions, list):
                             story.append(Paragraph("Workflow Decision Process:", styles['Heading3']))
                             story.append(Spacer(1, 3))
                             
@@ -389,7 +467,22 @@ class ReportGenerator:
                                     story.append(Paragraph(f"  Decision: {decision.get('decision', 'Unknown')}", normal))
                                     reasoning = decision.get('reasoning', '')
                                     if reasoning:
-                                        story.append(Paragraph(f"  Reasoning: {reasoning[:150]}{'...' if len(reasoning) > 150 else ''}", normal))
+                                        story.append(Paragraph(f"  Reasoning: {reasoning}", normal))
+                                    story.append(Spacer(1, 3))
+                        
+                        # Agent Coordination
+                        agent_coordination = workflow_rationale.get('agent_coordination', [])
+                        if agent_coordination and isinstance(agent_coordination, list):
+                            story.append(Paragraph("Agent Coordination:", styles['Heading3']))
+                            story.append(Spacer(1, 3))
+                            
+                            for i, coord in enumerate(agent_coordination[:3]):  # Show last 3
+                                if isinstance(coord, dict):
+                                    from_agent = coord.get('from_agent', 'Unknown')
+                                    to_agent = coord.get('to_agent', 'Unknown')
+                                    action = coord.get('action', 'Unknown')
+                                    story.append(Paragraph(f"Coordination {i+1}: {from_agent} → {to_agent}", normal))
+                                    story.append(Paragraph(f"  Action: {action}", normal))
                                     story.append(Spacer(1, 3))
                         
                         story.append(Spacer(1, 6))

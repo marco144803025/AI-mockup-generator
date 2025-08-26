@@ -36,6 +36,18 @@ You focus ONLY on template recommendation and scoring. You do not analyze requir
         scored_templates = self._score_templates_with_llm(requirements, templates, context)
         print(f"DEBUG: Scored templates result: {len(scored_templates)} templates")
         
+        # Record rationale for template recommendations
+        try:
+            from utils.rationale_manager import RationaleManager
+            # Get session_id from context if available
+            session_id = context.get("session_id") if context else None
+            if session_id:
+                rationale_manager = RationaleManager(session_id)
+                rationale_manager.add_template_recommendation_rationale(scored_templates)
+                self.logger.info("Stored template recommendation rationale")
+        except Exception as e:
+            self.logger.error(f"Failed to store template recommendation rationale: {e}")
+        
         return scored_templates[:self.keyword_manager.get_default_values()["max_templates"]]
     
     def _get_templates_from_database(self, requirements: Dict[str, Any], category: str = None) -> List[Dict[str, Any]]:
@@ -143,8 +155,13 @@ EVALUATION CRITERIA:
 4. Brand Consistency (15% weight): Does it align with the target audience?
 5. Technical Quality (10% weight): Is the implementation solid and maintainable?
 
-CRITICAL INSTRUCTION:
-You MUST respond with ONLY a valid JSON array. Do NOT include any explanatory text, introductions, or conclusions before or after the JSON.
+CRITICAL INSTRUCTION - READ CAREFULLY:
+You MUST respond with ONLY a valid JSON array. 
+- NO explanatory text before the JSON
+- NO introductions or conclusions after the JSON
+- NO "I'll help you analyze" or similar phrases
+- NO reasoning about your approach
+- ONLY the JSON array, nothing else
 
 REQUIRED FORMAT:
 Return exactly this JSON structure with NO additional text:
@@ -170,6 +187,9 @@ RULES:
 - Provide detailed reasoning for each recommendation
 - Consider both explicit matches and implicit design principles
 - Sort by overall_score (highest first)
+- START YOUR RESPONSE WITH [ AND END WITH ]
+
+REMEMBER: Your response must begin with [ and end with ]. No other text allowed.
 """
         
         return prompt
@@ -347,25 +367,61 @@ RULES:
             print(f"ERROR: Error parsing scoring response: {e}")
             return self._fallback_scoring(templates)
     
+    def _extract_json_from_text(self, response: str) -> Optional[List[Dict[str, Any]]]:
+        """Extract JSON using the base agent's robust extractor"""
+        try:
+            # Use the base agent's JSON extraction method
+            extracted = super()._extract_json_from_text(response, return_type="list")
+            if extracted:
+                return extracted
+            
+            # If base method fails, try our custom extraction
+            return None
+        except Exception as e:
+            print(f"DEBUG: Base agent JSON extraction failed: {e}")
+            return None
+
     def _extract_json_from_response(self, response: str) -> Optional[str]:
-        """Extract JSON using multiple strategies"""
+        """Extract JSON using the base agent's consolidated method"""
+        try:
+            # Use the base agent's consolidated method
+            result = super()._extract_json_from_response(response, return_type="string")
+            if result:
+                return result
+            
+            # Fallback to legacy extraction if base method fails
+            return self._legacy_json_extraction(response)
+        except Exception as e:
+            print(f"DEBUG: Base agent JSON extraction failed: {e}")
+            return None
+    
+    def _legacy_json_extraction(self, response: str) -> Optional[str]:
+        """Legacy JSON extraction method as fallback"""
+        print(f"DEBUG: Attempting legacy JSON extraction from response of length {len(response)}")
+        print(f"DEBUG: Response preview: {response[:300]}...")
         
         # Strategy 1: Find JSON array (most common format)
         json_match = re.search(r'\[.*\]', response, re.DOTALL)
         if json_match:
             try:
-                json.loads(json_match.group())
-                return json_match.group()
-            except json.JSONDecodeError:
+                json_str = json_match.group()
+                json.loads(json_str)
+                print(f"DEBUG: Strategy 1 succeeded - found valid JSON array")
+                return json_str
+            except json.JSONDecodeError as e:
+                print(f"DEBUG: Strategy 1 failed - JSON decode error: {e}")
                 pass
         
         # Strategy 2: Find JSON object
         json_match = re.search(r'\{.*\}', response, re.DOTALL)
         if json_match:
             try:
-                json.loads(json_match.group())
-                return json_match.group()
-            except json.JSONDecodeError:
+                json_str = json_match.group()
+                json.loads(json_str)
+                print(f"DEBUG: Strategy 2 succeeded - found valid JSON object")
+                return json_str
+            except json.JSONDecodeError as e:
+                print(f"DEBUG: Strategy 2 failed - JSON decode error: {e}")
                 pass
         
         # Strategy 3: Look for specific patterns like "recommendations:" or "templates:"
@@ -376,22 +432,28 @@ RULES:
             r'results:\s*(\[.*?\])'
         ]
         
-        for pattern in patterns:
+        for i, pattern in enumerate(patterns):
             match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
             if match:
                 try:
-                    json.loads(match.group(1))
-                    return match.group(1)
-                except json.JSONDecodeError:
+                    json_str = match.group(1)
+                    json.loads(json_str)
+                    print(f"DEBUG: Strategy 3.{i+1} succeeded - found JSON after pattern")
+                    return json_str
+                except json.JSONDecodeError as e:
+                    print(f"DEBUG: Strategy 3.{i+1} failed - JSON decode error: {e}")
                     pass
         
         # Strategy 4: Try to find JSON between markdown code blocks
         code_block_match = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', response, re.DOTALL)
         if code_block_match:
             try:
-                json.loads(code_block_match.group(1))
-                return code_block_match.group(1)
-            except json.JSONDecodeError:
+                json_str = code_block_match.group(1)
+                json.loads(json_str)
+                print(f"DEBUG: Strategy 4 succeeded - found JSON in code block")
+                return json_str
+            except json.JSONDecodeError as e:
+                print(f"DEBUG: Strategy 4 failed - JSON decode error: {e}")
                 pass
         
         # Strategy 5: Look for JSON after common prefixes
@@ -402,13 +464,16 @@ RULES:
             r'final recommendations:\s*(\[.*?\])'
         ]
         
-        for pattern in prefix_patterns:
+        for i, pattern in enumerate(patterns):
             match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
             if match:
                 try:
-                    json.loads(match.group(1))
-                    return match.group(1)
-                except json.JSONDecodeError:
+                    json_str = match.group(1)
+                    json.loads(json_str)
+                    print(f"DEBUG: Strategy 5.{i+1} succeeded - found JSON after prefix")
+                    return json_str
+                except json.JSONDecodeError as e:
+                    print(f"DEBUG: Strategy 5.{i+1} failed - JSON decode error: {e}")
                     pass
         
         # Strategy 6: Try to extract and fix common JSON issues
@@ -421,10 +486,13 @@ RULES:
             if fixed_json:
                 try:
                     json.loads(fixed_json)
+                    print(f"DEBUG: Strategy 6 succeeded - fixed JSON issues")
                     return fixed_json
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
+                    print(f"DEBUG: Strategy 6 failed - JSON decode error after fixing: {e}")
                     pass
         
+        print(f"DEBUG: All JSON extraction strategies failed")
         return None
     
     def _fix_common_json_issues(self, json_str: str) -> Optional[str]:

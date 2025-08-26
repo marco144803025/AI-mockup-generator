@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 from anthropic import Anthropic
 from db import get_db
 import json
@@ -7,6 +7,7 @@ import base64
 from PIL import Image
 import io
 from datetime import datetime
+import re
 
 class BaseAgent:
     # Base class for all agents with common functionality
@@ -320,13 +321,15 @@ ANSWER:
         except Exception:
             return json_str
 
-    def _extract_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
+    def _extract_json_from_text(self, text: str, return_type: str = "auto") -> Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]:
         """Robust JSON extraction that handles prose, code fences, and partials.
-
-        Strategies:
-        - Prefer ```json fenced blocks
-        - Balanced brace scan for first complete object/array
-        - Fallback to widest { ... } or [ ... ] slice with cleanup
+        
+        Args:
+            text: Text containing JSON
+            return_type: "auto", "dict", or "list" - what type to return
+            
+        Returns:
+            Parsed JSON object, list, or None if parsing fails
         """
         try:
             import json
@@ -338,7 +341,8 @@ ANSWER:
                     candidate = text[start:end].strip()
                     candidate = self._clean_json_string_enhanced(candidate)
                     try:
-                        return json.loads(candidate)
+                        result = json.loads(candidate)
+                        return self._validate_return_type(result, return_type)
                     except json.JSONDecodeError:
                         pass
             # 2) Balanced braces/brackets scan
@@ -357,7 +361,8 @@ ANSWER:
                                 candidate = text[start_idx:i+1]
                                 candidate = self._clean_json_string_enhanced(candidate)
                                 try:
-                                    return json.loads(candidate)
+                                    result = json.loads(candidate)
+                                    return self._validate_return_type(result, return_type)
                                 except json.JSONDecodeError:
                                     continue
             # 3) Greedy slice between first { and last }
@@ -366,8 +371,8 @@ ANSWER:
                 e = text.rfind("}") + 1
                 candidate = self._clean_json_string_enhanced(text[s:e])
                 try:
-                    import json
-                    return json.loads(candidate)
+                    result = json.loads(candidate)
+                    return self._validate_return_type(result, return_type)
                 except json.JSONDecodeError:
                     pass
             # 4) Greedy slice between first [ and last ]
@@ -376,15 +381,69 @@ ANSWER:
                 e = text.rfind("]") + 1
                 candidate = self._clean_json_string_enhanced(text[s:e])
                 try:
-                    return json.loads(candidate)
+                    result = json.loads(candidate)
+                    return self._validate_return_type(result, return_type)
                 except json.JSONDecodeError:
                     pass
             return None
         except Exception:
             return None
+    
+    def _validate_return_type(self, result: Union[Dict[str, Any], List[Dict[str, Any]]], return_type: str) -> Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]:
+        """Validate and convert result to expected return type"""
+        if return_type == "auto":
+            return result
+        elif return_type == "dict" and isinstance(result, dict):
+            return result
+        elif return_type == "list" and isinstance(result, list):
+            return result
+        elif return_type == "dict" and isinstance(result, list) and len(result) > 0:
+            # If expecting dict but got list, return first item if it's a dict
+            return result[0] if isinstance(result[0], dict) else None
+        elif return_type == "list" and isinstance(result, dict):
+            # If expecting list but got dict, wrap in list
+            return [result]
+        return None
+    
+    def _extract_json_from_response(self, response: str, return_type: str = "auto", context: str = "response") -> Optional[Union[Dict[str, Any], List[Dict[str, Any]], str]]:
+        """Consolidated JSON extraction method that can return different types based on needs.
         
-        # Add context information
-        if context:
-            output["metadata"]["context_used"] = context
-        
-        return output
+        Args:
+            response: Text containing JSON
+            return_type: "auto", "dict", "list", or "string" - what type to return
+            context: Context for debugging (optional)
+            
+        Returns:
+            Parsed JSON object, list, string, or None if parsing fails
+        """
+        if return_type == "string":
+            # Return raw JSON string for agents that need it
+            return self._extract_json_string(response)
+        else:
+            # Return parsed JSON object/list
+            return self._extract_json_from_text(response, return_type)
+    
+    def _extract_json_string(self, response: str) -> Optional[str]:
+        """Extract JSON as a string for agents that need to parse it themselves"""
+        try:
+            # Try to find JSON array first
+            json_match = re.search(r'\[.*\]', response, re.DOTALL)
+            if json_match:
+                candidate = json_match.group()
+                # Validate it's actually JSON
+                import json
+                json.loads(candidate)
+                return candidate
+            
+            # Try to find JSON object
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                candidate = json_match.group()
+                # Validate it's actually JSON
+                import json
+                json.loads(candidate)
+                return candidate
+            
+            return None
+        except Exception:
+            return None

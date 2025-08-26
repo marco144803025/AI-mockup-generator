@@ -209,7 +209,7 @@ async def test_screenshot_with_local_image(session_id: str):
             shutil.copy2(logo_source, logo_dest)
             print(f"Logo copied to screenshot directory: {logo_dest}")
         else:
-            print(f"ℹ️  No logo.png found in session folder: {ui_folder}")
+            print(f"Info: No logo.png found in session folder: {ui_folder}")
             print(f"💡 Creating a test logo for testing...")
             # Create a simple test image if no logo exists
             from PIL import Image, ImageDraw

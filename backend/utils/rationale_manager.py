@@ -30,11 +30,13 @@ class RationaleManager:
                 "session_id": self.session_id,
                 "created_at": datetime.now().isoformat(),
                 "last_updated": datetime.now().isoformat(),
+                "requirements_analysis": [],
                 "template_selection": {
                     "recommendations": [],
                     "final_selection": None,
                     "selection_reasoning": ""
                 },
+                "question_generation": [],
                 "ui_editing": {
                     "planning_rationale": [],
                     "execution_summary": []
@@ -145,6 +147,134 @@ class RationaleManager:
             
         except Exception as e:
             print(f"Warning: Failed to add UI editing execution summary: {e}")
+    
+    def add_requirements_rationale(self, requirements: Dict[str, Any], analysis_summary: str):
+        """
+        Store requirements analysis rationale.
+        
+        Args:
+            requirements: The requirements data
+            analysis_summary: Summary of the analysis
+        """
+        try:
+            rationale_data = self._load_rationale()
+            
+            requirements_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "requirements": requirements,
+                "analysis_summary": analysis_summary
+            }
+            
+            if "requirements_analysis" not in rationale_data:
+                rationale_data["requirements_analysis"] = []
+            
+            rationale_data["requirements_analysis"].append(requirements_entry)
+            
+            # Keep only last 5 entries
+            if len(rationale_data["requirements_analysis"]) > 5:
+                rationale_data["requirements_analysis"] = rationale_data["requirements_analysis"][-5:]
+            
+            self._save_rationale(rationale_data)
+            
+        except Exception as e:
+            print(f"Warning: Failed to add requirements rationale: {e}")
+    
+    def add_workflow_decision(self, phase: str, decision: str, reasoning: str, context: Dict[str, Any] = None):
+        """
+        Store workflow decision rationale.
+        
+        Args:
+            phase: The workflow phase
+            decision: The decision made
+            reasoning: Reasoning behind the decision
+            context: Additional context
+        """
+        try:
+            rationale_data = self._load_rationale()
+            
+            decision_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "phase": phase,
+                "decision": decision,
+                "reasoning": reasoning,
+                "context": context or {}
+            }
+            
+            rationale_data["overall_workflow"]["phase_decisions"].append(decision_entry)
+            
+            # Keep only last 10 decisions
+            if len(rationale_data["overall_workflow"]["phase_decisions"]) > 10:
+                rationale_data["overall_workflow"]["phase_decisions"] = rationale_data["overall_workflow"]["phase_decisions"][-10:]
+            
+            self._save_rationale(rationale_data)
+            
+        except Exception as e:
+            print(f"Warning: Failed to add workflow decision: {e}")
+    
+    def add_agent_coordination(self, from_agent: str, to_agent: str, action: str, reasoning: str, data: Dict[str, Any] = None):
+        """
+        Store agent coordination rationale.
+        
+        Args:
+            from_agent: Source agent
+            to_agent: Target agent
+            action: Action taken
+            reasoning: Reasoning for the action
+            data: Data passed between agents
+        """
+        try:
+            rationale_data = self._load_rationale()
+            
+            coordination_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "from_agent": from_agent,
+                "to_agent": to_agent,
+                "action": action,
+                "reasoning": reasoning,
+                "data": data or {}
+            }
+            
+            rationale_data["overall_workflow"]["agent_coordination"].append(coordination_entry)
+            
+            # Keep only last 10 coordination entries
+            if len(rationale_data["overall_workflow"]["agent_coordination"]) > 10:
+                rationale_data["overall_workflow"]["agent_coordination"] = rationale_data["overall_workflow"]["agent_coordination"][-10:]
+            
+            self._save_rationale(rationale_data)
+            
+        except Exception as e:
+            print(f"Warning: Failed to add agent coordination: {e}")
+    
+    def add_question_generation_rationale(self, questions: List[Dict[str, Any]], reasoning: str):
+        """
+        Store question generation rationale.
+        
+        Args:
+            questions: Generated questions
+            reasoning: Reasoning for question generation
+        """
+        try:
+            rationale_data = self._load_rationale()
+            
+            question_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "questions": questions,
+                "reasoning": reasoning
+            }
+            
+            if "question_generation" not in rationale_data:
+                rationale_data["question_generation"] = []
+            
+            rationale_data["question_generation"].append(question_entry)
+            
+            # Keep only last 5 entries
+            if len(rationale_data["question_generation"]) > 5:
+                rationale_data["question_generation"] = rationale_data["question_generation"][-5:]
+            
+            self._save_rationale(rationale_data)
+            
+        except Exception as e:
+            print(f"Warning: Failed to add question generation rationale: {e}")
     
     def load_rationale(self) -> Dict[str, Any]:
         """
